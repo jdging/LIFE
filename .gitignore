@@ -1,0 +1,10 @@
+# Google Drive shortcuts
+*.gsheet
+*.gdoc
+*.gslides
+*.gdraw
+*.gtable
+
+# Archivos temporales de Windows
+Thumbs.db
+Desktop.ini

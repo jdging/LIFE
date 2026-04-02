@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LIFE</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e0c;
+    --surface: #161614;
+    --surface2: #1e1e1b;
+    --border: #2a2a26;
+    --text: #e8e4da;
+    --muted: #6b6860;
+    --accent: #8fb87a;
+    --accent2: #c4a96b;
+    --sidebar-w: 72px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-weight: 300;
+    min-height: 100vh;
+    display: flex;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: var(--sidebar-w);
+    min-height: 100vh;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 0;
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 100;
+    gap: 0;
+  }
+
+  .sidebar-logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    margin-bottom: 2rem;
+    text-decoration: none;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    flex: 1;
+  }
+
+  .nav-item {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    color: var(--muted);
+    text-decoration: none;
+    position: relative;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: var(--surface2); color: var(--accent); }
+
+  .nav-item svg { width: 20px; height: 20px; }
+
+  .nav-tooltip {
+    position: absolute;
+    left: calc(100% + 12px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+  }
+  .nav-item:hover .nav-tooltip { opacity: 1; }
+
+  .sidebar-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding-bottom: 0.5rem;
+  }
+
+  /* ── MAIN ── */
+  .main {
+    margin-left: var(--sidebar-w);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    padding: 5rem 4rem 3rem;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: 'LIFE';
+    position: absolute;
+    right: -0.1em;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(8rem, 18vw, 18rem);
+    font-weight: 300;
+    color: transparent;
+    -webkit-text-stroke: 1px var(--border);
+    line-height: 1;
+    pointer-events: none;
+    letter-spacing: -0.02em;
+  }
+
+  .hero-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 1rem;
+  }
+
+  .hero-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    font-weight: 300;
+    line-height: 1.05;
+    color: var(--text);
+    max-width: 600px;
+  }
+
+  .hero-title em {
+    font-style: italic;
+    color: var(--accent2);
+  }
+
+  .hero-sub {
+    margin-top: 1.5rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    line-height: 1.8;
+    max-width: 400px;
+  }
+
+  /* ── TOOLS GRID ── */
+  .tools-section {
+    padding: 3rem 4rem;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .section-title {
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .section-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+
+  .tool-card {
+    background: var(--surface);
+    padding: 2rem;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    transition: background 0.2s;
+    position: relative;
+    overflow: hidden;
+    min-height: 200px;
+  }
+  .tool-card:hover { background: var(--surface2); }
+  .tool-card:hover .tool-arrow { transform: translate(3px, -3px); }
+
+  .tool-card.coming-soon {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+  }
+
+  .tool-num {
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+  }
+
+  .tool-icon {
+    font-size: 1.8rem;
+    line-height: 1;
+  }
+
+  .tool-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.6rem;
+    font-weight: 400;
+    line-height: 1.1;
+    color: var(--text);
+  }
+
+  .tool-desc {
+    font-size: 0.72rem;
+    color: var(--muted);
+    line-height: 1.7;
+    letter-spacing: 0.03em;
+  }
+
+  .tool-footer {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .tool-status {
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 20px;
+  }
+  .tool-status.live {
+    background: rgba(143, 184, 122, 0.12);
+    color: var(--accent);
+    border: 1px solid rgba(143, 184, 122, 0.25);
+  }
+  .tool-status.soon {
+    background: rgba(107, 104, 96, 0.15);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .tool-arrow {
+    color: var(--muted);
+    transition: transform 0.2s;
+    font-size: 1rem;
+  }
+
+  .tool-card.active .tool-name { color: var(--accent); }
+  .tool-card.active .tool-arrow { color: var(--accent); }
+
+  /* ── FOOTER ── */
+  .footer {
+    margin-top: auto;
+    padding: 2rem 4rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .hero-label { animation: fadeUp 0.5s ease both; }
+  .hero-title { animation: fadeUp 0.5s 0.1s ease both; }
+  .hero-sub { animation: fadeUp 0.5s 0.2s ease both; }
+  .tool-card { animation: fadeUp 0.5s ease both; }
+  .tool-card:nth-child(1) { animation-delay: 0.15s; }
+  .tool-card:nth-child(2) { animation-delay: 0.2s; }
+  .tool-card:nth-child(3) { animation-delay: 0.25s; }
+  .tool-card:nth-child(4) { animation-delay: 0.3s; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 640px) {
+    .hero { padding: 3rem 1.5rem 2rem; }
+    .tools-section { padding: 2rem 1.5rem; }
+    .footer { padding: 1.5rem; flex-direction: column; gap: 0.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <a href="index.html" class="sidebar-logo">LIFE</a>
+
+  <div class="sidebar-nav">
+    <!-- Home -->
+    <a href="index.html" class="nav-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
+      <span class="nav-tooltip">Inicio</span>
+    </a>
+
+    <!-- Jardín -->
+    <a href="jardin/index.html" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22V12m0 0C12 7 7 4 3 5c0 4 2 8 9 7m0 0c0-5 5-8 9-7-1 4-4 7-9 7"/></svg>
+      <span class="nav-tooltip">Jardín</span>
+    </a>
+
+    <!-- Finanzas -->
+    <a href="finanzas/index.html" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <line x1="12" y1="1" x2="12" y2="23"/>
+        <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+      </svg>
+      <span class="nav-tooltip">Finanzas</span>
+    </a>
+  </div>
+
+  <div class="sidebar-bottom">
+    <div class="nav-item" style="cursor:default;color:var(--border)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/></svg>
+      <span class="nav-tooltip">Próximamente</span>
+    </div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-label">Sistema personal · v1.0</div>
+    <h1 class="hero-title">Herramientas para<br><em>vivir mejor.</em></h1>
+    <p class="hero-sub">Un espacio propio para organizar lo que importa — el jardín, la casa, el tiempo, el negocio. Simple, rápido, tuyo.</p>
+  </section>
+
+  <!-- TOOLS -->
+  <section class="tools-section">
+    <div class="section-header">
+      <span class="section-title">Herramientas</span>
+      <div class="section-line"></div>
+    </div>
+
+    <div class="tools-grid">
+
+      <a href="jardin/index.html" class="tool-card active">
+        <div class="tool-num">01</div>
+        <div class="tool-icon">🌿</div>
+        <div class="tool-name">Jardín</div>
+        <p class="tool-desc">Catálogo de plantas con clasificación botánica, ubicación georreferenciada y guía de productos adecuados y prohibidos.</p>
+        <div class="tool-footer">
+          <span class="tool-status live">En vivo</span>
+          <span class="tool-arrow">↗</span>
+        </div>
+      </a>
+
+      <a href="finanzas/index.html" class="tool-card active">
+        <div class="tool-num">02</div>
+        <div class="tool-icon">◈</div>
+        <div class="tool-name">Finanzas</div>
+        <p class="tool-desc">Dashboard de gastos, ingresos e inversiones en pareja. Proporcionalidad dinámica, cuotas y deudas en tiempo real.</p>
+        <div class="tool-footer">
+          <span class="tool-status live">En vivo</span>
+          <span class="tool-arrow">↗</span>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+  <footer class="footer">
+    <span>LIFE — Sistema personal</span>
+    <span>JD · 2025</span>
+  </footer>
+
+</main>
+
+</body>
+</html>

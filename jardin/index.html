@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jardín · LIFE</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e0c;
+    --surface: #161614;
+    --surface2: #1e1e1b;
+    --surface3: #252521;
+    --border: #2a2a26;
+    --text: #e8e4da;
+    --muted: #6b6860;
+    --accent: #8fb87a;
+    --accent2: #c4a96b;
+    --red: #c0543a;
+    --ok: #8fb87a;
+    --sidebar-w: 72px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-weight: 300;
+    min-height: 100vh;
+    display: flex;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: var(--sidebar-w);
+    min-height: 100vh;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 0;
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    z-index: 100;
+  }
+
+  .sidebar-logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    margin-bottom: 2rem;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .sidebar-logo:hover { color: var(--accent); }
+
+  .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    flex: 1;
+  }
+
+  .nav-item {
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    color: var(--muted);
+    text-decoration: none;
+    position: relative;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: var(--surface2); color: var(--accent); }
+  .nav-item svg { width: 20px; height: 20px; }
+
+  .nav-tooltip {
+    position: absolute;
+    left: calc(100% + 12px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+  }
+  .nav-item:hover .nav-tooltip { opacity: 1; }
+
+  .sidebar-bottom {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 0.25rem; padding-bottom: 0.5rem;
+  }
+
+  /* ── MAIN ── */
+  .main {
+    margin-left: var(--sidebar-w);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    padding: 1.5rem 3rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: rgba(14,14,12,0.92);
+    backdrop-filter: blur(12px);
+    z-index: 50;
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: baseline;
+    gap: 0.8rem;
+  }
+
+  .breadcrumb {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .breadcrumb:hover { color: var(--text); }
+
+  .breadcrumb-sep { color: var(--border); font-size: 0.7rem; }
+
+  .topbar-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: var(--accent);
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .plant-count {
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+
+  /* ── FILTER BAR ── */
+  .filterbar {
+    padding: 1rem 3rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .filterbar::-webkit-scrollbar { display: none; }
+
+  .filter-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .filter-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .filter-btn:hover { border-color: var(--text); color: var(--text); }
+  .filter-btn.active {
+    background: var(--surface2);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ── PRODUCT LEGEND ── */
+  .legend-bar {
+    padding: 0.8rem 3rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .legend-bar::-webkit-scrollbar { display: none; }
+
+  .legend-label {
+    font-size: 0.58rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.62rem;
+    color: var(--muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .legend-item .lemoji { font-size: 0.85rem; }
+  .lbadge {
+    font-size: 0.55rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    font-family: 'DM Mono', monospace;
+  }
+  .lbadge.ins { background: rgba(192,84,58,0.18); color: #e07a5a; }
+  .lbadge.fun { background: rgba(196,169,107,0.18); color: var(--accent2); }
+  .lbadge.fer { background: rgba(143,184,122,0.18); color: var(--accent); }
+  .lbadge.enr { background: rgba(100,140,200,0.18); color: #8ab0d8; }
+  .lbadge.blo { background: rgba(170,100,200,0.18); color: #c08ad8; }
+  .lbadge.cor { background: rgba(80,180,180,0.18); color: #70c8c8; }
+
+  /* ── WARNING BANNER ── */
+  .warning-banner {
+    margin: 1.5rem 3rem 0;
+    padding: 0.75rem 1rem;
+    background: rgba(192,84,58,0.08);
+    border: 1px solid rgba(192,84,58,0.25);
+    border-radius: 4px;
+    font-size: 0.7rem;
+    color: #e07a5a;
+    line-height: 1.6;
+    letter-spacing: 0.02em;
+  }
+
+  /* ── PLANT GRID ── */
+  .plants-grid {
+    padding: 1.5rem 3rem 3rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1px;
+    background: var(--border);
+  }
+
+  /* ── PLANT CARD ── */
+  .plant-card {
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    transition: background 0.2s;
+    animation: fadeUp 0.4s ease both;
+  }
+  .plant-card:hover { background: var(--surface2); }
+  .plant-card.hidden { display: none; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .plant-photo {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    display: block;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .plant-photo-placeholder {
+    width: 100%;
+    height: 200px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--border);
+    font-size: 2rem;
+  }
+
+  .plant-inner {
+    padding: 1rem 1.2rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    flex: 1;
+  }
+
+  .plant-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .plant-id {
+    font-size: 0.58rem;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    flex-shrink: 0;
+    padding-top: 0.2rem;
+  }
+
+  .plant-names { flex: 1; }
+
+  .plant-common {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.15rem;
+    font-weight: 400;
+    line-height: 1.2;
+    color: var(--text);
+  }
+
+  .plant-scientific {
+    font-style: italic;
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 0.1rem;
+    font-family: 'DM Mono', monospace;
+    font-weight: 300;
+  }
+
+  .plant-zone {
+    background: var(--surface3);
+    border-radius: 3px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    flex-shrink: 0;
+    white-space: nowrap;
+    align-self: flex-start;
+    margin-top: 0.15rem;
+  }
+  .plant-zone.interior { border-left: 2px solid #8ab0d8; }
+  .plant-zone.exterior { border-left: 2px solid var(--accent); }
+
+  .plant-desc {
+    font-size: 0.72rem;
+    color: var(--muted);
+    line-height: 1.7;
+    letter-spacing: 0.02em;
+  }
+
+  .plant-location {
+    font-size: 0.68rem;
+    color: var(--muted);
+    line-height: 1.6;
+    padding: 0.5rem 0.7rem;
+    background: var(--surface3);
+    border-radius: 3px;
+    border-left: 2px solid var(--border);
+  }
+  .plant-location::before {
+    content: '📍 ';
+    font-size: 0.75rem;
+  }
+
+  .divider { height: 1px; background: var(--border); }
+
+  /* ── CHUFA SECTION ── */
+  .chufa-section { display: flex; flex-direction: column; gap: 0.5rem; }
+
+  .chufa-label {
+    font-size: 0.58rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-weight: 400;
+    margin-bottom: 0.2rem;
+  }
+  .chufa-label.ok { color: var(--ok); }
+  .chufa-label.bad { color: var(--red); }
+
+  .tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+
+  .tag {
+    font-size: 0.65rem;
+    border-radius: 20px;
+    padding: 0.18rem 0.55rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    border: 1px solid transparent;
+    line-height: 1.4;
+  }
+  .tag.ok {
+    background: rgba(143,184,122,0.08);
+    border-color: rgba(143,184,122,0.2);
+    color: var(--accent);
+  }
+  .tag.bad {
+    background: rgba(192,84,58,0.08);
+    border-color: rgba(192,84,58,0.2);
+    color: #e07a5a;
+  }
+  .tag .dose {
+    font-size: 0.58rem;
+    opacity: 0.65;
+  }
+
+  .note {
+    font-size: 0.68rem;
+    color: var(--accent2);
+    line-height: 1.6;
+    padding: 0.4rem 0.6rem;
+    border-left: 2px solid rgba(196,169,107,0.3);
+    background: rgba(196,169,107,0.04);
+    border-radius: 0 3px 3px 0;
+  }
+
+  .alert {
+    font-size: 0.68rem;
+    color: #e07a5a;
+    line-height: 1.6;
+    padding: 0.4rem 0.6rem;
+    border-left: 2px solid rgba(192,84,58,0.4);
+    background: rgba(192,84,58,0.04);
+    border-radius: 0 3px 3px 0;
+  }
+
+  .img-ref {
+    font-size: 0.58rem;
+    letter-spacing: 0.08em;
+    color: var(--border);
+    text-align: right;
+    padding: 0.5rem 1.2rem 0.7rem;
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* ── FOOTER ── */
+  .footer {
+    padding: 1.5rem 3rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 640px) {
+    .topbar { padding: 1rem 1.2rem; }
+    .filterbar { padding: 0.8rem 1.2rem; }
+    .legend-bar { padding: 0.6rem 1.2rem; }
+    .warning-banner { margin: 1rem 1.2rem 0; }
+    .plants-grid { padding: 1rem 0 2rem; }
+    .footer { padding: 1rem 1.2rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <a href="../index.html" class="sidebar-logo">LIFE</a>
+
+  <div class="sidebar-nav">
+    <a href="../index.html" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
+      <span class="nav-tooltip">Inicio</span>
+    </a>
+    <a href="index.html" class="nav-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22V12m0 0C12 7 7 4 3 5c0 4 2 8 9 7m0 0c0-5 5-8 9-7-1 4-4 7-9 7"/></svg>
+      <span class="nav-tooltip">Jardín</span>
+    </a>
+  </div>
+
+  <div class="sidebar-bottom">
+    <div class="nav-item" style="cursor:default;color:var(--border)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/></svg>
+      <span class="nav-tooltip">Próximamente</span>
+    </div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <a href="../index.html" class="breadcrumb">LIFE</a>
+      <span class="breadcrumb-sep">/</span>
+      <span class="topbar-title">Jardín</span>
+    </div>
+    <div class="topbar-right">
+      <span class="plant-count" id="plantCount">26 plantas</span>
+    </div>
+  </div>
+
+  <!-- FILTER BAR -->
+  <div class="filterbar">
+    <span class="filter-label">Filtrar</span>
+    <button class="filter-btn active" onclick="filterCards('all', this)">Todas</button>
+    <button class="filter-btn" onclick="filterCards('interior', this)">Interior</button>
+    <button class="filter-btn" onclick="filterCards('exterior', this)">Exterior</button>
+    <button class="filter-btn" onclick="filterCards('floracion', this)">Con floración</button>
+    <button class="filter-btn" onclick="filterCards('dsist-ok', this)">Compatible D-SIST</button>
+    <button class="filter-btn" onclick="filterCards('dsist-no', this)">D-SIST prohibido</button>
+  </div>
+
+  <!-- PRODUCT LEGEND -->
+  <div class="legend-bar">
+    <span class="legend-label">Arsenal</span>
+    <div class="legend-item"><span class="lemoji">🧬</span> Enzimas <span class="lbadge blo">Bloqueador</span> 1mL/L</div>
+    <div class="legend-item"><span class="lemoji">🚀</span> Booster <span class="lbadge fer">Fertilizante</span> 1mL/L · flor</div>
+    <div class="legend-item"><span class="lemoji">🚿</span> Limpia Raíces <span class="lbadge cor">Corrector</span> 2.5mL/L</div>
+    <div class="legend-item"><span class="lemoji">☠️</span> D-SIST Ambiente <span class="lbadge ins">Insecticida</span> 6mL/L</div>
+    <div class="legend-item"><span class="lemoji">🐜</span> D-SIST Planta <span class="lbadge ins">Insecticida</span> 2mL/L</div>
+    <div class="legend-item"><span class="lemoji">🍄</span> FungoXAN Planta <span class="lbadge fun">Funguicida</span> 2mL/L</div>
+    <div class="legend-item"><span class="lemoji">🏴‍☠️</span> FungoXAN Ambiente <span class="lbadge fun">Funguicida</span> 6mL/L</div>
+    <div class="legend-item"><span class="lemoji">🛡️</span> Top Barrier <span class="lbadge fer">Fertilizante</span> 0.5mL/L</div>
+    <div class="legend-item"><span class="lemoji">🌸</span> Top Bloom <span class="lbadge fer">Fertilizante</span> 1mL/L · flor</div>
+    <div class="legend-item"><span class="lemoji">🦈</span> Mycorrhizae <span class="lbadge enr">Enraizador</span> pizca</div>
+    <div class="legend-item"><span class="lemoji">🌿</span> Bioestimulante <span class="lbadge fer">Fertilizante</span> 2mL/L · pre-flor</div>
+  </div>
+
+  <!-- WARNING -->
+  <div class="warning-banner">
+    ⚠ D-SIST (Ambiente y Planta) — <strong>PROHIBIDO</strong> en: Anthurium · Asparagus · Ficus · Philodendron — según ficha técnica GlacoXAN. Ver plantas #1, #3, #6, #9.
+  </div>
+
+  <!-- PLANTS GRID -->
+  <div class="plants-grid" id="plantsGrid">
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- PLANTA 1 -->
+    <!-- ════════════════════════════════════════ -->
+    <div class="plant-card" data-zone="interior" data-floracion="no" data-dsist="no">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4450.webp" alt="Filodendro trepador" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">01</span>
+          <div class="plant-names">
+            <div class="plant-common">Filodendro trepador</div>
+            <div class="plant-scientific">Philodendron hederaceum</div>
+          </div>
+          <span class="plant-zone interior">Interior</span>
+        </div>
+        <p class="plant-desc">Enredadera con hojas ovaladas verde oscuro y tallos largos colgantes. Tolera sombra, crecimiento rápido. Hojas jóvenes con tono cobrizo.</p>
+        <div class="plant-location">Maceta blanca acanalada sobre repisa gris, junto a rocas minerales y figura oscura.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🛡️ Top Barrier <span class="dose">0.5mL/L semanal</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">2mL/L mensual</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">☠️ D-SIST Ambiente</span>
+            <span class="tag bad">🐜 D-SIST Planta</span>
+          </div>
+          <div class="alert">Philodendron está en la lista de prohibidos del D-SIST (ambas versiones).</div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4450</div>
+    </div>
+
+    <!-- PLANTA 2 -->
+    <div class="plant-card" data-zone="interior" data-floracion="no" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4449.webp" alt="Sanseveria" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">02</span>
+          <div class="plant-names">
+            <div class="plant-common">Lengua de suegra</div>
+            <div class="plant-scientific">Dracaena trifasciata</div>
+          </div>
+          <span class="plant-zone interior">Interior</span>
+        </div>
+        <p class="plant-desc">Hojas largas y rígidas con bandas verde oscuro. Hojas caen a los lados — posible exceso de riego o poca luz.</p>
+        <div class="plant-location">Maceta terracota en rincón entre pared verde oliva y pared blanca, sobre piso de cemento.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">0.25mL/L mensual — tabla específica Sansevieria</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🚀 Booster</span>
+            <span class="tag bad">🌸 Top Bloom</span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4449</div>
+    </div>
+
+    <!-- PLANTA 3 -->
+    <div class="plant-card" data-zone="interior" data-floracion="no" data-dsist="no">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4448.webp" alt="Ficus elastica" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">03</span>
+          <div class="plant-names">
+            <div class="plant-common">Gomero / Caucho</div>
+            <div class="plant-scientific">Ficus elastica</div>
+          </div>
+          <span class="plant-zone interior">Interior</span>
+        </div>
+        <p class="plant-desc">Hojas grandes coriáceas verde brillante con nervio rojizo. Dos tallos en maceta negra. Hojas jóvenes salen en vaina rojiza.</p>
+        <div class="plant-location">Maceta negra entre cortina blanca y armario marrón. Llaves de luz en pared verde, foco naranja arriba derecha.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🛡️ Top Barrier <span class="dose">0.5mL/L semanal</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">2mL/L mensual</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">☠️ D-SIST Ambiente</span>
+            <span class="tag bad">🐜 D-SIST Planta</span>
+          </div>
+          <div class="alert">Ficus está explícitamente prohibido en ambas versiones del D-SIST.</div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4448</div>
+    </div>
+
+    <!-- PLANTA 4 -->
+    <div class="plant-card" data-zone="interior" data-floracion="no" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4447.webp" alt="Monstera" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">04</span>
+          <div class="plant-names">
+            <div class="plant-common">Monstera / Costilla de Adán</div>
+            <div class="plant-scientific">Monstera deliciosa</div>
+          </div>
+          <span class="plant-zone interior">Interior</span>
+        </div>
+        <p class="plant-desc">Hojas grandes con hendiduras características. Las hojas jóvenes aún no tienen cortes.</p>
+        <div class="plant-location">Toma de cerca del follaje, maceta oscura sobre superficie negra. Pedestal dorado y pared blanca al fondo.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🛡️ Top Barrier <span class="dose">0.5mL/L semanal</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">2mL/L mensual</span></span>
+            <span class="tag ok">🐜 D-SIST Planta <span class="dose">2mL/L mensual si hay pulgones</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🚿 Limpia Raíces <span class="dose">solo etapa floración</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4447</div>
+    </div>
+
+    <!-- PLANTA 5 -->
+    <div class="plant-card" data-zone="interior" data-floracion="si" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4446.webp" alt="Espatifilo" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">05</span>
+          <div class="plant-names">
+            <div class="plant-common">Espatifilo</div>
+            <div class="plant-scientific">Spathiphyllum wallisii</div>
+          </div>
+          <span class="plant-zone interior">Interior</span>
+        </div>
+        <p class="plant-desc">Hojas lanceoladas brillantes verde intenso. Puntas marrones visibles. Figura de buda dorado en la tierra.</p>
+        <div class="plant-location">Maceta negra texturada sobre mesita oscura, frente a cortina blanca. Buda dorado en la tierra.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🛡️ Top Barrier <span class="dose">0.5mL/L semanal</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal</span></span>
+            <span class="tag ok">🌸 Top Bloom <span class="dose">1mL/L semanal al florecer</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">2mL/L mensual</span></span>
+            <span class="tag ok">🐜 D-SIST Planta <span class="dose">2mL/L mensual</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🚿 Limpia Raíces <span class="dose">solo floración activa</span></span>
+          </div>
+          <div class="note">Puntas marrones: probablemente agua con flúor — usar agua reposada 24h.</div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4446</div>
+    </div>
+
+    <!-- PLANTA 6 -->
+    <div class="plant-card" data-zone="interior" data-floracion="no" data-dsist="no">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4445.webp" alt="Anthurium crystallinum" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">06</span>
+          <div class="plant-names">
+            <div class="plant-common">Anthurium crystallinum</div>
+            <div class="plant-scientific">Anthurium crystallinum</div>
+          </div>
+          <span class="plant-zone interior">Interior</span>
+        </div>
+        <p class="plant-desc">Hojas de terciopelo verde oscuro con nervios blancos reticulados. Puntas marrones por baja humedad. Especie ornamental de alto valor.</p>
+        <div class="plant-location">Maceta negra pequeña a la izquierda del espatifilo, frente a cortina. Junto al router blanco.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">2mL/L mensual</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">☠️ D-SIST Ambiente</span>
+            <span class="tag bad">🐜 D-SIST Planta</span>
+          </div>
+          <div class="alert">Anthurium es el primero de la lista de prohibidos del D-SIST. Nunca aplicar.</div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4445</div>
+    </div>
+
+    <!-- PLANTA 7 -->
+    <div class="plant-card" data-zone="interior" data-floracion="no" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4444.webp" alt="Aglaonema" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">07</span>
+          <div class="plant-names">
+            <div class="plant-common">Aglaonema</div>
+            <div class="plant-scientific">Aglaonema commutatum</div>
+          </div>
+          <span class="plant-zone interior">Interior</span>
+        </div>
+        <p class="plant-desc">Hojas lanceoladas verde plateado con manchas oscuras. Muy tolerante a la sombra. Fácil mantenimiento.</p>
+        <div class="plant-location">Maceta negra en el piso, primer plano. Detrás espatifilo y monstera. Sobre piso de cemento pulido.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🛡️ Top Barrier <span class="dose">0.5mL/L semanal</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">2mL/L mensual</span></span>
+            <span class="tag ok">🐜 D-SIST Planta <span class="dose">2mL/L mensual</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🚀 Booster</span>
+            <span class="tag bad">🌸 Top Bloom</span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4444</div>
+    </div>
+
+    <!-- PLANTA 8 -->
+    <div class="plant-card" data-zone="interior" data-floracion="no" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4443.webp" alt="Palma Areca" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">08</span>
+          <div class="plant-names">
+            <div class="plant-common">Palma Areca</div>
+            <div class="plant-scientific">Dypsis lutescens</div>
+          </div>
+          <span class="plant-zone interior">Interior</span>
+        </div>
+        <p class="plant-desc">Palma con hojas en arco, finas y alargadas. Varias cañas emergiendo de la base. Gran purificadora de aire.</p>
+        <div class="plant-location">Dos macetas negras junto a la puerta con cortina blanca y televisor. Speaker Sony negro sobre ella.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🛡️ Top Barrier <span class="dose">0.5mL/L semanal</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">2mL/L mensual</span></span>
+            <span class="tag ok">🐜 D-SIST Planta <span class="dose">2mL/L mensual si hay plaga</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🚀 Booster</span>
+            <span class="tag bad">🌸 Top Bloom</span>
+          </div>
+          <div class="note">Sensible al flúor — usar agua reposada siempre.</div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4443</div>
+    </div>
+
+    <!-- PLANTA 9 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="no" data-dsist="no">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4442.webp" alt="Esparraguera" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">09</span>
+          <div class="plant-names">
+            <div class="plant-common">Esparraguera ornamental</div>
+            <div class="plant-scientific">Asparagus densiflorus 'Sprengeri'</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Tallos colgantes con hojitas filiformes. Muy vigorosa — ramas se extienden entre barrotes de la reja.</p>
+        <div class="plant-location">Maceta terracota detrás de reja de hierro negro exterior. Rastrillo rojo a la izquierda, ventana con tela al fondo.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🛡️ Top Barrier <span class="dose">0.5mL/L semanal</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">2mL/L mensual</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">☠️ D-SIST Ambiente</span>
+            <span class="tag bad">🐜 D-SIST Planta</span>
+          </div>
+          <div class="alert">Asparagus plumosus está en lista de prohibidos del D-SIST. Variedad Sprengeri es especie hermana — no arriesgar.</div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4442</div>
+    </div>
+
+    <!-- PLANTA 10 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="no" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4441.webp" alt="Hiedra" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">10</span>
+          <div class="plant-names">
+            <div class="plant-common">Hiedra común</div>
+            <div class="plant-scientific">Hedera helix</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Hojas lobuladas verde intenso con nervios claros. Planta pequeña con cerco de palillos. Suelo muy húmedo visible.</p>
+        <div class="plant-location">Plantada en suelo exterior mojado con cerco de palillos y piolín blanco. Al fondo árbol con hojas verde oscuro.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca al plantar</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">2mL/L mensual — suelo húmedo, riesgo Rhizoctonia</span></span>
+            <span class="tag ok">🐜 D-SIST Planta <span class="dose">2mL/L mensual si hay plaga</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🚿 Limpia Raíces</span>
+            <span class="tag bad">🌸 Top Bloom</span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4441</div>
+    </div>
+
+    <!-- PLANTA 11 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="si" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4440.webp" alt="Sedum" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">11</span>
+          <div class="plant-names">
+            <div class="plant-common">Siempreviva / Sedum</div>
+            <div class="plant-scientific">Hylotelephium spectabile</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Suculenta de hojas carnosas y flores en pompón rosa-lila. Apoyada contra el tronco de un árbol.</p>
+        <div class="plant-location">A ras del suelo junto a la base del tronco grande con corteza marcada. Borde de maceta terracota a la derecha.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🌸 Top Bloom <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🚀 Booster <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">2mL/L mensual</span></span>
+            <span class="tag ok">🐜 D-SIST Planta <span class="dose">2mL/L mensual si hay plaga</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🧬 Enzimas <span class="dose">innecesario en suculentas</span></span>
+            <span class="tag bad">🦈 Mycorrhizae <span class="dose">ya establecida</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4440</div>
+    </div>
+
+    <!-- PLANTA 12 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="no" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4439.webp" alt="Plectranthus" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">12</span>
+          <div class="plant-names">
+            <div class="plant-common">Plectranthus variegado</div>
+            <div class="plant-scientific">Plectranthus coleoides 'Marginatus'</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Hojas verde claro con margen blanco. Textura aterciopelada. Mata densa y compacta. Aromática.</p>
+        <div class="plant-location">Maceta terracota mediana en exterior, mismo grupo que el Sedum. Pompón rosa del Sedum visible arriba derecha.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🛡️ Top Barrier <span class="dose">0.5mL/L semanal</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">2mL/L mensual</span></span>
+            <span class="tag ok">🐜 D-SIST Planta <span class="dose">2mL/L mensual si hay plaga</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🚀 Booster <span class="dose">exceso N → pierde variegado</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4439</div>
+    </div>
+
+    <!-- PLANTA 13 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="no" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4438.webp" alt="Suculentas mixtas" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">13</span>
+          <div class="plant-names">
+            <div class="plant-common">Jardín de suculentas</div>
+            <div class="plant-scientific">Crassula · Sedum · Haworthia</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Múltiples suculentas en plato grande de terracota con piedras blancas decorativas.</p>
+        <div class="plant-location">Gran plato de terracota al pie del tronco grande. Maceta pequeña con crassula a la izquierda.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">2mL/L mensual — previene Rhizoctonia en plato</span></span>
+            <span class="tag ok">🐜 D-SIST Planta <span class="dose">2mL/L mensual — propensas a cochinilla</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🚿 Limpia Raíces</span>
+            <span class="tag bad">🚀 Booster</span>
+            <span class="tag bad">🌸 Top Bloom</span>
+            <span class="tag bad">🦈 Mycorrhizae <span class="dose">ya establecidas</span></span>
+          </div>
+          <div class="note">En suculentas establecidas, menos es más.</div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4438</div>
+    </div>
+
+    <!-- PLANTA 14 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="no" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4437.webp" alt="Dracena de maíz" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">14</span>
+          <div class="plant-names">
+            <div class="plant-common">Dracena de maíz</div>
+            <div class="plant-scientific">Dracaena fragrans</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Hojas largas arqueadas verde claro con franja central. Puntas secas visibles. Surge de nudo cortado.</p>
+        <div class="plant-location">Maceta negra sobre mesa de madera roja exterior, rodeada de árboles de tronco gris. Maceta de madera a la derecha.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🛡️ Top Barrier <span class="dose">0.5mL/L semanal</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">2mL/L mensual</span></span>
+            <span class="tag ok">🐜 D-SIST Planta <span class="dose">2mL/L mensual si hay trips</span></span>
+          </div>
+          <div class="note">Puntas secas: típico por flúor — usar agua reposada 24h.</div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🚀 Booster</span>
+            <span class="tag bad">🌸 Top Bloom</span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4437</div>
+    </div>
+
+    <!-- PLANTA 15 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="si" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4436.webp" alt="Miscanthus" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">15</span>
+          <div class="plant-names">
+            <div class="plant-common">Pasto pluma / Miscanthus</div>
+            <div class="plant-scientific">Miscanthus sinensis</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Gramínea ornamental de gran porte con espigas plumosas doradas secas. Crece directamente en suelo junto al murete.</p>
+        <div class="plant-location">Esquina entre murete bajo de ladrillos blancos y paredón calado. Mesa/banco de madera oscura a la derecha. Suelo mojado.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🛡️ Top Barrier <span class="dose">0.5mL/L semanal</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal</span></span>
+            <span class="tag ok">🐜 D-SIST Planta <span class="dose">2mL/L mensual si hay plaga</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🚀 Booster <span class="dose">exceso N = sin espigas</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4436</div>
+    </div>
+
+    <!-- PLANTA 16 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="no" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4435.webp" alt="Tradescantia" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">16</span>
+          <div class="plant-names">
+            <div class="plant-common">Tradescantia</div>
+            <div class="plant-scientific">Tradescantia zebrina</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Tallos erectos con hojas ovaladas y tallo casi negro-rojizo. Varios brotes brotando desde la base.</p>
+        <div class="plant-location">Plantada en suelo exterior frente a malla metálica. Detrás el tronco grueso del árbol principal.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🛡️ Top Barrier <span class="dose">0.5mL/L semanal</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">2mL/L mensual</span></span>
+            <span class="tag ok">🐜 D-SIST Planta <span class="dose">2mL/L mensual</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🚀 Booster <span class="dose">exceso N pierde color morado</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4435</div>
+    </div>
+
+    <!-- PLANTA 17 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="si" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4434.webp" alt="Salvia rosa" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">17</span>
+          <div class="plant-names">
+            <div class="plant-common">Salvia arbustiva rosa</div>
+            <div class="plant-scientific">Salvia microphylla</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Arbusto fino con hojas pequeñas y flores rosa-lila tubulares. Varias ramas emergiendo sobre el murete blanco.</p>
+        <div class="plant-location">Ramas emergiendo desde el borde del murete bajo de ladrillos blancos. 3–4 tallos con flores abiertas.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🌸 Top Bloom <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🚀 Booster <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🌿 Bioestimulante <span class="dose">2mL/L semanal pre-flor</span></span>
+            <span class="tag ok">🍄 FungoXAN Ambiente <span class="dose">6mL/L mensual</span></span>
+            <span class="tag ok">☠️ D-SIST Ambiente <span class="dose">6mL/L mensual — aplicar al amanecer</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🛡️ Top Barrier <span class="dose">exceso N retrasa floración</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4434</div>
+    </div>
+
+    <!-- PLANTA 18 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="si" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4433.webp" alt="Lantana" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">18</span>
+          <div class="plant-names">
+            <div class="plant-common">Lantana / Camará</div>
+            <div class="plant-scientific">Lantana camara</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Arbusto con hojas dentadas rugosas y flores en racimo. Frutos negros visibles. ⚠️ Frutos tóxicos para mascotas y niños.</p>
+        <div class="plant-location">Plantada en suelo del jardín exterior, zona central. Al fondo borde del murete blanco. Suelo oscuro y húmedo.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🌸 Top Bloom <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🚀 Booster <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🌿 Bioestimulante <span class="dose">2mL/L semanal pre-flor</span></span>
+            <span class="tag ok">🍄 FungoXAN Ambiente <span class="dose">6mL/L mensual</span></span>
+            <span class="tag ok">☠️ D-SIST Ambiente <span class="dose">6mL/L mensual</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🛡️ Top Barrier <span class="dose">exceso N = solo hojas</span></span>
+          </div>
+          <div class="alert">⚠ Frutos negros tóxicos para mascotas y niños.</div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4433</div>
+    </div>
+
+    <!-- PLANTA 19 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="si" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4432.webp" alt="Escabiosa" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">19</span>
+          <div class="plant-names">
+            <div class="plant-common">Escabiosa / Flor de viuda</div>
+            <div class="plant-scientific">Scabiosa atropurpurea</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Tallos finos con cabezuelas globosas marrones en etapa post-floral. Aspecto silvestre, crece espontánea.</p>
+        <div class="plant-location">Brotando del suelo contra el paredón de ladrillos blancos. Cuatro tallos con cabezuelas secas.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🌸 Top Bloom <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🌿 Bioestimulante <span class="dose">2mL/L semanal pre-flor</span></span>
+            <span class="tag ok">☠️ D-SIST Ambiente <span class="dose">6mL/L mensual si hay trips</span></span>
+          </div>
+          <div class="note">Planta silvestre — muy poco insumo es suficiente.</div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🛡️ Top Barrier <span class="dose">exceso N = sin flores</span></span>
+            <span class="tag bad">🦈 Mycorrhizae <span class="dose">planta espontánea establecida</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4432</div>
+    </div>
+
+    <!-- PLANTA 20 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="si" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4431.webp" alt="Rosa blanca" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">20</span>
+          <div class="plant-names">
+            <div class="plant-common">Rosa blanca</div>
+            <div class="plant-scientific">Rosa sp.</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Rosal con flor blanca grande abierta, varios tallos con espinas. Hojas compuestas de 5–7 folíolos.</p>
+        <div class="plant-location">Plantado en tierra junto al paredón blanco, lado izquierdo. Flor blanca cayendo hacia la izquierda.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🌸 Top Bloom <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🚀 Booster <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🌿 Bioestimulante <span class="dose">2mL/L semanal pre-flor</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal</span></span>
+            <span class="tag ok">🍄 FungoXAN Planta <span class="dose">0.25mL/L c/15 días — tabla específica Rosa</span></span>
+            <span class="tag ok">🐜 D-SIST Planta <span class="dose">2mL/L mensual vs pulgones</span></span>
+          </div>
+          <div class="note">FungoXAN tiene fila específica para Rosa — oídio y botrytis. Dosis baja preventiva cada 15 días.</div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🛡️ Top Barrier <span class="dose">en floración activa</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4431</div>
+    </div>
+
+    <!-- PLANTA 21 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="si" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4429.webp" alt="Hemerocallis" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">21</span>
+          <div class="plant-names">
+            <div class="plant-common">Lirio de día amarillo</div>
+            <div class="plant-scientific">Hemerocallis lilioasphodelus</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Flor amarilla grande con 6 pétalos curvos. Hojas basales en abanico. Cada flor dura solo un día.</p>
+        <div class="plant-location">Suelo junto al paredón blanco. IMG_4429: planta completa con tallo alto. IMG_4428: close-up de la flor.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🌸 Top Bloom <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🚀 Booster <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🌿 Bioestimulante <span class="dose">2mL/L semanal pre-flor</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal</span></span>
+            <span class="tag ok">🍄 FungoXAN Ambiente <span class="dose">6mL/L mensual</span></span>
+            <span class="tag ok">☠️ D-SIST Ambiente <span class="dose">6mL/L mensual si hay plaga</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🛡️ Top Barrier <span class="dose">exceso N = sin flores</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4429 · IMG_4428</div>
+    </div>
+
+    <!-- PLANTA 22 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="si" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4430.webp" alt="Salvia azul" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">22</span>
+          <div class="plant-names">
+            <div class="plant-common">Salvia azul</div>
+            <div class="plant-scientific">Salvia farinacea</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Herbácea compacta con hojas ovales y espigas de flores azul-violeta. Varios ejemplares juntos.</p>
+        <div class="plant-location">Tierra junto al paredón blanco, primer plano. Detrás base de la rosa blanca. A la derecha tronco rollizo.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🌸 Top Bloom <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🚀 Booster <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🌿 Bioestimulante <span class="dose">2mL/L semanal pre-flor</span></span>
+            <span class="tag ok">🍄 FungoXAN Ambiente <span class="dose">6mL/L mensual</span></span>
+            <span class="tag ok">☠️ D-SIST Ambiente <span class="dose">6mL/L mensual si hay pulgones</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🛡️ Top Barrier <span class="dose">exceso N en floración</span></span>
+            <span class="tag bad">🚿 Limpia Raíces <span class="dose">suelo ya muy húmedo</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4430</div>
+    </div>
+
+    <!-- PLANTA 23 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="si" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4425.webp" alt="Lavanda" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">23</span>
+          <div class="plant-names">
+            <div class="plant-common">Lavanda</div>
+            <div class="plant-scientific">Lavandula angustifolia</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Arbusto bajo con follaje plateado-grisáceo aromático y espigas lila-violeta. Varios ejemplares en cantero con tronco rollizo.</p>
+        <div class="plant-location">Primer plano foto 5, cantero delimitado por tronco rollizo. Al fondo hemerocallis, salvia azul y otras plantas.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🌸 Top Bloom <span class="dose">1mL/L muy diluido — una vez por temporada</span></span>
+            <span class="tag ok">☠️ D-SIST Ambiente <span class="dose">6mL/L mensual si hay plaga</span></span>
+            <span class="tag ok">🍄 FungoXAN Ambiente <span class="dose">6mL/L mensual preventivo</span></span>
+          </div>
+          <div class="note">La lavanda prefiere suelo pobre. Top Bloom: una sola aplicación muy diluida al inicio de temporada.</div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🛡️ Top Barrier</span>
+            <span class="tag bad">🚀 Booster</span>
+            <span class="tag bad">🌿 Bioestimulante</span>
+            <span class="tag bad">🦈 Mycorrhizae <span class="dose">ya establecida</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4425</div>
+    </div>
+
+    <!-- PLANTA 24 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="no" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4426.webp" alt="Artemisa" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">24</span>
+          <div class="plant-names">
+            <div class="plant-common">Artemisa / Ajenjo</div>
+            <div class="plant-scientific">Artemisia sp.</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Follaje plateado-grisáceo muy recortado. Aromática e insectífuga natural.</p>
+        <div class="plant-location">Plantada sola contra el paredón blanco de ladrillos. Tierra oscura alrededor.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🍄 FungoXAN Ambiente <span class="dose">6mL/L mensual preventivo</span></span>
+            <span class="tag ok">☠️ D-SIST Ambiente <span class="dose">6mL/L mensual si hay plaga puntual</span></span>
+          </div>
+          <div class="note">Naturalmente repelente — casi no necesita insumos. Suelo pobre = mejor aroma.</div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🛡️ Top Barrier</span>
+            <span class="tag bad">🚀 Booster</span>
+            <span class="tag bad">🌸 Top Bloom</span>
+            <span class="tag bad">🌿 Bioestimulante</span>
+            <span class="tag bad">🦈 Mycorrhizae</span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4426</div>
+    </div>
+
+    <!-- PLANTA 25 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="si" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4427.webp" alt="Salvia mexicana" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">25</span>
+          <div class="plant-names">
+            <div class="plant-common">Salvia mexicana lila</div>
+            <div class="plant-scientific">Salvia leucantha</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Arbusto con hojas lanceoladas gris-verdosas y largas espigas de flores violeta-morado intenso. Muy visitada por colibríes.</p>
+        <div class="plant-location">Cantero con tronco delimitador, mismo sector que la lavanda. Dos tallos floridos inclinados hacia adelante.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🌸 Top Bloom <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🚀 Booster <span class="dose">1mL/L semanal en floración</span></span>
+            <span class="tag ok">🌿 Bioestimulante <span class="dose">2mL/L semanal pre-flor</span></span>
+            <span class="tag ok">🍄 FungoXAN Ambiente <span class="dose">6mL/L mensual</span></span>
+            <span class="tag ok">☠️ D-SIST Ambiente <span class="dose">6mL/L mensual — aplicar al amanecer</span></span>
+          </div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🛡️ Top Barrier <span class="dose">exceso N retrasa floración</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4427</div>
+    </div>
+
+    <!-- PLANTA 26 -->
+    <div class="plant-card" data-zone="exterior" data-floracion="si" data-dsist="ok">
+      <img class="plant-photo" src="data/Plantas 260327/IMG_4424.webp" alt="Enredadera trepadora" loading="lazy" onerror="this.style.display='none'">
+      <div class="plant-inner">
+        <div class="plant-header">
+          <span class="plant-id">26</span>
+          <div class="plant-names">
+            <div class="plant-common">Enredadera trepadora</div>
+            <div class="plant-scientific">Trachelospermum jasminoides</div>
+          </div>
+          <span class="plant-zone exterior">Exterior</span>
+        </div>
+        <p class="plant-desc">Enredadera de hojas pequeñas ovaladas trepando por tutor de bambú y alambre guía. Planta joven en crecimiento.</p>
+        <div class="plant-location">Al pie del paredón blanco, junto a la puerta de entrada (felpudo y marco negro a la izquierda). Foco de jardín negro empotrado a la derecha. Tutor de bambú y alambre visibles.</div>
+        <div class="divider"></div>
+        <div class="chufa-section">
+          <div class="chufa-label ok">✓ Adecuada</div>
+          <div class="tags">
+            <span class="tag ok">🧬 Enzimas <span class="dose">1mL/L semanal</span></span>
+            <span class="tag ok">🛡️ Top Barrier <span class="dose">0.5mL/L semanal — planta joven, prioridad</span></span>
+            <span class="tag ok">🌿 Bioestimulante <span class="dose">2mL/L semanal pre-flor</span></span>
+            <span class="tag ok">🌸 Top Bloom <span class="dose">1mL/L semanal al florecer</span></span>
+            <span class="tag ok">🦈 Mycorrhizae <span class="dose">pizca semanal — planta joven, muy útil ahora</span></span>
+            <span class="tag ok">🍄 FungoXAN Ambiente <span class="dose">6mL/L mensual</span></span>
+            <span class="tag ok">☠️ D-SIST Ambiente <span class="dose">6mL/L mensual si hay plaga</span></span>
+          </div>
+          <div class="note">Mycorrhizae y Top Barrier son prioridad ahora para establecer raíces antes de la primera floración.</div>
+        </div>
+        <div class="chufa-section">
+          <div class="chufa-label bad">✗ Prohibida</div>
+          <div class="tags">
+            <span class="tag bad">🚀 Booster <span class="dose">esperar a que esté establecida</span></span>
+            <span class="tag bad">🚿 Limpia Raíces <span class="dose">solo en etapa floración</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="img-ref">IMG_4424</div>
+    </div>
+
+  </div><!-- /plants-grid -->
+
+  <footer class="footer">
+    <span>LIFE · Jardín · 26 plantas · 11 productos</span>
+    <span>Fichas técnicas: GlacoXAN · DMT · Top Crop · Great White</span>
+  </footer>
+
+</main>
+
+<script>
+  function filterCards(type, btn) {
+    // Update active button
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const cards = document.querySelectorAll('.plant-card');
+    let visible = 0;
+
+    cards.forEach(card => {
+      const zone = card.dataset.zone;
+      const floracion = card.dataset.floracion;
+      const dsist = card.dataset.dsist;
+
+      let show = false;
+      if (type === 'all') show = true;
+      else if (type === 'interior') show = zone === 'interior';
+      else if (type === 'exterior') show = zone === 'exterior';
+      else if (type === 'floracion') show = floracion === 'si';
+      else if (type === 'dsist-ok') show = dsist === 'ok';
+      else if (type === 'dsist-no') show = dsist === 'no';
+
+      card.classList.toggle('hidden', !show);
+      if (show) visible++;
+    });
+
+    document.getElementById('plantCount').textContent = visible + (visible === 1 ? ' planta' : ' plantas');
+  }
+</script>
+
+</body>
+</html>
