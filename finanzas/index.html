@@ -598,6 +598,166 @@
     .appsheet-drawer { width: 100%; }
     .fab { bottom: 1.5rem; right: 1.5rem; }
   }
+
+  /* ── FIJOS DETAIL (panel colapsable en vista Gastos) ─── */
+  .fijos-detail {
+    margin: -1.25rem 0 2rem 0;
+    border: 1px solid var(--border);
+    border-top: none;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .fijos-detail table { margin: 0; }
+  .fijos-detail thead th { background: var(--surface2); }
+  .fijos-detail tr:last-child td { border-bottom: none; }
+
+  /* ── PRESUPUESTO — BARRA DE PROGRESO ─────────────────── */
+  .ppto-bar-wrap { margin-bottom: 2rem; }
+
+  .ppto-bar {
+    display: flex;
+    height: 26px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    margin-bottom: 0.5rem;
+  }
+
+  .ppto-seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: width 0.4s ease;
+    font-size: 0.55rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 400;
+    min-width: 0;
+  }
+  .ppto-seg span {
+    white-space: nowrap;
+    padding: 0 0.5rem;
+    color: rgba(14,14,12,0.8);
+  }
+  .ppto-seg-fijos { background: var(--danger); }
+  .ppto-seg-sim   { background: var(--accent2); }
+  .ppto-seg-disp  { background: var(--accent); }
+
+  .ppto-bar-legend {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .ppto-leg-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    margin-right: 0.35rem;
+    vertical-align: middle;
+  }
+
+  /* ── PRESUPUESTO — TABLA DE FIJOS ─────────────────────── */
+  .fijos-row-clickable {
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .fijos-row-clickable:hover { background: var(--surface2); }
+  .fijos-row-clickable.active-history { background: var(--surface3); }
+
+  .badge-bimestral {
+    font-size: 0.55rem;
+    color: var(--accent2);
+    letter-spacing: 0.04em;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+  }
+
+  tfoot td {
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ── PRESUPUESTO — HISTORIAL ─────────────────────────── */
+  .ppto-history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* ── PRESUPUESTO — SIMULADOR ──────────────────────────── */
+  .sim-table { width: 100%; border-collapse: collapse; }
+
+  .sim-table thead th {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    font-weight: 300;
+  }
+  .sim-table tbody tr { border-bottom: 1px solid var(--border); }
+  .sim-table tbody td { padding: 0.3rem 0.75rem; }
+
+  .sim-input {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid transparent;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 300;
+    width: 100%;
+    padding: 0.2rem 0;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .sim-input:focus { border-bottom-color: var(--accent); }
+  .sim-input-monto { text-align: right; }
+
+  .btn-add-sim {
+    display: block;
+    margin: 0.5rem 0.75rem;
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.35rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .btn-add-sim:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-link {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 0;
+    transition: color 0.2s;
+  }
+  .btn-link:hover { color: var(--text); }
+
+  .hint-text {
+    font-size: 0.6rem;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
 </style>
 </head>
 <body>
@@ -643,6 +803,16 @@
         <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
       </svg>
       <span class="nav-tooltip">Ingresos</span>
+    </button>
+
+    <!-- Presupuesto -->
+    <button class="nav-item" onclick="switchView('presupuesto')" id="nav-presupuesto">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <path d="M3 9h18M9 21V9"/>
+        <path d="M13 13h4M13 17h4"/>
+      </svg>
+      <span class="nav-tooltip">Presupuesto</span>
     </button>
   </div>
 
@@ -690,10 +860,10 @@
           <div class="card-label">Total gastos</div>
           <div class="card-value" id="g-total">—</div>
         </div>
-        <div class="card">
+        <div class="card" onclick="toggleFijosDetail()" style="cursor:pointer" title="Ver detalle de gastos fijos">
           <div class="card-label">Gastos fijos</div>
           <div class="card-value accent2" id="g-fijos">—</div>
-          <div class="card-sub" id="g-fijos-count">— ítems recurrentes</div>
+          <div class="card-sub" id="g-fijos-count">— ítems · ver detalle</div>
         </div>
         <div class="card">
           <div class="card-label">En cuotas</div>
@@ -704,6 +874,13 @@
           <div class="card-label">Deuda neta</div>
           <div class="card-value" id="g-deuda">—</div>
           <div class="card-sub" id="g-deuda-quien">calculando…</div>
+        </div>
+      </div>
+
+      <!-- Detalle de gastos fijos (colapsable, se abre al clickear la card) -->
+      <div class="fijos-detail" id="fijos-detail" style="display:none">
+        <div id="fijos-detail-inner">
+          <div class="empty-state" style="padding:1rem">Cargando…</div>
         </div>
       </div>
 
@@ -833,6 +1010,102 @@
 
     </div><!-- /view-ingresos -->
 
+    <!-- ── VISTA PRESUPUESTO ──────────────────────────── -->
+    <div class="view" id="view-presupuesto">
+
+      <div class="section-header">
+        <span class="section-label">Presupuesto</span>
+        <div class="section-line"></div>
+      </div>
+
+      <!-- 4 cards principales -->
+      <div class="cards-row" id="ppto-cards">
+        <div class="card">
+          <div class="card-label">Ingresos del mes</div>
+          <div class="card-value accent" id="ppto-ingresos">—</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Gastos fijos</div>
+          <div class="card-value accent2" id="ppto-fijos-val">—</div>
+          <div class="card-sub" id="ppto-fijos-count">— ítems</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Simulados</div>
+          <div class="card-value" id="ppto-sim-val">$0</div>
+          <div class="card-sub" id="ppto-sim-count">0 ítems</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Disponible</div>
+          <div class="card-value" id="ppto-disponible">—</div>
+          <div class="card-sub" id="ppto-disponible-sub"></div>
+        </div>
+      </div>
+
+      <!-- Barra de progreso: fijos | simulados | disponible -->
+      <div class="ppto-bar-wrap">
+        <div class="ppto-bar">
+          <div class="ppto-seg ppto-seg-fijos" id="ppto-seg-fijos" style="width:0%"><span>Fijos</span></div>
+          <div class="ppto-seg ppto-seg-sim"   id="ppto-seg-sim"   style="width:0%"><span>Simulados</span></div>
+          <div class="ppto-seg ppto-seg-disp"  id="ppto-seg-disp"  style="width:100%"><span>Disponible</span></div>
+        </div>
+        <div class="ppto-bar-legend">
+          <span><span class="ppto-leg-dot" style="background:var(--danger)"></span>Gastos fijos</span>
+          <span><span class="ppto-leg-dot" style="background:var(--accent2)"></span>Simulados</span>
+          <span><span class="ppto-leg-dot" style="background:var(--accent)"></span>Disponible</span>
+        </div>
+      </div>
+
+      <!-- Gráficos: torta de fijos por categoría + historial del fijo seleccionado -->
+      <div class="charts-row">
+        <div class="chart-box">
+          <div class="chart-title">Fijos por categoría</div>
+          <div class="chart-wrap"><canvas id="chart-ppto-pie"></canvas></div>
+        </div>
+        <div class="chart-box" id="ppto-history-box" style="display:none">
+          <div class="chart-title ppto-history-header">
+            <span id="ppto-history-label">Evolución</span>
+            <button class="btn-link" onclick="closeHistoryChart()">✕ cerrar</button>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-ppto-history"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Tabla de gastos fijos vigentes -->
+      <div class="table-box">
+        <div class="table-header">
+          <span class="section-label">Gastos fijos vigentes</span>
+          <span class="hint-text">Clic en una fila para ver evolución histórica</span>
+        </div>
+        <div id="ppto-fijos-table">
+          <div class="empty-state">Cargando…</div>
+        </div>
+      </div>
+
+      <!-- Simulador de gastos variables (100% client-side) -->
+      <div class="table-box" style="margin-top:2rem">
+        <div class="table-header">
+          <span class="section-label">Simulador de gastos variables</span>
+          <button class="btn-link" onclick="clearSimulator()">Limpiar todo</button>
+        </div>
+        <div id="ppto-simulator">
+          <table class="sim-table">
+            <thead><tr>
+              <th>Concepto</th>
+              <th style="text-align:right;width:140px">Monto</th>
+              <th style="width:40px"></th>
+            </tr></thead>
+            <tbody id="ppto-sim-body">
+              <tr id="ppto-sim-empty">
+                <td colspan="3" class="empty-state" style="padding:1.5rem 0.75rem">Sin gastos simulados. Agregá uno para proyectar.</td>
+              </tr>
+            </tbody>
+          </table>
+          <button class="btn-add-sim" onclick="addSimRow()">+ Agregar gasto</button>
+        </div>
+      </div>
+
+    </div><!-- /view-presupuesto -->
+
   </div><!-- /content -->
 </main>
 
@@ -851,7 +1124,7 @@
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbww3oiHDqq4w5hHQqdwJpCxGMx-mSQhiUEiJojkCyRIkk2BLcsMcF2NdWb0cLEFJdcu/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbysRuNB-922qFj04pbBhMQXJpKnSMFGtUbeVe5FImBerx6OUOfRSOp0cBSqF_BEIrIFeA/exec';
 const APPSHEET_URL = 'https://www.appsheet.com/start/01dde697-d530-4d07-89d9-34f4ec40b45e'; // ← Pegá acá la URL pública de tu app AppSheet
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
@@ -862,6 +1135,9 @@ const S = {
   catTree:     {},
   log:         [],        // todo el log (sin borrados)
   proportions: null,      // proporciones del mes activo
+  fixed:       null,      // gastos fijos vigentes del mes (desde endpoint ?action=fixed)
+  simRows:     [],        // filas del simulador (solo client-side)
+  simCounter:  0,         // ID incremental para filas del simulador
   month:       thisMonth(),
   view:        'gastos',
   charts:      {},        // instancias Chart.js activas
@@ -890,8 +1166,11 @@ async function init() {
     document.getElementById('inc-p1-label').textContent = p1;
     document.getElementById('inc-p2-label').textContent = p2;
 
-    // Proporciones del mes actual
-    await fetchProportions(S.month);
+    // Proporciones + gastos fijos del mes actual en paralelo
+    await Promise.all([
+      fetchProportions(S.month),
+      fetchFixed(S.month),
+    ]);
 
     hideLoading();
     renderView(S.view);
@@ -912,7 +1191,7 @@ async function reload() {
 
 function switchView(view) {
   S.view = view;
-  ['gastos','inversiones','ingresos'].forEach(v => {
+  ['gastos','inversiones','ingresos','presupuesto'].forEach(v => {
     document.getElementById('view-' + v).classList.toggle('active', v === view);
     document.getElementById('nav-'  + v).classList.toggle('active', v === view);
   });
@@ -921,7 +1200,10 @@ function switchView(view) {
 
 function onMonthChange(val) {
   S.month = val;
-  fetchProportions(val).then(() => renderView(S.view));
+  Promise.all([
+    fetchProportions(val),
+    fetchFixed(val),
+  ]).then(() => renderView(S.view));
 }
 
 // ── RENDER DISPATCH ───────────────────────────────────────────────────────────
@@ -930,6 +1212,7 @@ function renderView(view) {
   if (view === 'gastos')      renderGastos();
   if (view === 'inversiones') renderInversiones();
   if (view === 'ingresos')    renderIngresos();
+  if (view === 'presupuesto') renderPresupuesto();
 }
 
 // ── VISTA GASTOS ──────────────────────────────────────────────────────────────
@@ -937,14 +1220,19 @@ function renderView(view) {
 function renderGastos() {
   const rows = filterLog({ tipo: 'Gasto', month: S.month });
 
-  // Cards
-  const total  = sum(rows, 'monto_total');
-  const fijos  = rows.filter(r => r.es_fijo === true || r.es_fijo === 'TRUE');
+  // === Gastos variables del Log + gastos fijos del endpoint fixed ===
+  // El total real = variables registrados en el mes + fijos vigentes
+  const varTotal = sum(rows, 'monto_total');
+  const fixTotal = S.fixed?.total || 0;
+  const total    = varTotal + fixTotal;
+
   const cuotas = rows.filter(r => (parseInt(r.cuotas_total) || 1) > 1);
 
+  // Card "Gastos fijos" — muestra datos del endpoint fixed
+  const fijosCount = S.fixed?.data?.length || 0;
   setText('g-total',        fmt(total));
-  setText('g-fijos',        fmt(sum(fijos, 'monto_total')));
-  setText('g-fijos-count',  fijos.length + ' ítem' + (fijos.length !== 1 ? 's' : '') + ' recurrente' + (fijos.length !== 1 ? 's' : ''));
+  setText('g-fijos',        fmt(fixTotal));
+  setText('g-fijos-count',  fijosCount + ' ítem' + (fijosCount !== 1 ? 's' : '') + ' · ver detalle');
   setText('g-cuotas',       fmt(sum(cuotas, 'monto_total')));
   setText('g-cuotas-count', cuotas.length + ' cuota' + (cuotas.length !== 1 ? 's' : '') + ' activa' + (cuotas.length !== 1 ? 's' : ''));
 
@@ -1503,6 +1791,285 @@ function lineDefaults() {
     maintainAspectRatio: false,
     plugins: { legend: { position: 'bottom' } },
   };
+}
+
+// ── FETCH FIXED ───────────────────────────────────────────────────────────────
+
+// Qué hace: pide al endpoint ?action=fixed los gastos fijos vigentes para el mes.
+// El resultado incluye `data` (array de gastos) y `history` (mapa desc → historial).
+// Si falla silenciosamente, S.fixed queda null y las cards muestran $0.
+async function fetchFixed(month) {
+  try {
+    const res = await apiFetch('fixed', { month });
+    S.fixed = res?.ok ? res : null;
+  } catch (e) {
+    S.fixed = null;
+  }
+}
+
+// ── VISTA GASTOS — PANEL FIJOS ────────────────────────────────────────────────
+
+// Alterna la visibilidad del panel de detalle de gastos fijos en la vista Gastos.
+function toggleFijosDetail() {
+  const panel = document.getElementById('fijos-detail');
+  const isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) renderFijosDetailTable();
+}
+
+// Renderiza la tabla de fijos dentro del panel colapsable de la vista Gastos.
+function renderFijosDetailTable() {
+  const inner = document.getElementById('fijos-detail-inner');
+  const data  = S.fixed?.data;
+  if (!data || data.length === 0) {
+    inner.innerHTML = '<div class="empty-state" style="padding:1rem">Sin gastos fijos para este mes.</div>';
+    return;
+  }
+  inner.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Descripción</th><th>Categoría</th>
+        <th>Responsable</th><th style="text-align:right">Monto mensual</th>
+      </tr></thead>
+      <tbody>
+        ${data.map(r => `
+          <tr>
+            <td>${r.descripcion}${r.es_bimestral ? ' <span class="badge-bimestral">bimestral</span>' : ''}</td>
+            <td class="td-muted">${r.categoria}${r.subcategoria ? ' / ' + r.subcategoria : ''}</td>
+            <td class="td-muted">${r.responsable || '—'}</td>
+            <td class="td-amount td-accent">${fmt(r.monto_mensual)}</td>
+          </tr>`).join('')}
+      </tbody>
+      <tfoot><tr>
+        <td colspan="3" class="td-muted" style="padding:0.65rem 1rem">Total fijos</td>
+        <td class="td-amount td-accent" style="padding:0.65rem 1rem">${fmt(S.fixed.total)}</td>
+      </tr></tfoot>
+    </table>`;
+}
+
+// ── VISTA PRESUPUESTO ─────────────────────────────────────────────────────────
+
+function renderPresupuesto() {
+  const ingresos = sum(filterLog({ tipo: 'Ingreso', month: S.month }), 'monto_total');
+  const fijosTotal = S.fixed?.total || 0;
+  const fijosCount = S.fixed?.data?.length || 0;
+  const simTotal   = S.simRows.reduce((acc, r) => acc + (parseFloat(r.monto) || 0), 0);
+  const disponible = ingresos - fijosTotal - simTotal;
+
+  // Cards
+  setText('ppto-ingresos',       fmt(ingresos));
+  setText('ppto-fijos-val',      fmt(fijosTotal));
+  setText('ppto-fijos-count',    fijosCount + ' ítem' + (fijosCount !== 1 ? 's' : ''));
+  setText('ppto-sim-val',        fmt(simTotal));
+  setText('ppto-sim-count',      S.simRows.length + ' ítem' + (S.simRows.length !== 1 ? 's' : ''));
+
+  const dispEl = document.getElementById('ppto-disponible');
+  dispEl.textContent = fmt(Math.abs(disponible));
+  dispEl.className = 'card-value ' + (disponible >= 0 ? 'accent' : 'danger');
+  setText('ppto-disponible-sub', disponible >= 0 ? 'de margen' : 'de déficit');
+
+  updateProgressBar(ingresos, fijosTotal, simTotal);
+  renderPptoPie();
+  renderPptoFijosTable();
+}
+
+// Actualiza la barra de progreso tricolor (fijos/simulados/disponible).
+// Cada segmento es proporcional al ingreso total. Si no hay ingresos, barra vacía.
+function updateProgressBar(ingresos, fijosTotal, simTotal) {
+  const base = ingresos > 0 ? ingresos : (fijosTotal + simTotal) || 1;
+  const pctFijos = Math.min(100, (fijosTotal / base) * 100);
+  const pctSim   = Math.min(100 - pctFijos, (simTotal / base) * 100);
+  const pctDisp  = Math.max(0, 100 - pctFijos - pctSim);
+
+  document.getElementById('ppto-seg-fijos').style.width = pctFijos.toFixed(1) + '%';
+  document.getElementById('ppto-seg-sim').style.width   = pctSim.toFixed(1)   + '%';
+  document.getElementById('ppto-seg-disp').style.width  = pctDisp.toFixed(1)  + '%';
+}
+
+// Torta de gastos fijos por categoría.
+function renderPptoPie() {
+  destroyChart('ppto-pie');
+  const data = S.fixed?.data;
+  if (!data || data.length === 0) return;
+
+  const grouped = data.reduce((acc, r) => {
+    const key = r.categoria || 'Sin categoría';
+    acc[key] = (acc[key] || 0) + r.monto_mensual;
+    return acc;
+  }, {});
+  const labels = Object.keys(grouped);
+  const values = labels.map(k => grouped[k]);
+
+  S.charts['ppto-pie'] = new Chart(document.getElementById('chart-ppto-pie'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: PALETTE, borderWidth: 0 }] },
+    options: { ...pieDefaults(), cutout: '60%' },
+  });
+}
+
+// Tabla de gastos fijos vigentes en la vista Presupuesto.
+// Cada fila es clickeable → muestra el gráfico de evolución histórica.
+function renderPptoFijosTable() {
+  const container = document.getElementById('ppto-fijos-table');
+  const data = S.fixed?.data;
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div class="empty-state">Sin gastos fijos para este mes.</div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Descripción</th><th>Categoría</th>
+        <th>Responsable</th><th>Medio</th>
+        <th style="text-align:right">Monto mensual</th>
+      </tr></thead>
+      <tbody>
+        ${data.map(r => `
+          <tr class="fijos-row-clickable" onclick="showFixedHistory('${r.descripcion}')">
+            <td>${r.descripcion}${r.es_bimestral ? ' <span class="badge-bimestral">bimestral</span>' : ''}</td>
+            <td class="td-muted">${r.categoria}${r.subcategoria ? ' / ' + r.subcategoria : ''}</td>
+            <td class="td-muted">${r.responsable || '—'}</td>
+            <td class="td-muted">${r.medio_pago || '—'}</td>
+            <td class="td-amount td-accent">${fmt(r.monto_mensual)}</td>
+          </tr>`).join('')}
+      </tbody>
+      <tfoot><tr>
+        <td colspan="4" class="td-muted" style="padding:0.65rem 1rem">Total fijos mensuales</td>
+        <td class="td-amount td-accent" style="padding:0.65rem 1rem">${fmt(S.fixed.total)}</td>
+      </tr></tfoot>
+    </table>`;
+}
+
+// Muestra el gráfico de evolución histórica del gasto fijo con esa descripción.
+// El historial viene embedido en S.fixed.history — sin llamadas extra a la API.
+// Usa stepped:'before' para que el gráfico de escalones refleje que el precio
+// no cambia suavemente sino que salta en una fecha puntual.
+function showFixedHistory(descripcion) {
+  const history = S.fixed?.history?.[descripcion];
+  if (!history || history.length === 0) return;
+
+  // Marcar fila activa visualmente
+  document.querySelectorAll('.fijos-row-clickable').forEach(tr => {
+    tr.classList.toggle('active-history', tr.querySelector('td')?.textContent.trim().startsWith(descripcion));
+  });
+
+  // Mostrar panel del gráfico
+  const box = document.getElementById('ppto-history-box');
+  box.style.display = 'block';
+  setText('ppto-history-label', descripcion);
+
+  // Construir datasets
+  const labels = history.map(h => h.vigente_desde);
+  const values = history.map(h => h.monto);
+
+  destroyChart('ppto-history');
+  S.charts['ppto-history'] = new Chart(document.getElementById('chart-ppto-history'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: descripcion,
+        data: values,
+        borderColor: PALETTE[1],       // accent2 = dorado
+        backgroundColor: PALETTE[1] + '22',
+        borderWidth: 2,
+        fill: true,
+        stepped: 'before',             // escalón: el monto entra en vigor en vigente_desde
+        pointRadius: 5,
+        pointBackgroundColor: PALETTE[1],
+      }],
+    },
+    options: {
+      ...lineDefaults(),
+      plugins: { legend: { display: false } },
+      scales: {
+        x: axisStyle(),
+        y: { ...axisStyle(), ticks: { ...tickStyle(), callback: v => fmtShort(v) }, beginAtZero: true },
+      },
+    },
+  });
+}
+
+function closeHistoryChart() {
+  document.getElementById('ppto-history-box').style.display = 'none';
+  destroyChart('ppto-history');
+  document.querySelectorAll('.fijos-row-clickable').forEach(tr => tr.classList.remove('active-history'));
+}
+
+// ── SIMULADOR ─────────────────────────────────────────────────────────────────
+
+// Agrega una fila editable al simulador de gastos variables.
+// El simulador es 100% client-side: no guarda datos en ningún lado.
+// Cada cambio recalcula los totales y la barra de progreso en tiempo real.
+function addSimRow() {
+  const id = ++S.simCounter;
+  S.simRows.push({ id, concepto: '', monto: 0 });
+
+  const empty = document.getElementById('ppto-sim-empty');
+  if (empty) empty.remove();
+
+  const tbody = document.getElementById('ppto-sim-body');
+  const tr = document.createElement('tr');
+  tr.id = 'sim-row-' + id;
+  tr.innerHTML = `
+    <td><input class="sim-input" type="text" placeholder="Concepto…"
+         oninput="updateSimRow(${id}, 'concepto', this.value)"></td>
+    <td><input class="sim-input sim-input-monto" type="number" placeholder="0"
+         oninput="updateSimRow(${id}, 'monto', this.value)"></td>
+    <td><button class="btn-link" onclick="removeSimRow(${id})">✕</button></td>`;
+  tbody.appendChild(tr);
+}
+
+function updateSimRow(id, field, value) {
+  const row = S.simRows.find(r => r.id === id);
+  if (!row) return;
+  row[field] = field === 'monto' ? (parseFloat(value) || 0) : value;
+  updateSimTotals();
+}
+
+function removeSimRow(id) {
+  S.simRows = S.simRows.filter(r => r.id !== id);
+  const tr = document.getElementById('sim-row-' + id);
+  if (tr) tr.remove();
+
+  // Reponer el mensaje vacío si no quedan filas
+  if (S.simRows.length === 0) {
+    const tbody = document.getElementById('ppto-sim-body');
+    tbody.innerHTML = `<tr id="ppto-sim-empty">
+      <td colspan="3" class="empty-state" style="padding:1.5rem 0.75rem">Sin gastos simulados. Agregá uno para proyectar.</td>
+    </tr>`;
+  }
+  updateSimTotals();
+}
+
+function clearSimulator() {
+  S.simRows = [];
+  S.simCounter = 0;
+  const tbody = document.getElementById('ppto-sim-body');
+  tbody.innerHTML = `<tr id="ppto-sim-empty">
+    <td colspan="3" class="empty-state" style="padding:1.5rem 0.75rem">Sin gastos simulados. Agregá uno para proyectar.</td>
+  </tr>`;
+  updateSimTotals();
+}
+
+// Recalcula los totales del simulador y actualiza las cards + barra de progreso.
+// Se llama cada vez que el usuario edita un input del simulador.
+function updateSimTotals() {
+  const simTotal  = S.simRows.reduce((acc, r) => acc + (parseFloat(r.monto) || 0), 0);
+  const ingresos  = sum(filterLog({ tipo: 'Ingreso', month: S.month }), 'monto_total');
+  const fijosTotal = S.fixed?.total || 0;
+  const disponible = ingresos - fijosTotal - simTotal;
+
+  setText('ppto-sim-val',   fmt(simTotal));
+  setText('ppto-sim-count', S.simRows.length + ' ítem' + (S.simRows.length !== 1 ? 's' : ''));
+
+  const dispEl = document.getElementById('ppto-disponible');
+  dispEl.textContent = fmt(Math.abs(disponible));
+  dispEl.className = 'card-value ' + (disponible >= 0 ? 'accent' : 'danger');
+  setText('ppto-disponible-sub', disponible >= 0 ? 'de margen' : 'de déficit');
+
+  updateProgressBar(ingresos, fijosTotal, simTotal);
 }
 
 // ── ARRANQUE ──────────────────────────────────────────────────────────────────
