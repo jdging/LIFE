@@ -1451,9 +1451,13 @@ function renderTarjetasAlert() {
 function renderGastosPie(rows) {
   destroyChart('gastos-pie');
   const grouped = groupBy(rows, 'categoria');
-  const labels  = Object.keys(grouped);
-  const data    = labels.map(k => sum(grouped[k], 'monto_total'));
+  const keys    = Object.keys(grouped);
+  const data    = keys.map(k => sum(grouped[k], 'monto_total'));
   if (!data.length) return;
+
+  const total  = data.reduce((a, b) => a + b, 0) || 1;
+  // Label incluye monto y % para que la leyenda sea autoexplicativa sin hover
+  const labels = keys.map((k, i) => `${k}  ${fmtShort(data[i])}  ${((data[i] / total) * 100).toFixed(0)}%`);
 
   S.charts['gastos-pie'] = new Chart(document.getElementById('chart-gastos-pie'), {
     type: 'doughnut',
@@ -1464,6 +1468,11 @@ function renderGastosPie(rows) {
     options: {
       ...pieDefaults(),
       cutout: '60%',
+      plugins: {
+        legend: { position: 'right', labels: { color: '#6b6860', font: { size: 10 } } },
+        // Tooltip solo muestra el monto — el label ya tiene monto y % en la leyenda
+        tooltip: { callbacks: { label: ctx => '  ' + fmtShort(ctx.raw) } },
+      },
     },
   });
 }
@@ -1584,31 +1593,71 @@ function renderInvPie(rows) {
 
 function renderInvLine() {
   destroyChart('inv-line');
-  const months = last6Months(S.month);
-  let acum = 0;
-  const data = months.map(m => {
-    acum += sum(filterLog({ tipo: 'Inversión', month: m }), 'monto_total');
-    return acum;
+  const months  = last6Months(S.month);
+  const allRows = filterLog({ tipo: 'Inversión' });
+
+  // Subcategorías únicas presentes en todo el historial (no solo el mes actual)
+  const subcats = [...new Set(allRows.map(r => r.subcategoria).filter(Boolean))].sort();
+
+  // === Dataset total — línea gruesa con fill ===
+  let acumTotal = 0;
+  const totalData = months.map(m => {
+    acumTotal += sum(filterLog({ tipo: 'Inversión', month: m }), 'monto_total');
+    return acumTotal;
+  });
+
+  // === Dataset por subcategoría — líneas finas, sin fill ===
+  const subDatasets = subcats.map((cat, i) => {
+    let acum = 0;
+    const data = months.map(m => {
+      acum += sum(
+        filterLog({ tipo: 'Inversión', month: m }).filter(r => r.subcategoria === cat),
+        'monto_total'
+      );
+      return acum;
+    });
+    const color = PALETTE[(i + 1) % PALETTE.length];
+    return {
+      label: cat,
+      data,
+      borderColor: color,
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      fill: false,
+      tension: 0.3,
+      pointRadius: 3,
+      pointBackgroundColor: color,
+    };
   });
 
   S.charts['inv-line'] = new Chart(document.getElementById('chart-inv-line'), {
     type: 'line',
     data: {
       labels: months.map(shortMonth),
-      datasets: [{
-        label: 'Acumulado',
-        data,
-        borderColor: PALETTE[0],
-        backgroundColor: PALETTE[0] + '22',
-        borderWidth: 2,
-        fill: true,
-        tension: 0.3,
-        pointRadius: 4,
-        pointBackgroundColor: PALETTE[0],
-      }],
+      datasets: [
+        {
+          label: 'Total',
+          data: totalData,
+          borderColor: PALETTE[0],
+          backgroundColor: PALETTE[0] + '22',
+          borderWidth: 3,
+          fill: true,
+          tension: 0.3,
+          pointRadius: 4,
+          pointBackgroundColor: PALETTE[0],
+        },
+        ...subDatasets,
+      ],
     },
     options: {
       ...lineDefaults(),
+      plugins: {
+        ...lineDefaults().plugins,
+        legend: {
+          display: true,
+          labels: { color: '#6b6860', font: { size: 10 }, boxWidth: 12, padding: 10 },
+        },
+      },
       scales: {
         x: axisStyle(),
         y: { ...axisStyle(), ticks: { ...tickStyle(), callback: v => fmtShort(v) } },
@@ -1640,7 +1689,7 @@ function renderIngresos() {
     setText('inc-proporcion', pct1 + '% / ' + pct2 + '%');
     const src = prop.source === 'fallback'
       ? 'fallback de ' + prop.fallback_month
-      : prop.source === 'default_50_50' ? 'sin datos — 50/50' : 'este mes';
+      : prop.source === 'default_50_50' ? 'sin datos — 50/50' : shortMonth(S.month);
     setText('inc-proporcion-source', src);
   }
 
