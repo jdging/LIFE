@@ -611,6 +611,73 @@
   .fijos-detail thead th { background: var(--surface2); }
   .fijos-detail tr:last-child td { border-bottom: none; }
 
+  .credito-detail {
+    margin: -1.25rem 0 2rem 0;
+    border: 1px solid var(--border);
+    border-top: none;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .credito-detail table { margin: 0; }
+  .credito-detail thead th { background: var(--surface2); }
+  .credito-detail tr:last-child td { border-bottom: none; }
+  .credito-tarjeta-header {
+    padding: 0.5rem 1rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: var(--surface2);
+    border-top: 1px solid var(--border);
+  }
+  .credito-tarjeta-header:first-child { border-top: none; }
+
+  /* ── GASTOS — COMPOSICIÓN (F-03) ─────────────────────── */
+  .composicion-wrap {
+    margin-bottom: 2rem;
+    padding: 1.25rem 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .composicion-title {
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+  .composicion-bar {
+    display: flex;
+    height: 14px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    margin-bottom: 0.85rem;
+  }
+  .composicion-seg { transition: width 0.4s ease; }
+  .composicion-seg-fijos  { background: var(--danger); }
+  .composicion-seg-var    { background: #c4895a; }
+  .composicion-seg-cuotas { background: #9a7fc4; }
+  .composicion-legend { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+  .composicion-leg-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    font-size: 0.65rem;
+  }
+  .composicion-leg-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    align-self: center;
+  }
+  .composicion-leg-label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .composicion-leg-val   { color: var(--text); }
+  .composicion-leg-pct   { color: var(--muted); }
+
   /* ── PRESUPUESTO — BARRA DE PROGRESO ─────────────────── */
   .ppto-bar-wrap { margin-bottom: 2rem; }
 
@@ -889,6 +956,11 @@
           <div class="card-value" id="g-cuotas">—</div>
           <div class="card-sub" id="g-cuotas-count">— cuotas activas</div>
         </div>
+        <div class="card" onclick="toggleCreditoDetail()" style="cursor:pointer" title="Ver detalle por tarjeta">
+          <div class="card-label">Carga en crédito</div>
+          <div class="card-value" id="g-credito">—</div>
+          <div class="card-sub" id="g-credito-sub">— ítems · ver detalle</div>
+        </div>
         <div class="card">
           <div class="card-label">Deuda neta</div>
           <div class="card-value" id="g-deuda">—</div>
@@ -901,6 +973,24 @@
         <div id="fijos-detail-inner">
           <div class="empty-state" style="padding:1rem">Cargando…</div>
         </div>
+      </div>
+
+      <!-- Detalle de carga en crédito por tarjeta (colapsable) -->
+      <div class="credito-detail" id="credito-detail" style="display:none">
+        <div id="credito-detail-inner">
+          <div class="empty-state" style="padding:1rem">Cargando…</div>
+        </div>
+      </div>
+
+      <!-- Composición del gasto total: fijos / variables / cuotas (F-03) -->
+      <div class="composicion-wrap" id="g-composicion">
+        <div class="composicion-title">Composición del gasto</div>
+        <div class="composicion-bar">
+          <div class="composicion-seg composicion-seg-fijos"  id="comp-seg-fijos"  style="width:0%"></div>
+          <div class="composicion-seg composicion-seg-var"    id="comp-seg-var"    style="width:0%"></div>
+          <div class="composicion-seg composicion-seg-cuotas" id="comp-seg-cuotas" style="width:0%"></div>
+        </div>
+        <div class="composicion-legend" id="comp-legend"></div>
       </div>
 
       <!-- Recordatorio tarjetas -->
@@ -1271,6 +1361,12 @@ function renderGastos() {
 
   // Deuda
   renderDeuda(rows);
+
+  // Card carga en crédito
+  renderCreditoCard(rows);
+
+  // Composición del gasto total
+  renderComposicion();
 
   // Tarjetas alerta
   renderTarjetasAlert();
@@ -1894,6 +1990,136 @@ function renderFijosDetailTable() {
         <td class="td-amount td-accent" style="padding:0.65rem 1rem">${fmt(S.fixed.total)}</td>
       </tr></tfoot>
     </table>`;
+}
+
+// === SECCIÓN: Carga en crédito (F-02) ===
+// Qué hace: calcula el total acumulado en tarjetas de crédito para el mes.
+//   - Capa 1: gastos del Log del mes con medio_pago="Crédito" (cuota propia del mes)
+//   - Capa 2: cuotas comprometidas del mes (cuota_nro > 1) que también son de crédito
+// Por qué dos capas: el saldo de la tarjeta incluye ambas; separarlas en la fuente
+//   evita doble conteo (una cuota ya existía en el Log del mes de compra, no en este).
+// Cómo funciona el label: busca en S.tarjetas por ID → construye "Banco – Nombre".
+//   El Log guarda el ID (TC1, TD1…), no el nombre, para independizarse de renombres.
+
+function renderCreditoCard(gastosRows) {
+  // Capa 1: gastos propios del mes con crédito
+  const gastosCredito = gastosRows.filter(r => r.medio_pago === 'Crédito');
+
+  // Capa 2: cuotas comprometidas del mes que sean de crédito
+  const cuotasCredito = filterCuotasComprometidas(S.month)
+    .filter(r => r.medio_pago === 'Crédito');
+
+  const allRows = [...gastosCredito, ...cuotasCredito];
+  const total   = sum(allRows, 'monto_total');
+
+  setText('g-credito', fmt(total));
+  setText('g-credito-sub', allRows.length + ' ítem' + (allRows.length !== 1 ? 's' : '') + ' · ver detalle');
+
+  // Pre-renderizar el detalle (se muestra solo si el panel está abierto)
+  const panel = document.getElementById('credito-detail');
+  if (panel.style.display !== 'none') renderCreditoDetailPanel(allRows);
+}
+
+function toggleCreditoDetail() {
+  const panel  = document.getElementById('credito-detail');
+  const isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) {
+    const gastosRows = filterLog({ tipo: 'Gasto', month: S.month });
+    const gastosCredito = gastosRows.filter(r => r.medio_pago === 'Crédito');
+    const cuotasCredito = filterCuotasComprometidas(S.month).filter(r => r.medio_pago === 'Crédito');
+    renderCreditoDetailPanel([...gastosCredito, ...cuotasCredito]);
+  }
+}
+
+function renderCreditoDetailPanel(rows) {
+  const inner = document.getElementById('credito-detail-inner');
+
+  if (rows.length === 0) {
+    inner.innerHTML = '<div class="empty-state" style="padding:1rem">Sin gastos en crédito para este mes.</div>';
+    return;
+  }
+
+  // Agrupar por ID de tarjeta
+  const grupos = groupBy(rows, 'tarjeta');
+
+  // Helper para resolver label de tarjeta: "Banco – Nombre" o el ID si no se encuentra
+  const labelTarjeta = id => {
+    const t = S.tarjetas.find(t => t.id === id);
+    if (!t) return id || 'Sin tarjeta';
+    return t.banco ? t.banco + ' – ' + t.nombre : t.nombre;
+  };
+
+  const bloques = Object.entries(grupos).map(([id, items]) => {
+    const subtotal = sum(items, 'monto_total');
+    const filas = items.map(r => {
+      const esCuota = (parseInt(r.cuota_nro) || 1) > 1;
+      return `<tr>
+        <td class="td-muted" style="width:90px">${r.fecha || '—'}</td>
+        <td>${r.descripcion || '—'}${esCuota ? ' <span class="badge-bimestral">cuota ' + r.cuota_nro + '/' + r.cuotas_total + '</span>' : ''}</td>
+        <td class="td-muted">${r.categoria || '—'}</td>
+        <td class="td-amount">${fmt(r.monto_total)}</td>
+      </tr>`;
+    }).join('');
+
+    return `
+      <div class="credito-tarjeta-header">${labelTarjeta(id)}</div>
+      <table>
+        <thead><tr>
+          <th>Fecha</th><th>Descripción</th><th>Categoría</th>
+          <th style="text-align:right">Monto</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+        <tfoot><tr>
+          <td colspan="3" class="td-muted" style="padding:0.65rem 1rem">Subtotal</td>
+          <td class="td-amount" style="padding:0.65rem 1rem">${fmt(subtotal)}</td>
+        </tr></tfoot>
+      </table>`;
+  }).join('');
+
+  const total = sum(rows, 'monto_total');
+  inner.innerHTML = bloques + `
+    <table style="border-top:2px solid var(--border)">
+      <tfoot><tr>
+        <td colspan="3" style="padding:0.65rem 1rem;font-size:0.72rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--muted)">Total en crédito</td>
+        <td class="td-amount td-accent" style="padding:0.65rem 1rem">${fmt(total)}</td>
+      </tr></tfoot>
+    </table>`;
+}
+
+// === SECCIÓN: Composición del gasto total (F-03) ===
+// Qué hace: desglosa el gasto total del mes en 3 componentes con barra horizontal proporcional.
+//   - Fijos: S.fixed.total (gastos fijos del endpoint)
+//   - Variables: gastos del Log del mes con cuota_nro=1 (gasto directo del mes)
+//   - Cuotas: filterCuotasComprometidas — cuotas de compras anteriores que vencen este mes
+// Por qué: "Total gastos" solo muestra el número, no explica de dónde viene.
+//   Esta barra da contexto inmediato sobre la composición sin necesidad de expandir nada.
+function renderComposicion() {
+  const gastosRows  = filterLog({ tipo: 'Gasto', month: S.month });
+  const fijosTotal  = S.fixed?.total || 0;
+  const varTotal    = sum(gastosRows.filter(r => (parseInt(r.cuota_nro) || 1) === 1), 'monto_total');
+  const cuotasTotal = sum(filterCuotasComprometidas(S.month), 'monto_total');
+  const grandTotal  = fijosTotal + varTotal + cuotasTotal || 1;
+
+  const pctFijos  = (fijosTotal  / grandTotal * 100);
+  const pctVar    = (varTotal    / grandTotal * 100);
+  const pctCuotas = (cuotasTotal / grandTotal * 100);
+
+  document.getElementById('comp-seg-fijos').style.width  = pctFijos.toFixed(1)  + '%';
+  document.getElementById('comp-seg-var').style.width    = pctVar.toFixed(1)    + '%';
+  document.getElementById('comp-seg-cuotas').style.width = pctCuotas.toFixed(1) + '%';
+
+  document.getElementById('comp-legend').innerHTML = [
+    { color: 'var(--danger)', label: 'Fijos',    total: fijosTotal,  pct: pctFijos  },
+    { color: '#c4895a',       label: 'Variables', total: varTotal,    pct: pctVar    },
+    { color: '#9a7fc4',       label: 'Cuotas',    total: cuotasTotal, pct: pctCuotas },
+  ].map(({ color, label, total, pct }) => `
+    <div class="composicion-leg-item">
+      <span class="composicion-leg-dot" style="background:${color}"></span>
+      <span class="composicion-leg-label">${label}</span>
+      <span class="composicion-leg-val">${fmt(total)}</span>
+      <span class="composicion-leg-pct">${pct.toFixed(0)}%</span>
+    </div>`).join('');
 }
 
 // ── VISTA PRESUPUESTO ─────────────────────────────────────────────────────────
