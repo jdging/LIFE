@@ -641,9 +641,11 @@
     padding: 0 0.5rem;
     color: rgba(14,14,12,0.8);
   }
-  .ppto-seg-fijos { background: var(--danger); }
-  .ppto-seg-sim   { background: var(--accent2); }
-  .ppto-seg-disp  { background: var(--accent); }
+  .ppto-seg-fijos  { background: var(--danger); }
+  .ppto-seg-var    { background: #c4895a; }
+  .ppto-seg-cuotas { background: #9a7fc4; }
+  .ppto-seg-sim    { background: var(--accent2); }
+  .ppto-seg-disp   { background: var(--accent); }
 
   .ppto-bar-legend {
     display: flex;
@@ -1047,6 +1049,16 @@
           <div class="card-sub" id="ppto-fijos-count">— ítems</div>
         </div>
         <div class="card">
+          <div class="card-label">Variables ejecutados</div>
+          <div class="card-value" id="ppto-var-val">—</div>
+          <div class="card-sub" id="ppto-var-count">— ítems</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Cuotas comprometidas</div>
+          <div class="card-value" id="ppto-cuotas-val">—</div>
+          <div class="card-sub" id="ppto-cuotas-count">— ítems</div>
+        </div>
+        <div class="card">
           <div class="card-label">Simulados</div>
           <div class="card-value" id="ppto-sim-val">$0</div>
           <div class="card-sub" id="ppto-sim-count">0 ítems</div>
@@ -1061,12 +1073,16 @@
       <!-- Barra de progreso: fijos | simulados | disponible -->
       <div class="ppto-bar-wrap">
         <div class="ppto-bar">
-          <div class="ppto-seg ppto-seg-fijos" id="ppto-seg-fijos" style="width:0%"><span>Fijos</span></div>
-          <div class="ppto-seg ppto-seg-sim"   id="ppto-seg-sim"   style="width:0%"><span>Simulados</span></div>
-          <div class="ppto-seg ppto-seg-disp"  id="ppto-seg-disp"  style="width:100%"><span>Disponible</span></div>
+          <div class="ppto-seg ppto-seg-fijos"  id="ppto-seg-fijos"  style="width:0%"><span>Fijos</span></div>
+          <div class="ppto-seg ppto-seg-var"    id="ppto-seg-var"    style="width:0%"><span>Variables</span></div>
+          <div class="ppto-seg ppto-seg-cuotas" id="ppto-seg-cuotas" style="width:0%"><span>Cuotas</span></div>
+          <div class="ppto-seg ppto-seg-sim"    id="ppto-seg-sim"    style="width:0%"><span>Simulados</span></div>
+          <div class="ppto-seg ppto-seg-disp"   id="ppto-seg-disp"   style="width:100%"><span>Disponible</span></div>
         </div>
         <div class="ppto-bar-legend">
-          <span><span class="ppto-leg-dot" style="background:var(--danger)"></span>Gastos fijos</span>
+          <span><span class="ppto-leg-dot" style="background:var(--danger)"></span>Fijos</span>
+          <span><span class="ppto-leg-dot" style="background:#c4895a"></span>Variables</span>
+          <span><span class="ppto-leg-dot" style="background:#9a7fc4"></span>Cuotas</span>
           <span><span class="ppto-leg-dot" style="background:var(--accent2)"></span>Simulados</span>
           <span><span class="ppto-leg-dot" style="background:var(--accent)"></span>Disponible</span>
         </div>
@@ -1725,6 +1741,22 @@ function cuotaLabel(r) {
   return total > 1 ? nro + '/' + total : '—';
 }
 
+// ── HELPERS — DATOS ───────────────────────────────────────────────────────────
+
+// === FUNCIÓN COMPARTIDA: filterCuotasComprometidas ===
+// Qué hace: retorna las filas del Log que son cuotas de compras anteriores que caen en el mes dado
+// Por qué: F-01, F-02 y F-03 necesitan exactamente este filtro — definirlo una sola vez evita
+//          inconsistencias si la lógica cambia (ej: cambiar el umbral de cuota_nro)
+// Cómo funciona: filtra S.log por cuota_nro > 1 AND fecha comienza con "YYYY-MM"
+//   - cuota_nro > 1: descarta la cuota original (nro 1) y solo toma las cuotas diferidas
+//   - fecha.startsWith(month): match simple sobre el string ISO — no requiere parseo de fecha
+function filterCuotasComprometidas(month) {
+  return S.log.filter(r => {
+    const nro = parseInt(r.cuota_nro) || 1;
+    return nro > 1 && (r.fecha || '').startsWith(month);
+  });
+}
+
 // ── HELPERS — UI ──────────────────────────────────────────────────────────────
 
 function fmt(n) {
@@ -1867,40 +1899,58 @@ function renderFijosDetailTable() {
 // ── VISTA PRESUPUESTO ─────────────────────────────────────────────────────────
 
 function renderPresupuesto() {
-  const ingresos = sum(filterLog({ tipo: 'Ingreso', month: S.month }), 'monto_total');
+  const ingresos   = sum(filterLog({ tipo: 'Ingreso', month: S.month }), 'monto_total');
   const fijosTotal = S.fixed?.total || 0;
   const fijosCount = S.fixed?.data?.length || 0;
+
+  // Capa 1: gastos variables ejecutados — tipo=Gasto, no fijo, cuota propia (nro 1 o sin cuotas)
+  const varRows  = filterLog({ tipo: 'Gasto', month: S.month })
+    .filter(r => !r.es_fijo && (parseInt(r.cuota_nro) || 1) === 1);
+  const varTotal = sum(varRows, 'monto_total');
+
+  // Capa 2: cuotas de compras anteriores que vencen en este mes
+  const cuotasRows  = filterCuotasComprometidas(S.month);
+  const cuotasTotal = sum(cuotasRows, 'monto_total');
+
   const simTotal   = S.simRows.reduce((acc, r) => acc + (parseFloat(r.monto) || 0), 0);
-  const disponible = ingresos - fijosTotal - simTotal;
+  const disponible = ingresos - fijosTotal - varTotal - cuotasTotal - simTotal;
 
   // Cards
-  setText('ppto-ingresos',       fmt(ingresos));
-  setText('ppto-fijos-val',      fmt(fijosTotal));
-  setText('ppto-fijos-count',    fijosCount + ' ítem' + (fijosCount !== 1 ? 's' : ''));
-  setText('ppto-sim-val',        fmt(simTotal));
-  setText('ppto-sim-count',      S.simRows.length + ' ítem' + (S.simRows.length !== 1 ? 's' : ''));
+  setText('ppto-ingresos',      fmt(ingresos));
+  setText('ppto-fijos-val',     fmt(fijosTotal));
+  setText('ppto-fijos-count',   fijosCount + ' ítem' + (fijosCount !== 1 ? 's' : ''));
+  setText('ppto-var-val',       fmt(varTotal));
+  setText('ppto-var-count',     varRows.length + ' ítem' + (varRows.length !== 1 ? 's' : ''));
+  setText('ppto-cuotas-val',    fmt(cuotasTotal));
+  setText('ppto-cuotas-count',  cuotasRows.length + ' ítem' + (cuotasRows.length !== 1 ? 's' : ''));
+  setText('ppto-sim-val',       fmt(simTotal));
+  setText('ppto-sim-count',     S.simRows.length + ' ítem' + (S.simRows.length !== 1 ? 's' : ''));
 
   const dispEl = document.getElementById('ppto-disponible');
   dispEl.textContent = fmt(Math.abs(disponible));
   dispEl.className = 'card-value ' + (disponible >= 0 ? 'accent' : 'danger');
   setText('ppto-disponible-sub', disponible >= 0 ? 'de margen' : 'de déficit');
 
-  updateProgressBar(ingresos, fijosTotal, simTotal);
+  updateProgressBar(ingresos, fijosTotal, varTotal, cuotasTotal, simTotal);
   renderFixedEvolution();   // todos los fijos por defecto
   renderPptoFijosTable();
 }
 
-// Actualiza la barra de progreso tricolor (fijos/simulados/disponible).
-// Cada segmento es proporcional al ingreso total. Si no hay ingresos, barra vacía.
-function updateProgressBar(ingresos, fijosTotal, simTotal) {
-  const base = ingresos > 0 ? ingresos : (fijosTotal + simTotal) || 1;
-  const pctFijos = Math.min(100, (fijosTotal / base) * 100);
-  const pctSim   = Math.min(100 - pctFijos, (simTotal / base) * 100);
-  const pctDisp  = Math.max(0, 100 - pctFijos - pctSim);
+// Actualiza la barra de progreso de 5 segmentos (fijos/variables/cuotas/simulados/disponible).
+// Cada segmento se calcula en cascada para que la suma nunca supere el 100%.
+function updateProgressBar(ingresos, fijosTotal, varTotal, cuotasTotal, simTotal) {
+  const base     = ingresos > 0 ? ingresos : (fijosTotal + varTotal + cuotasTotal + simTotal) || 1;
+  const pctFijos  = Math.min(100, (fijosTotal / base) * 100);
+  const pctVar    = Math.min(100 - pctFijos, (varTotal / base) * 100);
+  const pctCuotas = Math.min(100 - pctFijos - pctVar, (cuotasTotal / base) * 100);
+  const pctSim    = Math.min(100 - pctFijos - pctVar - pctCuotas, (simTotal / base) * 100);
+  const pctDisp   = Math.max(0, 100 - pctFijos - pctVar - pctCuotas - pctSim);
 
-  document.getElementById('ppto-seg-fijos').style.width = pctFijos.toFixed(1) + '%';
-  document.getElementById('ppto-seg-sim').style.width   = pctSim.toFixed(1)   + '%';
-  document.getElementById('ppto-seg-disp').style.width  = pctDisp.toFixed(1)  + '%';
+  document.getElementById('ppto-seg-fijos').style.width   = pctFijos.toFixed(1)  + '%';
+  document.getElementById('ppto-seg-var').style.width     = pctVar.toFixed(1)    + '%';
+  document.getElementById('ppto-seg-cuotas').style.width  = pctCuotas.toFixed(1) + '%';
+  document.getElementById('ppto-seg-sim').style.width     = pctSim.toFixed(1)    + '%';
+  document.getElementById('ppto-seg-disp').style.width    = pctDisp.toFixed(1)   + '%';
 }
 
 // === SECCIÓN: Evolución de gastos fijos ===
@@ -2138,10 +2188,14 @@ function clearSimulator() {
 // Recalcula los totales del simulador y actualiza las cards + barra de progreso.
 // Se llama cada vez que el usuario edita un input del simulador.
 function updateSimTotals() {
-  const simTotal  = S.simRows.reduce((acc, r) => acc + (parseFloat(r.monto) || 0), 0);
-  const ingresos  = sum(filterLog({ tipo: 'Ingreso', month: S.month }), 'monto_total');
-  const fijosTotal = S.fixed?.total || 0;
-  const disponible = ingresos - fijosTotal - simTotal;
+  const simTotal    = S.simRows.reduce((acc, r) => acc + (parseFloat(r.monto) || 0), 0);
+  const ingresos    = sum(filterLog({ tipo: 'Ingreso', month: S.month }), 'monto_total');
+  const fijosTotal  = S.fixed?.total || 0;
+  const varRows     = filterLog({ tipo: 'Gasto', month: S.month })
+    .filter(r => !r.es_fijo && (parseInt(r.cuota_nro) || 1) === 1);
+  const varTotal    = sum(varRows, 'monto_total');
+  const cuotasTotal = sum(filterCuotasComprometidas(S.month), 'monto_total');
+  const disponible  = ingresos - fijosTotal - varTotal - cuotasTotal - simTotal;
 
   setText('ppto-sim-val',   fmt(simTotal));
   setText('ppto-sim-count', S.simRows.length + ' ítem' + (S.simRows.length !== 1 ? 's' : ''));
@@ -2151,7 +2205,7 @@ function updateSimTotals() {
   dispEl.className = 'card-value ' + (disponible >= 0 ? 'accent' : 'danger');
   setText('ppto-disponible-sub', disponible >= 0 ? 'de margen' : 'de déficit');
 
-  updateProgressBar(ingresos, fijosTotal, simTotal);
+  updateProgressBar(ingresos, fijosTotal, varTotal, cuotasTotal, simTotal);
 }
 
 // ── ARRANQUE ──────────────────────────────────────────────────────────────────
