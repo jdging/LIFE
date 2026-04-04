@@ -753,6 +753,23 @@
   }
   .btn-link:hover { color: var(--text); }
 
+  /* Toggle $/% en el header del gráfico de evolución de fijos */
+  .ppto-history-controls { display: flex; align-items: center; gap: 0.75rem; }
+  .btn-toggle {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+    transition: background 0.2s, color 0.2s;
+  }
+  .btn-toggle:hover { background: var(--surface3); color: var(--text); }
+  .btn-toggle.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
   .hint-text {
     font-size: 0.6rem;
     letter-spacing: 0.06em;
@@ -1055,26 +1072,23 @@
         </div>
       </div>
 
-      <!-- Gráficos: torta de fijos por categoría + historial del fijo seleccionado -->
-      <div class="charts-row">
-        <div class="chart-box">
-          <div class="chart-title">Fijos por categoría</div>
-          <div class="chart-wrap"><canvas id="chart-ppto-pie"></canvas></div>
-        </div>
-        <div class="chart-box" id="ppto-history-box" style="display:none">
-          <div class="chart-title ppto-history-header">
-            <span id="ppto-history-label">Evolución</span>
-            <button class="btn-link" onclick="closeHistoryChart()">✕ cerrar</button>
+      <!-- Gráfico de evolución de gastos fijos (todos por defecto, filtrable por fila) -->
+      <div class="chart-box" id="ppto-history-box">
+        <div class="chart-title ppto-history-header">
+          <span id="ppto-history-label">Evolución — todos los gastos fijos</span>
+          <div class="ppto-history-controls">
+            <button class="btn-toggle" id="btn-toggle-pct" onclick="toggleFixedScale()" title="Cambiar escala entre $ y %">$</button>
+            <button class="btn-link" id="btn-todos-fijos" onclick="showAllFixedHistory()" style="display:none">← todos</button>
           </div>
-          <div class="chart-wrap"><canvas id="chart-ppto-history"></canvas></div>
         </div>
+        <div class="chart-wrap"><canvas id="chart-ppto-history"></canvas></div>
       </div>
 
       <!-- Tabla de gastos fijos vigentes -->
       <div class="table-box">
         <div class="table-header">
           <span class="section-label">Gastos fijos vigentes</span>
-          <span class="hint-text">Clic en una fila para ver evolución histórica</span>
+          <span class="hint-text">Clic en una fila para filtrar el gráfico</span>
         </div>
         <div id="ppto-fijos-table">
           <div class="empty-state">Cargando…</div>
@@ -1142,6 +1156,9 @@ const S = {
   view:        'gastos',
   charts:      {},        // instancias Chart.js activas
 };
+
+// Escala del gráfico de evolución de fijos: false = $ (absoluto), true = % (variación)
+let fixedScalePct = false;
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 
@@ -1869,7 +1886,7 @@ function renderPresupuesto() {
   setText('ppto-disponible-sub', disponible >= 0 ? 'de margen' : 'de déficit');
 
   updateProgressBar(ingresos, fijosTotal, simTotal);
-  renderPptoPie();
+  renderFixedEvolution();   // todos los fijos por defecto
   renderPptoFijosTable();
 }
 
@@ -1886,29 +1903,134 @@ function updateProgressBar(ingresos, fijosTotal, simTotal) {
   document.getElementById('ppto-seg-disp').style.width  = pctDisp.toFixed(1)  + '%';
 }
 
-// Torta de gastos fijos por categoría.
-function renderPptoPie() {
-  destroyChart('ppto-pie');
-  const data = S.fixed?.data;
-  if (!data || data.length === 0) return;
+// === SECCIÓN: Evolución de gastos fijos ===
+// Qué hace: renderiza un gráfico de línea con área degradé para uno o todos los
+//           gastos fijos simultáneamente. Resuelve el problema de escala (alquiler
+//           $1.2M vs internet $15K) con el toggle $/%.
+// Cómo funciona:
+//   - Sin filtro (descripcion=null): muestra todos los gastos fijos juntos.
+//   - Con filtro: muestra solo esa descripción con escala adaptada.
+//   - Modo "%": normaliza cada serie a variación % desde su primer valor, haciendo
+//     comparables gastos de magnitudes muy distintas.
+//   - Modo "$": valores absolutos (útil cuando se filtra a un solo gasto).
+//   - Las fechas del eje X son la unión de todos los vigente_desde. Los valores
+//     se rellenan hacia adelante (fill-forward) para reflejar que el monto se
+//     mantiene hasta que hay un nuevo registro.
+function renderFixedEvolution(descripcion = null) {
+  const history = S.fixed?.history;
+  if (!history) return;
 
-  const grouped = data.reduce((acc, r) => {
-    const key = r.categoria || 'Sin categoría';
-    acc[key] = (acc[key] || 0) + r.monto_mensual;
-    return acc;
-  }, {});
-  const labels = Object.keys(grouped);
-  const values = labels.map(k => grouped[k]);
+  const entries = descripcion
+    ? (history[descripcion] ? [[descripcion, history[descripcion]]] : [])
+    : Object.entries(history);
 
-  S.charts['ppto-pie'] = new Chart(document.getElementById('chart-ppto-pie'), {
-    type: 'doughnut',
-    data: { labels, datasets: [{ data: values, backgroundColor: PALETTE, borderWidth: 0 }] },
-    options: { ...pieDefaults(), cutout: '60%' },
+  if (entries.length === 0) return;
+
+  // Actualizar header y botón "← todos"
+  setText('ppto-history-label',
+    descripcion ? descripcion : 'Evolución — todos los gastos fijos');
+  document.getElementById('btn-todos-fijos').style.display = descripcion ? 'inline' : 'none';
+
+  // Eje X unificado: unión de todas las fechas vigente_desde, ordenadas
+  const allDates = [...new Set(
+    entries.flatMap(([, hist]) => hist.map(h => h.vigente_desde))
+  )].sort();
+
+  // Construir un dataset por gasto fijo, alineando valores al eje X común
+  // con fill-forward (el monto rige hasta que aparece el siguiente registro)
+  const datasets = entries.map(([desc, hist], i) => {
+    const color = PALETTE[i % PALETTE.length];
+
+    // Mapa fecha → monto de este gasto
+    const map = {};
+    hist.forEach(h => { map[h.vigente_desde] = h.monto; });
+
+    // Fill-forward sobre allDates
+    let last = 0;
+    const absValues = allDates.map(d => {
+      if (map[d] !== undefined) last = map[d];
+      return last;
+    });
+
+    // Primer valor no-cero como base para el cálculo de %
+    const base = absValues.find(v => v > 0) || 1;
+    const values = fixedScalePct
+      ? absValues.map(v => +((( v - base) / base) * 100).toFixed(2))
+      : absValues;
+
+    return {
+      label: desc,
+      data: values,
+      borderColor: color,
+      backgroundColor: color + '28',  // relleno semitransparente bajo la línea
+      borderWidth: 2,
+      fill: true,
+      stepped: 'before',              // escalón: el monto salta en vigente_desde, no suaviza
+      pointRadius: 5,
+      pointBackgroundColor: color,
+      pointBorderColor: color,
+    };
+  });
+
+  destroyChart('ppto-history');
+  S.charts['ppto-history'] = new Chart(document.getElementById('chart-ppto-history'), {
+    type: 'line',
+    data: { labels: allDates, datasets },
+    options: {
+      ...lineDefaults(),
+      plugins: {
+        legend: {
+          display: entries.length > 1,   // leyenda solo cuando hay más de uno
+          labels: {
+            color: '#9c9990',
+            font: { family: "'DM Mono', monospace", size: 9 },
+            boxWidth: 10,
+            padding: 12,
+          },
+        },
+      },
+      scales: {
+        x: axisStyle(),
+        y: {
+          ...axisStyle(),
+          beginAtZero: false,
+          ticks: {
+            ...tickStyle(),
+            callback: v => fixedScalePct ? (v > 0 ? '+' : '') + v.toFixed(1) + '%' : fmtShort(v),
+          },
+        },
+      },
+    },
   });
 }
 
+// Alterna entre escala absoluta ($) y variación porcentual (%).
+// El "%" resuelve el problema de que alquiler ($1.2M) aplasta a internet ($15K)
+// cuando se muestran todos juntos: en modo % la variación de cada uno es comparable.
+function toggleFixedScale() {
+  fixedScalePct = !fixedScalePct;
+  const btn = document.getElementById('btn-toggle-pct');
+  btn.textContent = fixedScalePct ? '%' : '$';
+  btn.classList.toggle('active', fixedScalePct);
+
+  // Re-renderizar con la escala nueva, preservando el filtro activo
+  const label = document.getElementById('ppto-history-label').textContent;
+  const isTodos = label.startsWith('Evolución —');
+  const activeRow = document.querySelector('.fijos-row-clickable.active-history');
+  const desc = (!isTodos && activeRow)
+    ? activeRow.querySelector('td')?.textContent.trim()
+    : null;
+  renderFixedEvolution(desc);
+}
+
+// Vuelve a mostrar todos los gastos fijos en el gráfico (deselecciona la fila activa).
+function showAllFixedHistory() {
+  document.querySelectorAll('.fijos-row-clickable').forEach(tr => tr.classList.remove('active-history'));
+  renderFixedEvolution(null);
+}
+
 // Tabla de gastos fijos vigentes en la vista Presupuesto.
-// Cada fila es clickeable → muestra el gráfico de evolución histórica.
+// Cada fila es clickeable → filtra el gráfico de evolución a ese gasto.
 function renderPptoFijosTable() {
   const container = document.getElementById('ppto-fijos-table');
   const data = S.fixed?.data;
@@ -1941,61 +2063,21 @@ function renderPptoFijosTable() {
     </table>`;
 }
 
-// Muestra el gráfico de evolución histórica del gasto fijo con esa descripción.
-// El historial viene embedido en S.fixed.history — sin llamadas extra a la API.
-// Usa stepped:'before' para que el gráfico de escalones refleje que el precio
-// no cambia suavemente sino que salta en una fecha puntual.
+// Filtra el gráfico de evolución al gasto fijo clickeado.
+// Delega en renderFixedEvolution() que construye el chart completo.
 function showFixedHistory(descripcion) {
-  const history = S.fixed?.history?.[descripcion];
-  if (!history || history.length === 0) return;
+  if (!S.fixed?.history?.[descripcion]) return;
 
-  // Marcar fila activa visualmente
+  // Marcar fila activa visualmente (resaltado)
   document.querySelectorAll('.fijos-row-clickable').forEach(tr => {
     tr.classList.toggle('active-history', tr.querySelector('td')?.textContent.trim().startsWith(descripcion));
   });
 
-  // Mostrar panel del gráfico
-  const box = document.getElementById('ppto-history-box');
-  box.style.display = 'block';
-  setText('ppto-history-label', descripcion);
-
-  // Construir datasets
-  const labels = history.map(h => h.vigente_desde);
-  const values = history.map(h => h.monto);
-
-  destroyChart('ppto-history');
-  S.charts['ppto-history'] = new Chart(document.getElementById('chart-ppto-history'), {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: descripcion,
-        data: values,
-        borderColor: PALETTE[1],       // accent2 = dorado
-        backgroundColor: PALETTE[1] + '22',
-        borderWidth: 2,
-        fill: true,
-        stepped: 'before',             // escalón: el monto entra en vigor en vigente_desde
-        pointRadius: 5,
-        pointBackgroundColor: PALETTE[1],
-      }],
-    },
-    options: {
-      ...lineDefaults(),
-      plugins: { legend: { display: false } },
-      scales: {
-        x: axisStyle(),
-        y: { ...axisStyle(), ticks: { ...tickStyle(), callback: v => fmtShort(v) }, beginAtZero: true },
-      },
-    },
-  });
+  renderFixedEvolution(descripcion);
 }
 
-function closeHistoryChart() {
-  document.getElementById('ppto-history-box').style.display = 'none';
-  destroyChart('ppto-history');
-  document.querySelectorAll('.fijos-row-clickable').forEach(tr => tr.classList.remove('active-history'));
-}
+// Alias de compatibilidad — si algo llama closeHistoryChart() vuelve a "todos"
+function closeHistoryChart() { showAllFixedHistory(); }
 
 // ── SIMULADOR ─────────────────────────────────────────────────────────────────
 

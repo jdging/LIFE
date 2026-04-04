@@ -1,13 +1,26 @@
 @echo off
-:: Agrega cambios (respeta .gitignore)
+:: 1. Agregamos todo
 git add .
 
-:: Pide el mensaje
+:: 2. Mensaje de commit
 set /p message="Introduce el mensaje del commit: "
-
-:: Ejecuta commit y push
 git commit -m "%message%"
-git push
 
-echo Proceso finalizado.
+:: 3. Sincronizacion segura (Rebase)
+echo Intentando sincronizar de forma segura...
+git pull origin main --rebase
+
+:: 4. Verificamos si el pull salio bien antes de subir
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERROR] Hubo un conflicto de versiones. 
+    echo Por favor, revisa el index.html manualmente antes de seguir.
+    pause
+    exit
+)
+
+:: 5. Subida final
+git push origin main
+echo.
+echo ¡Cambios subidos con éxito y sin riesgos!
 pause
