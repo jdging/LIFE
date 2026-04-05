@@ -506,11 +506,13 @@
 
   .drawer-body { flex: 1; overflow: hidden; }
 
-  .drawer-body iframe {
+  .appsheet-frame {
+    flex: 1;
+    border: none;
     width: 100%;
     height: 100%;
-    border: none;
     display: block;
+    background: #fff;
   }
 
   .drawer-no-url {
@@ -706,7 +708,6 @@ const S = {
 // ═══════════════════════════════════════════════════════════════
 
 async function init() {
-  initDrawer();
   await loadData();
 }
 
@@ -726,9 +727,9 @@ async function loadData() {
   setStatus('loading', 'Cargando inventario...');
 
   try {
-    const res  = await fetch(API_URL + '?action=inventario');
+    const res = await fetch(API_URL + '?action=inventario');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
-
     if (!json.ok) throw new Error(json.error || 'Error desconocido');
 
     S.items = json.data || [];
@@ -897,22 +898,32 @@ async function deleteItem(id) {
 // APPSHEET DRAWER
 // ═══════════════════════════════════════════════════════════════
 
-function initDrawer() {
-  const body = document.getElementById('drawer-body');
-  if (APPSHEET_URL) {
-    body.innerHTML = `<iframe src="${APPSHEET_URL}" title="Agregar bien"></iframe>`;
-  } else {
-    body.innerHTML = `
-      <div class="drawer-no-url">
-        Configurá la constante <code>APPSHEET_URL</code> en el código del dashboard
-        para habilitar la carga de bienes desde AppSheet.
-      </div>`;
-  }
-}
-
 function openDrawer() {
-  document.getElementById('drawer').classList.add('open');
-  document.getElementById('drawer-overlay').classList.add('open');
+  const drawer  = document.getElementById('drawer');
+  const overlay = document.getElementById('drawer-overlay');
+  const body    = document.getElementById('drawer-body');
+
+  // Carga el iframe la primera vez que se abre (lazy), igual que finanzas
+  if (APPSHEET_URL) {
+    if (!body.querySelector('iframe')) {
+      const iframe = document.createElement('iframe');
+      iframe.className = 'appsheet-frame';
+      iframe.src       = APPSHEET_URL;
+      iframe.allow     = 'camera; microphone';
+      body.appendChild(iframe);
+    }
+  } else {
+    if (!body.querySelector('.drawer-no-url')) {
+      body.innerHTML = `
+        <div class="drawer-no-url">
+          Configurá la constante <code>APPSHEET_URL</code> en el código del dashboard
+          para habilitar la carga de bienes desde AppSheet.
+        </div>`;
+    }
+  }
+
+  drawer.classList.add('open');
+  overlay.classList.add('open');
 }
 
 function closeDrawer() {
