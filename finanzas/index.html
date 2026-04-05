@@ -159,6 +159,29 @@
     color: var(--muted);
   }
 
+  .period-selector {
+    display: flex;
+    gap: 2px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px;
+  }
+  .period-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.25rem 0.55rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  .period-btn:hover { background: var(--bg); color: var(--text); }
+  .period-btn.active { background: var(--accent); color: var(--bg); font-weight: 600; }
+
   .month-input {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -973,8 +996,21 @@
   <div class="topbar">
     <span class="topbar-title">Finanzas</span>
     <div class="topbar-filter">
-      <label for="month-picker">Período</label>
+      <label>Período</label>
+      <div class="period-selector">
+        <button class="period-btn active" data-period="month" onclick="selectPeriodType('month')">Mes</button>
+        <button class="period-btn" data-period="quarter" onclick="selectPeriodType('quarter')">3M</button>
+        <button class="period-btn" data-period="semester" onclick="selectPeriodType('semester')">6M</button>
+        <button class="period-btn" data-period="year" onclick="selectPeriodType('year')">Año</button>
+        <button class="period-btn" data-period="all" onclick="selectPeriodType('all')">Todo</button>
+        <button class="period-btn" data-period="range" onclick="selectPeriodType('range')">Rango</button>
+      </div>
       <input type="month" id="month-picker" class="month-input" onchange="onMonthChange(this.value)">
+      <div id="range-pickers" style="display:none; gap:0.4rem; align-items:center; flex-wrap:wrap">
+        <input type="date" id="range-from" class="month-input" onchange="onRangeChange()">
+        <span style="color:var(--muted);font-size:0.75rem">a</span>
+        <input type="date" id="range-to" class="month-input" onchange="onRangeChange()">
+      </div>
       <div class="proportion-badge" id="proportion-badge">
         cargando proporciones…
       </div>
@@ -1329,6 +1365,7 @@ const S = {
   simRows:     [],        // filas del simulador (solo client-side)
   simCounter:  0,         // ID incremental para filas del simulador
   month:       thisMonth(),
+  period:      null,          // inicializado en init() via computePeriod()
   view:        'gastos',
   charts:      {},        // instancias Chart.js activas
 };
@@ -1339,6 +1376,7 @@ let fixedScalePct = false;
 // ── INIT ──────────────────────────────────────────────────────────────────────
 
 async function init() {
+  S.period = computePeriod('month', { month: S.month });
   document.getElementById('month-picker').value = S.month;
 
   try {
@@ -1391,8 +1429,69 @@ function switchView(view) {
   renderView(view);
 }
 
+// -- MANEJO DE PERIODO (H1) ---------------------------------------------------
+
+function computePeriod(type, opts = {}) {
+  const today = thisMonth();
+  const [cy, cm] = today.split('-').map(Number);
+  function nMonthsAgo(n) {
+    let m = cm - n, y = cy;
+    while (m < 1) { m += 12; y--; }
+    return y + '-' + String(m).padStart(2, '0');
+  }
+  let from, to, refMonth;
+  switch (type) {
+    case 'month': {
+      const m = opts.month || today;
+      from = m + '-01'; to = m + '-31'; refMonth = m; break;
+    }
+    case 'quarter':
+      from = nMonthsAgo(2) + '-01'; to = today + '-31'; refMonth = today; break;
+    case 'semester':
+      from = nMonthsAgo(5) + '-01'; to = today + '-31'; refMonth = today; break;
+    case 'year':
+      from = cy + '-01-01'; to = cy + '-12-31'; refMonth = today; break;
+    case 'all':
+      from = null; to = null; refMonth = today; break;
+    case 'range':
+      from = opts.from || null; to = opts.to || null;
+      refMonth = (opts.to || today).substring(0, 7); break;
+  }
+  return { type, from, to, refMonth };
+}
+
+function selectPeriodType(type) {
+  const monthVal = document.getElementById('month-picker').value || thisMonth();
+  S.period = computePeriod(type, { month: monthVal });
+  S.month  = S.period.refMonth;
+
+  document.querySelectorAll('.period-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.period === type)
+  );
+  document.getElementById('month-picker').style.display = type === 'month' ? '' : 'none';
+  const rp = document.getElementById('range-pickers');
+  if (rp) rp.style.display = type === 'range' ? 'flex' : 'none';
+
+  Promise.all([
+    fetchProportions(S.month),
+    fetchFixed(S.month),
+  ]).then(() => renderView(S.view));
+}
+
+function onRangeChange() {
+  const from = document.getElementById('range-from')?.value || null;
+  const to   = document.getElementById('range-to')?.value   || null;
+  S.period = computePeriod('range', { from, to });
+  S.month  = S.period.refMonth;
+  Promise.all([
+    fetchProportions(S.month),
+    fetchFixed(S.month),
+  ]).then(() => renderView(S.view));
+}
+
 function onMonthChange(val) {
-  S.month = val;
+  S.period = computePeriod('month', { month: val });
+  S.month  = val;
   Promise.all([
     fetchProportions(val),
     fetchFixed(val),
@@ -1411,7 +1510,7 @@ function renderView(view) {
 // ── VISTA GASTOS ──────────────────────────────────────────────────────────────
 
 function renderGastos() {
-  const rows = filterLog({ tipo: 'Gasto', month: S.month });
+  const rows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to });
 
   // === Gastos variables del Log + gastos fijos del endpoint fixed ===
   // El total real = variables registrados en el mes + fijos vigentes
@@ -1468,12 +1567,28 @@ function getRowPct(row, p1, p2) {
   };
 }
 
+// Proporción de deuda considerando corresponde_a (H4).
+// Si el gasto corresponde 100% a una persona, esa persona absorbe el total.
+// Si es "Común" o vacío, delega a getRowPct() (tipo_proporcion / dinámica).
+function getDeudaPct(row, p1, p2) {
+  const ca = (row.corresponde_a || 'Común').trim();
+  if (ca === p2) return { pct1: 0, pct2: 100 };
+  if (ca === p1) return { pct1: 100, pct2: 0 };
+  return getRowPct(row, p1, p2);
+}
+
 function renderDeuda(rows) {
   const p1 = S.config.nombre_persona1 || 'JD';
   const p2 = S.config.nombre_persona2 || 'Pinki';
 
-  // Solo las filas donde una persona pagó algo que debería repartirse
-  const debtRows = rows.filter(r => r.pago === p1 || r.pago === p2);
+  // Solo filas donde una persona pagó algo que NO sea su propio gasto (H4)
+  const debtRows = rows.filter(r => {
+    if (r.pago !== p1 && r.pago !== p2) return false;
+    const ca = (r.corresponde_a || 'Común').trim();
+    if (r.pago === p1 && ca === p1) return false; // p1 pagó lo suyo, sin deuda
+    if (r.pago === p2 && ca === p2) return false; // p2 pagó lo suyo, sin deuda
+    return true;
+  });
 
   if (!S.proportions && debtRows.length) {
     setText('g-deuda', '—');
@@ -1481,12 +1596,12 @@ function renderDeuda(rows) {
     return;
   }
 
-  // === Balance neto usando proporción por fila ===
+  // === Balance neto usando proporción por fila (H4: respeta corresponde_a) ===
   // Positivo = p2 le debe a p1. Negativo = p1 le debe a p2.
   let balance = 0;
   debtRows.forEach(r => {
     const monto = parseFloat(r.monto_total) || 0;
-    const { pct1, pct2 } = getRowPct(r, p1, p2);
+    const { pct1, pct2 } = getDeudaPct(r, p1, p2);
     if (r.pago === p1) balance += monto * (pct2 / 100);
     if (r.pago === p2) balance -= monto * (pct1 / 100);
   });
@@ -1520,7 +1635,13 @@ function toggleDeudaDetail() {
   if (!isOpen) {
     const p1 = S.config.nombre_persona1 || 'JD';
     const p2 = S.config.nombre_persona2 || 'Pinki';
-    const rows = filterLog({ tipo: 'Gasto', month: S.month }).filter(r => r.pago === p1 || r.pago === p2);
+    const rows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to }).filter(r => {
+      if (r.pago !== p1 && r.pago !== p2) return false;
+      const ca = (r.corresponde_a || 'Común').trim();
+      if (r.pago === p1 && ca === p1) return false;
+      if (r.pago === p2 && ca === p2) return false;
+      return true;
+    });
     renderDeudaDetailPanel(rows, p1, p2);
   }
 }
@@ -1533,12 +1654,15 @@ function renderDeudaDetailPanel(debtRows, p1, p2) {
   let debeP1 = 0, debeP2 = 0;
   const rowsData = sorted.map(r => {
     const monto = parseFloat(r.monto_total) || 0;
-    const { pct1, pct2 } = getRowPct(r, p1, p2);
+    const { pct1, pct2 } = getDeudaPct(r, p1, p2); // H4: respeta corresponde_a
     const montoP1 = monto * (pct1 / 100);
     const montoP2 = monto * (pct2 / 100);
     if (r.pago === p1) debeP2 += montoP2;
     if (r.pago === p2) debeP1 += montoP1;
-    const tipoLabel = (r.tipo_proporcion || 'dinámica').replace('dinamica', 'dinámica');
+    const ca = (r.corresponde_a || 'Común').trim();
+    const tipoLabel = ca !== 'Común'
+      ? 'gasto de ' + ca                                            // corresponde_a define al deudor
+      : (r.tipo_proporcion || 'dinámica').replace('dinamica', 'dinámica');
     return { r, monto, pct1, pct2, montoP1, montoP2, tipoLabel };
   });
 
@@ -1565,7 +1689,7 @@ function renderDeudaDetailPanel(debtRows, p1, p2) {
           <tr>
             <td class="td-muted">${r.fecha || '—'}</td>
             <td>${r.descripcion || r.subcategoria || '—'}
-              <br><span class="td-muted" style="font-size:0.65rem">pagó: ${r.pago}</span>
+              <br><span class="td-muted" style="font-size:0.65rem">pagó: ${r.pago}${(r.corresponde_a && r.corresponde_a !== 'Común') ? ' · para: <strong>' + r.corresponde_a + '</strong>' : ''}</span>
             </td>
             <td style="text-align:right">${fmt(monto)}</td>
             <td style="text-align:right" class="td-muted">${pct1}%</td>
@@ -1712,7 +1836,7 @@ function renderGastosTable(rows) {
 // ── VISTA INVERSIONES ─────────────────────────────────────────────────────────
 
 function renderInversiones() {
-  const rows = filterLog({ tipo: 'Inversión', month: S.month });
+  const rows = filterLog({ tipo: 'Inversión', from: S.period.from, to: S.period.to });
   const all  = filterLog({ tipo: 'Inversión' });
 
   const total = sum(rows, 'monto_total');
@@ -1842,7 +1966,7 @@ function renderInvLine() {
 // ── VISTA INGRESOS ────────────────────────────────────────────────────────────
 
 function renderIngresos() {
-  const rows = filterLog({ tipo: 'Ingreso', month: S.month });
+  const rows = filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to });
   const p1 = S.config.nombre_persona1 || 'JD';
   const p2 = S.config.nombre_persona2 || 'Pinki';
 
@@ -2006,13 +2130,15 @@ function updateProportionBadge(prop) {
 
 // ── HELPERS — DATOS ───────────────────────────────────────────────────────────
 
-function filterLog({ tipo, month, months, cat, pago } = {}) {
+function filterLog({ tipo, month, months, from, to, cat, pago } = {}) {
   return S.log.filter(r => {
     if (tipo   && r.tipo      !== tipo)   return false;
     if (cat    && r.categoria !== cat)    return false;
     if (pago   && r.pago      !== pago)   return false;
     if (month  && (r.fecha||'').substring(0,7) !== month)  return false;
     if (months && !months.includes((r.fecha||'').substring(0,7))) return false;
+    if (from   && (r.fecha||'') < from)   return false;
+    if (to     && (r.fecha||'') > to)     return false;
     return true;
   });
 }
@@ -2067,11 +2193,16 @@ function cuotaLabel(r) {
 //          inconsistencias si la lógica cambia (ej: cambiar el umbral de cuota_nro)
 // Cómo funciona: filtra S.log por cuota_nro > 1 AND fecha comienza con "YYYY-MM"
 //   - cuota_nro > 1: descarta la cuota original (nro 1) y solo toma las cuotas diferidas
-//   - fecha.startsWith(month): match simple sobre el string ISO — no requiere parseo de fecha
-function filterCuotasComprometidas(month) {
+//   - Acepta from/to (YYYY-MM-DD) para soportar periodos multi-mes (H1)
+//   - Si from/to son null, incluye todas las cuotas diferidas del log
+function filterCuotasComprometidas(from, to) {
   return S.log.filter(r => {
     const nro = parseInt(r.cuota_nro) || 1;
-    return nro > 1 && (r.fecha || '').startsWith(month);
+    if (nro <= 1) return false;
+    const fecha = r.fecha || '';
+    if (from && fecha < from) return false;
+    if (to   && fecha > to)   return false;
+    return true;
   });
 }
 
@@ -2228,7 +2359,7 @@ function renderCreditoCard(gastosRows) {
   const gastosCredito = gastosRows.filter(r => r.medio_pago === 'Crédito');
 
   // Capa 2: cuotas comprometidas del mes que sean de crédito
-  const cuotasCredito = filterCuotasComprometidas(S.month)
+  const cuotasCredito = filterCuotasComprometidas(S.period.from, S.period.to)
     .filter(r => r.medio_pago === 'Crédito');
 
   const allRows = [...gastosCredito, ...cuotasCredito];
@@ -2247,9 +2378,9 @@ function toggleCreditoDetail() {
   const isHidden = panel.style.display === 'none';
   panel.style.display = isHidden ? 'block' : 'none';
   if (isHidden) {
-    const gastosRows = filterLog({ tipo: 'Gasto', month: S.month });
+    const gastosRows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to });
     const gastosCredito = gastosRows.filter(r => r.medio_pago === 'Crédito');
-    const cuotasCredito = filterCuotasComprometidas(S.month).filter(r => r.medio_pago === 'Crédito');
+    const cuotasCredito = filterCuotasComprometidas(S.period.from, S.period.to).filter(r => r.medio_pago === 'Crédito');
     renderCreditoDetailPanel([...gastosCredito, ...cuotasCredito]);
   }
 }
@@ -2317,10 +2448,10 @@ function renderCreditoDetailPanel(rows) {
 // Por qué: "Total gastos" solo muestra el número, no explica de dónde viene.
 //   Esta barra da contexto inmediato sobre la composición sin necesidad de expandir nada.
 function renderComposicion() {
-  const gastosRows  = filterLog({ tipo: 'Gasto', month: S.month });
+  const gastosRows  = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to });
   const fijosTotal  = S.fixed?.total || 0;
   const varTotal    = sum(gastosRows.filter(r => (parseInt(r.cuota_nro) || 1) === 1), 'monto_total');
-  const cuotasTotal = sum(filterCuotasComprometidas(S.month), 'monto_total');
+  const cuotasTotal = sum(filterCuotasComprometidas(S.period.from, S.period.to), 'monto_total');
   const grandTotal  = fijosTotal + varTotal + cuotasTotal || 1;
 
   const pctFijos  = (fijosTotal  / grandTotal * 100);
@@ -2347,17 +2478,17 @@ function renderComposicion() {
 // ── VISTA PRESUPUESTO ─────────────────────────────────────────────────────────
 
 function renderPresupuesto() {
-  const ingresos   = sum(filterLog({ tipo: 'Ingreso', month: S.month }), 'monto_total');
+  const ingresos   = sum(filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to }), 'monto_total');
   const fijosTotal = S.fixed?.total || 0;
   const fijosCount = S.fixed?.data?.length || 0;
 
   // Capa 1: gastos variables ejecutados — tipo=Gasto, no fijo, cuota propia (nro 1 o sin cuotas)
-  const varRows  = filterLog({ tipo: 'Gasto', month: S.month })
+  const varRows  = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })
     .filter(r => !r.es_fijo && (parseInt(r.cuota_nro) || 1) === 1);
   const varTotal = sum(varRows, 'monto_total');
 
   // Capa 2: cuotas de compras anteriores que vencen en este mes
-  const cuotasRows  = filterCuotasComprometidas(S.month);
+  const cuotasRows  = filterCuotasComprometidas(S.period.from, S.period.to);
   const cuotasTotal = sum(cuotasRows, 'monto_total');
 
   const simTotal   = S.simRows.reduce((acc, r) => acc + (parseFloat(r.monto) || 0), 0);
@@ -2638,12 +2769,12 @@ function clearSimulator() {
 // Se llama cada vez que el usuario edita un input del simulador.
 function updateSimTotals() {
   const simTotal    = S.simRows.reduce((acc, r) => acc + (parseFloat(r.monto) || 0), 0);
-  const ingresos    = sum(filterLog({ tipo: 'Ingreso', month: S.month }), 'monto_total');
+  const ingresos    = sum(filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to }), 'monto_total');
   const fijosTotal  = S.fixed?.total || 0;
-  const varRows     = filterLog({ tipo: 'Gasto', month: S.month })
+  const varRows     = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })
     .filter(r => !r.es_fijo && (parseInt(r.cuota_nro) || 1) === 1);
   const varTotal    = sum(varRows, 'monto_total');
-  const cuotasTotal = sum(filterCuotasComprometidas(S.month), 'monto_total');
+  const cuotasTotal = sum(filterCuotasComprometidas(S.period.from, S.period.to), 'monto_total');
   const disponible  = ingresos - fijosTotal - varTotal - cuotasTotal - simTotal;
 
   setText('ppto-sim-val',   fmt(simTotal));
@@ -2680,7 +2811,7 @@ function renderDistribucion() {
   const pct2 = S.proportions?.[p2]?.porcentaje ?? 50;
 
   // Salarios individuales
-  const salRows = filterLog({ tipo: 'Ingreso', month: S.month })
+  const salRows = filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to })
     .filter(r => (r.categoria || '').toLowerCase() === 'salario');
   const sal1 = sum(salRows.filter(r => r.pago === p1), 'monto_total');
   const sal2 = sum(salRows.filter(r => r.pago === p2), 'monto_total');
@@ -2692,7 +2823,7 @@ function renderDistribucion() {
 
   // Variables ejecutados: gastos comunes, cuota propia del mes
   // getRowPct() lee tipo_proporcion de cada fila (dinamica/50-50/custom)
-  const varRows = filterLog({ tipo: 'Gasto', month: S.month })
+  const varRows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })
     .filter(r => !r.es_fijo && (parseInt(r.cuota_nro) || 1) === 1 && r.pago === 'Común');
   let var1 = 0, var2 = 0;
   varRows.forEach(r => {
@@ -2703,7 +2834,7 @@ function renderDistribucion() {
   });
 
   // Cuotas comprometidas del mes (pagó="Común")
-  const cuotasRows = filterCuotasComprometidas(S.month).filter(r => r.pago === 'Común');
+  const cuotasRows = filterCuotasComprometidas(S.period.from, S.period.to).filter(r => r.pago === 'Común');
   let cuotas1 = 0, cuotas2 = 0;
   cuotasRows.forEach(r => {
     const monto = parseFloat(r.monto_total) || 0;
@@ -2718,8 +2849,8 @@ function renderDistribucion() {
   const sim2 = simTotal * (pct2 / 100);
 
   // Gastos propios: pagó=persona, tipo=Gasto (no "Común") — condicional
-  const propios1 = sum(filterLog({ tipo: 'Gasto', month: S.month }).filter(r => r.pago === p1), 'monto_total');
-  const propios2 = sum(filterLog({ tipo: 'Gasto', month: S.month }).filter(r => r.pago === p2), 'monto_total');
+  const propios1 = sum(filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to }).filter(r => r.pago === p1), 'monto_total');
+  const propios2 = sum(filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to }).filter(r => r.pago === p2), 'monto_total');
   const hayPropios = propios1 > 0 || propios2 > 0;
 
   // Disponible
