@@ -345,7 +345,7 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 860px;
+    min-width: 1300px;
   }
 
   thead th {
@@ -617,7 +617,7 @@
     <span class="cotizacion-label">Cotización USD hoy</span>
     <div class="cotizacion-input-wrap">
       <span class="cotizacion-prefix">$</span>
-      <input type="number" id="cotizacion-input" value="1200" min="1" step="1" oninput="onCotizacionChange()">
+      <input type="number" id="cotizacion-input" value="1200" min="1" step="1" oninput="onCotizacionChange(this.value)">
       <span class="cotizacion-suffix">ARS / USD</span>
     </div>
     <span class="cotizacion-note" id="cotizacion-note">
@@ -649,9 +649,9 @@
       </div>
 
       <div class="card">
-        <div class="card-label">Reventa estimada (USD)</div>
-        <div class="card-value" id="card-reventa-usd"><span class="currency">U$D</span>—</div>
-        <div class="card-sub" id="card-reventa-note">Suma de precios de reventa estimados</div>
+        <div class="card-label">Ítems activos</div>
+        <div class="card-value" id="card-count">—</div>
+        <div class="card-sub" id="card-count-note">bienes en inventario</div>
       </div>
     </div>
 
@@ -757,36 +757,41 @@ function render() {
   document.getElementById('table-count').textContent = filtered.length + ' item' + (filtered.length !== 1 ? 's' : '');
 }
 
+function usdCompra(item) {
+  // precio_usd_compra no se calcula automáticamente en Apps Script,
+  // así que lo derivamos en el frontend: precio_ars / cotizacion_usd_compra
+  const fromField = parseFloat(item.precio_usd_compra);
+  if (fromField && fromField > 0) return fromField;
+  const ars = parseFloat(item.precio_ars);
+  const cot = parseFloat(item.cotizacion_usd_compra);
+  return (ars > 0 && cot > 0) ? ars / cot : 0;
+}
+
 function renderCards(items) {
-  const cot = S.cotizacion || 1;
+  const cotHoy = S.cotizacion || 1;
 
-  // Solo usar ítems con precio_usd_compra para sumar valores
-  const totalUSD  = items.reduce((s, i) => s + (parseFloat(i.precio_usd_compra) || 0), 0);
-  const reventaUSD = items.reduce((s, i) => s + (parseFloat(i.precio_venta_estimado_usd) || 0), 0);
+  const totalUSD = items.reduce((s, i) => s + usdCompra(i), 0);
 
-  const jdUSD    = items.reduce((s, i) => {
+  const jdUSD = items.reduce((s, i) => {
     const pct = parseFloat(i.proporcion_jd);
-    const usd = parseFloat(i.precio_usd_compra) || 0;
-    return s + (isNaN(pct) ? usd * 0.5 : usd * pct / 100);
+    return s + usdCompra(i) * (isNaN(pct) ? 0.5 : pct / 100);
   }, 0);
 
   const pinkiUSD = totalUSD - jdUSD;
+  const activos  = items.filter(i => (i.estado || 'Activo') === 'Activo').length;
 
-  // Cards
   document.getElementById('card-total-usd').innerHTML = `<span class="currency">U$D</span>${fmtUSD(totalUSD)}`;
-  document.getElementById('card-total-ars').innerHTML  = `≈ <strong>${fmtARS(totalUSD * cot)}</strong> ARS hoy`;
+  document.getElementById('card-total-ars').innerHTML  = `≈ <strong>${fmtARS(totalUSD * cotHoy)}</strong> ARS hoy`;
 
   document.getElementById('card-jd-usd').innerHTML = `<span class="currency">U$D</span>${fmtUSD(jdUSD)}`;
-  document.getElementById('card-jd-ars').innerHTML  = `≈ <strong>${fmtARS(jdUSD * cot)}</strong> ARS hoy`;
+  document.getElementById('card-jd-ars').innerHTML  = `≈ <strong>${fmtARS(jdUSD * cotHoy)}</strong> ARS hoy`;
 
   document.getElementById('card-pinki-usd').innerHTML = `<span class="currency">U$D</span>${fmtUSD(pinkiUSD)}`;
-  document.getElementById('card-pinki-ars').innerHTML  = `≈ <strong>${fmtARS(pinkiUSD * cot)}</strong> ARS hoy`;
+  document.getElementById('card-pinki-ars').innerHTML  = `≈ <strong>${fmtARS(pinkiUSD * cotHoy)}</strong> ARS hoy`;
 
-  document.getElementById('card-reventa-usd').innerHTML = `<span class="currency">U$D</span>${fmtUSD(reventaUSD)}`;
-  document.getElementById('card-reventa-note').textContent =
-    reventaUSD > 0
-      ? `≈ ${fmtARS(reventaUSD * cot)} ARS · ${items.filter(i => i.precio_venta_estimado_usd).length} con estimacion`
-      : 'Suma de precios de reventa estimados';
+  document.getElementById('card-count').textContent = activos;
+  document.getElementById('card-count-note').textContent =
+    activos === 1 ? 'bien activo' : 'bienes activos';
 }
 
 function renderTable(items) {
@@ -801,29 +806,41 @@ function renderTable(items) {
     return;
   }
 
-  const cot = S.cotizacion || 1;
+  const cotHoy = S.cotizacion || 1;
 
   const rows = items.map(i => {
-    const usdCompra  = parseFloat(i.precio_usd_compra) || 0;
+    const ars        = parseFloat(i.precio_ars) || 0;
+    const cotCompra  = parseFloat(i.cotizacion_usd_compra) || 0;
+    const usd        = usdCompra(i);
     const pct        = parseFloat(i.proporcion_jd);
     const pctJD      = isNaN(pct) ? 50 : pct;
     const pctPinki   = 100 - pctJD;
-    const jdUSD      = usdCompra * pctJD / 100;
-    const pinkiUSD   = usdCompra * pctPinki / 100;
-    const arsHoy     = usdCompra * cot;
-    const reventa    = parseFloat(i.precio_venta_estimado_usd);
+    const arsJD      = ars * pctJD / 100;
+    const arsPinki   = ars * pctPinki / 100;
+    const ventaJD    = usd * cotHoy * pctJD / 100;
+    const ventaPinki = usd * cotHoy * pctPinki / 100;
 
     return `
       <tr>
         <td class="td-desc">${escHtml(i.descripcion || '—')}</td>
         <td class="muted">${escHtml(i.categoria || '—')}</td>
         <td class="muted">${i.fecha_compra ? i.fecha_compra.substring(0, 7) : '—'}</td>
-        <td class="right">${i.precio_ars ? fmtARS(parseFloat(i.precio_ars)) : '—'}</td>
-        <td class="right">${usdCompra ? 'U$D ' + fmtUSD(usdCompra) : '—'}</td>
-        <td class="right" style="color:var(--accent2)">${arsHoy ? fmtARS(arsHoy) : '—'}</td>
-        <td class="right" style="color:#7aa3b8">${jdUSD ? 'U$D ' + fmtUSD(jdUSD) : '—'}</td>
-        <td class="right" style="color:#b87ab0">${pinkiUSD ? 'U$D ' + fmtUSD(pinkiUSD) : '—'}</td>
-        <td class="right muted">${!isNaN(reventa) && reventa ? 'U$D ' + fmtUSD(reventa) : '—'}</td>
+        <td class="right">${ars ? fmtARS(ars) : '—'}</td>
+        <td class="right muted">${cotCompra ? fmtARS(cotCompra) : '—'}</td>
+        <td class="right">${usd ? 'U$D ' + fmtUSD(usd) : '—'}</td>
+        <td class="right muted">${pctJD}%</td>
+        <td class="right muted">${pctPinki}%</td>
+        <td class="right" style="color:#7aa3b8">${arsJD ? fmtARS(arsJD) : '—'}</td>
+        <td class="right" style="color:#b87ab0">${arsPinki ? fmtARS(arsPinki) : '—'}</td>
+        <td class="right" style="color:var(--accent2)">
+          <input type="number" class="cot-inline" value="${cotHoy}" min="1" step="1"
+            oninput="onCotizacionChange(this.value)"
+            style="width:72px;background:transparent;border:none;border-bottom:1px solid var(--border);
+                   color:var(--accent2);font-family:inherit;font-size:0.75rem;text-align:right;
+                   outline:none;padding:0 2px;">
+        </td>
+        <td class="right" style="color:#7aa3b8">${ventaJD ? fmtARS(ventaJD) : '—'}</td>
+        <td class="right" style="color:#b87ab0">${ventaPinki ? fmtARS(ventaPinki) : '—'}</td>
         <td><span class="badge badge-${(i.estado||'activo').toLowerCase()}">${i.estado || 'Activo'}</span></td>
         <td>
           <button class="btn-delete" onclick="confirmDelete('${escAttr(i.id)}', '${escAttr(i.descripcion || '')}')">
@@ -841,11 +858,15 @@ function renderTable(items) {
           <th>Categoría</th>
           <th>Fecha</th>
           <th class="right">ARS pagado</th>
+          <th class="right">Cot. compra</th>
           <th class="right">USD compra</th>
-          <th class="right">ARS hoy</th>
-          <th class="right">JD (USD)</th>
-          <th class="right">Pinki (USD)</th>
-          <th class="right">Reventa est.</th>
+          <th class="right">% JD</th>
+          <th class="right">% Pinki</th>
+          <th class="right">ARS JD</th>
+          <th class="right">ARS Pinki</th>
+          <th class="right">Cot. hoy</th>
+          <th class="right">Venta JD</th>
+          <th class="right">Venta Pinki</th>
           <th>Estado</th>
           <th></th>
         </tr>
@@ -868,10 +889,14 @@ function setFilter(f) {
   render();
 }
 
-function onCotizacionChange() {
-  const val = parseFloat(document.getElementById('cotizacion-input').value);
-  if (!isNaN(val) && val > 0) {
-    S.cotizacion = val;
+function onCotizacionChange(val) {
+  // Acepta valor desde el input global (arriba) o desde cualquier input de la tabla
+  const n = parseFloat(val !== undefined ? val : document.getElementById('cotizacion-input').value);
+  if (!isNaN(n) && n > 0) {
+    S.cotizacion = n;
+    // Sincroniza el input global si el cambio vino de la tabla
+    const globalInput = document.getElementById('cotizacion-input');
+    if (parseFloat(globalInput.value) !== n) globalInput.value = n;
     render();
   }
 }
