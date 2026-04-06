@@ -478,6 +478,18 @@
   }
   .drawer.open { transform: translateX(0); }
 
+  .drawer-resize-handle {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 6px;
+    cursor: col-resize;
+    z-index: 10;
+    border-radius: 3px 0 0 3px;
+    transition: background 0.15s;
+  }
+  .drawer-resize-handle:hover,
+  .drawer-resize-handle.dragging { background: var(--accent); opacity: 0.5; }
+
   .drawer-header {
     padding: 1.25rem 1.5rem;
     border-bottom: 1px solid var(--border);
@@ -678,6 +690,7 @@
 <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
 
 <div class="drawer" id="drawer">
+  <div class="drawer-resize-handle" id="drawer-resize-handle"></div>
   <div class="drawer-header">
     <span class="drawer-title">Agregar bien</span>
     <button class="drawer-close" onclick="closeDrawer()">✕</button>
@@ -923,6 +936,47 @@ async function deleteItem(id) {
 // APPSHEET DRAWER
 // ═══════════════════════════════════════════════════════════════
 
+// === SECCIÓN: Drawer resize (F9) ===
+// Qué hace: permite arrastrar el borde izquierdo del drawer para cambiar su ancho.
+// Por qué: solo en desktop (>= 768px). El ancho se guarda en variable de sesión.
+// Cómo funciona: mousedown → mousemove actualiza width → mouseup limpia listeners.
+let _drawerWidth = 420;
+
+function initDrawerResize(drawerId, handleId) {
+  if (window.innerWidth < 768) return;
+  const drawer = document.getElementById(drawerId);
+  const handle = document.getElementById(handleId);
+  if (!drawer || !handle) return;
+
+  drawer.style.width = _drawerWidth + 'px';
+
+  if (handle._resizeInit) return;
+  handle._resizeInit = true;
+
+  handle.addEventListener('mousedown', e => {
+    if (window.innerWidth < 768) return;
+    e.preventDefault();
+    handle.classList.add('dragging');
+    drawer.style.transition = 'none';
+
+    const onMove = ev => {
+      const newW = window.innerWidth - ev.clientX;
+      const minW = 280;
+      const maxW = Math.floor(window.innerWidth * 0.82);
+      _drawerWidth = Math.max(minW, Math.min(maxW, newW));
+      drawer.style.width = _drawerWidth + 'px';
+    };
+    const onUp = () => {
+      handle.classList.remove('dragging');
+      drawer.style.transition = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
 function openDrawer() {
   const drawer  = document.getElementById('drawer');
   const overlay = document.getElementById('drawer-overlay');
@@ -949,6 +1003,7 @@ function openDrawer() {
 
   drawer.classList.add('open');
   overlay.classList.add('open');
+  initDrawerResize('drawer', 'drawer-resize-handle');
 }
 
 function closeDrawer() {

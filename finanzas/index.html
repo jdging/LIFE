@@ -296,6 +296,9 @@
   .charts-row.single {
     grid-template-columns: 1fr 1fr;
   }
+  .charts-row.full {
+    grid-template-columns: 1fr;
+  }
 
   .chart-box {
     background: var(--surface);
@@ -309,6 +312,32 @@
     color: var(--muted);
     margin-bottom: 1rem;
   }
+
+  /* Fila título + controles de chart (zoom, toggle) */
+  .chart-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  .chart-title-row .chart-title { margin-bottom: 0; }
+
+  /* Botones de zoom temporal del gráfico de evolución */
+  .inv-zoom-row { display: flex; gap: 0.25rem; }
+  .btn-zoom, .btn-chart-toggle {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 3px;
+    padding: 0.15rem 0.45rem;
+    font-size: 0.62rem;
+    font-family: 'DM Mono', monospace;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    line-height: 1.4;
+  }
+  .btn-zoom:hover, .btn-chart-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-zoom.active { border-color: var(--accent); color: var(--accent); }
 
   .chart-wrap {
     position: relative;
@@ -382,6 +411,17 @@
   .badge-comun      { background: rgba(196,169,107,0.12); color: var(--accent2); }
   .badge-jd         { background: rgba(107,104,96,0.15);  color: var(--muted); }
   .badge-pinki      { background: rgba(107,104,96,0.15);  color: var(--muted); }
+
+  .row-detail-cell {
+    padding: 0.5rem 1rem !important;
+    background: var(--surface2);
+    display: flex;
+    gap: 2rem;
+    font-size: 0.7rem;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .row-detail-cell strong { color: var(--text); }
 
   .btn-delete {
     background: transparent;
@@ -602,6 +642,19 @@
   }
   .appsheet-drawer.open { transform: translateX(0); }
 
+  /* Handle de resize — solo visible/activo en desktop (JS lo desactiva en mobile) */
+  .drawer-resize-handle {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 6px;
+    cursor: col-resize;
+    z-index: 10;
+    border-radius: 3px 0 0 3px;
+    transition: background 0.15s;
+  }
+  .drawer-resize-handle:hover,
+  .drawer-resize-handle.dragging { background: var(--accent); opacity: 0.5; }
+
   .drawer-header {
     padding: 1.25rem 1.5rem;
     border-bottom: 1px solid var(--border);
@@ -696,6 +749,16 @@
   .credito-detail table { margin: 0; }
   .credito-detail thead th { background: var(--surface2); }
   .credito-detail tr:last-child td { border-bottom: none; }
+  .cuotas-detail {
+    margin: -1.25rem 0 2rem 0;
+    border: 1px solid var(--border);
+    border-top: none;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .cuotas-detail table { margin: 0; }
+  .cuotas-detail thead th { background: var(--surface2); }
+  .cuotas-detail tr:last-child td { border-bottom: none; }
   .credito-tarjeta-header {
     padding: 0.5rem 1rem;
     font-size: 0.65rem;
@@ -1039,10 +1102,10 @@
           <div class="card-value accent2" id="g-fijos">—</div>
           <div class="card-sub" id="g-fijos-count">— ítems · ver detalle</div>
         </div>
-        <div class="card">
+        <div class="card" onclick="toggleCuotasDetail()" style="cursor:pointer" title="Ver detalle de cuotas">
           <div class="card-label">En cuotas</div>
           <div class="card-value" id="g-cuotas">—</div>
-          <div class="card-sub" id="g-cuotas-count">— cuotas activas</div>
+          <div class="card-sub" id="g-cuotas-count">— cuotas activas · ver detalle</div>
         </div>
         <div class="card" onclick="toggleCreditoDetail()" style="cursor:pointer" title="Ver detalle por tarjeta">
           <div class="card-label">Carga en crédito</div>
@@ -1073,6 +1136,13 @@
       <!-- Detalle de carga en crédito por tarjeta (colapsable) -->
       <div class="credito-detail" id="credito-detail" style="display:none">
         <div id="credito-detail-inner">
+          <div class="empty-state" style="padding:1rem">Cargando…</div>
+        </div>
+      </div>
+
+      <!-- Detalle de cuotas comprometidas (colapsable, se abre al clickear la card) -->
+      <div class="cuotas-detail" id="cuotas-detail" style="display:none">
+        <div id="cuotas-detail-inner">
           <div class="empty-state" style="padding:1rem">Cargando…</div>
         </div>
       </div>
@@ -1144,11 +1214,25 @@
 
       <div class="charts-row single">
         <div class="chart-box">
-          <div class="chart-title">Por tipo</div>
+          <!-- ACOTACIÓN PARA R.P.: botón toggle torta/barras, alineado derecha del título -->
+          <div class="chart-title-row">
+            <span class="chart-title">Por tipo</span>
+            <button class="btn-chart-toggle" id="inv-pie-toggle" onclick="toggleInvPieType()">barras</button>
+          </div>
           <div class="chart-wrap"><canvas id="chart-inv-pie"></canvas></div>
         </div>
         <div class="chart-box">
-          <div class="chart-title">Evolución acumulada (6 meses)</div>
+          <!-- ACOTACIÓN PARA R.P.: botones de zoom temporal, alineados derecha del título -->
+          <div class="chart-title-row">
+            <span class="chart-title">Evolución acumulada</span>
+            <div class="inv-zoom-row">
+              <button class="btn-zoom" id="inv-zoom-1"  onclick="setInvZoom(1)">1M</button>
+              <button class="btn-zoom" id="inv-zoom-3"  onclick="setInvZoom(3)">3M</button>
+              <button class="btn-zoom active" id="inv-zoom-6"  onclick="setInvZoom(6)">6M</button>
+              <button class="btn-zoom" id="inv-zoom-12" onclick="setInvZoom(12)">1A</button>
+              <button class="btn-zoom" id="inv-zoom-0"  onclick="setInvZoom(0)">Todo</button>
+            </div>
+          </div>
           <div class="chart-wrap"><canvas id="chart-inv-line"></canvas></div>
         </div>
       </div>
@@ -1192,14 +1276,10 @@
         </div>
       </div>
 
-      <div class="charts-row single">
+      <div class="charts-row full">
         <div class="chart-box">
           <div class="chart-title">Evolución JD vs Pinki (6 meses)</div>
           <div class="chart-wrap"><canvas id="chart-inc-lines"></canvas></div>
-        </div>
-        <div class="chart-box">
-          <div class="chart-title">Por categoría este mes</div>
-          <div class="chart-wrap"><canvas id="chart-inc-bar"></canvas></div>
         </div>
       </div>
 
@@ -1337,6 +1417,8 @@
 
 <!-- APPSHEET DRAWER -->
 <div class="appsheet-drawer" id="appsheet-drawer">
+  <!-- Handle de resize: arrastrá este borde para cambiar el ancho del drawer (solo desktop) -->
+  <div class="drawer-resize-handle" id="drawer-resize-handle"></div>
   <div class="drawer-header">
     <span class="drawer-title">Nueva entrada</span>
     <button class="drawer-close" onclick="toggleDrawer()" title="Cerrar">&times;</button>
@@ -1350,7 +1432,7 @@
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbxNoImM225Sn7DBIKMoRueb4ijfqvD6FTgDCPZFhZq8hJJm9wyJHibcDb2_gOpLdd31aw/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbweHCK9P2uFzOnuSRkhcUzhFYOWuGJL6Fm-U8HVQXqC2K28EMBP53ZJwJ769R2e5kY7ew/exec';
 const APPSHEET_URL = 'https://www.appsheet.com/start/01dde697-d530-4d07-89d9-34f4ec40b45e'; // ← Pegá acá la URL pública de tu app AppSheet
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
@@ -1526,7 +1608,10 @@ function renderGastos() {
   setText('g-fijos',        fmt(fixTotal));
   setText('g-fijos-count',  fijosCount + ' ítem' + (fijosCount !== 1 ? 's' : '') + ' · ver detalle');
   setText('g-cuotas',       fmt(sum(cuotas, 'monto_total')));
-  setText('g-cuotas-count', cuotas.length + ' cuota' + (cuotas.length !== 1 ? 's' : '') + ' activa' + (cuotas.length !== 1 ? 's' : ''));
+  setText('g-cuotas-count', cuotas.length + ' cuota' + (cuotas.length !== 1 ? 's' : '') + ' activa' + (cuotas.length !== 1 ? 's' : '') + ' · ver detalle');
+
+  // Re-renderizar panel de cuotas si ya estaba abierto
+  if (document.getElementById('cuotas-detail').style.display !== 'none') renderCuotasDetailTable();
 
   // Deuda
   renderDeuda(rows);
@@ -1567,28 +1652,13 @@ function getRowPct(row, p1, p2) {
   };
 }
 
-// Proporción de deuda considerando corresponde_a (H4).
-// Si el gasto corresponde 100% a una persona, esa persona absorbe el total.
-// Si es "Común" o vacío, delega a getRowPct() (tipo_proporcion / dinámica).
-function getDeudaPct(row, p1, p2) {
-  const ca = (row.corresponde_a || 'Común').trim();
-  if (ca === p2) return { pct1: 0, pct2: 100 };
-  if (ca === p1) return { pct1: 100, pct2: 0 };
-  return getRowPct(row, p1, p2);
-}
-
 function renderDeuda(rows) {
   const p1 = S.config.nombre_persona1 || 'JD';
   const p2 = S.config.nombre_persona2 || 'Pinki';
 
-  // Solo filas donde una persona pagó algo que NO sea su propio gasto (H4)
-  const debtRows = rows.filter(r => {
-    if (r.pago !== p1 && r.pago !== p2) return false;
-    const ca = (r.corresponde_a || 'Común').trim();
-    if (r.pago === p1 && ca === p1) return false; // p1 pagó lo suyo, sin deuda
-    if (r.pago === p2 && ca === p2) return false; // p2 pagó lo suyo, sin deuda
-    return true;
-  });
+  // Solo filas donde una persona pagó (pago=JD o Pinki), son candidatas a generar deuda
+  // La proporción por fila (getRowPct) determina cuánto le corresponde a cada uno
+  const debtRows = rows.filter(r => r.pago === p1 || r.pago === p2);
 
   if (!S.proportions && debtRows.length) {
     setText('g-deuda', '—');
@@ -1601,7 +1671,7 @@ function renderDeuda(rows) {
   let balance = 0;
   debtRows.forEach(r => {
     const monto = parseFloat(r.monto_total) || 0;
-    const { pct1, pct2 } = getDeudaPct(r, p1, p2);
+    const { pct1, pct2 } = getRowPct(r, p1, p2);
     if (r.pago === p1) balance += monto * (pct2 / 100);
     if (r.pago === p2) balance -= monto * (pct1 / 100);
   });
@@ -1635,13 +1705,8 @@ function toggleDeudaDetail() {
   if (!isOpen) {
     const p1 = S.config.nombre_persona1 || 'JD';
     const p2 = S.config.nombre_persona2 || 'Pinki';
-    const rows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to }).filter(r => {
-      if (r.pago !== p1 && r.pago !== p2) return false;
-      const ca = (r.corresponde_a || 'Común').trim();
-      if (r.pago === p1 && ca === p1) return false;
-      if (r.pago === p2 && ca === p2) return false;
-      return true;
-    });
+    const rows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })
+      .filter(r => r.pago === p1 || r.pago === p2);
     renderDeudaDetailPanel(rows, p1, p2);
   }
 }
@@ -1654,15 +1719,12 @@ function renderDeudaDetailPanel(debtRows, p1, p2) {
   let debeP1 = 0, debeP2 = 0;
   const rowsData = sorted.map(r => {
     const monto = parseFloat(r.monto_total) || 0;
-    const { pct1, pct2 } = getDeudaPct(r, p1, p2); // H4: respeta corresponde_a
+    const { pct1, pct2 } = getRowPct(r, p1, p2);
     const montoP1 = monto * (pct1 / 100);
     const montoP2 = monto * (pct2 / 100);
     if (r.pago === p1) debeP2 += montoP2;
     if (r.pago === p2) debeP1 += montoP1;
-    const ca = (r.corresponde_a || 'Común').trim();
-    const tipoLabel = ca !== 'Común'
-      ? 'gasto de ' + ca                                            // corresponde_a define al deudor
-      : (r.tipo_proporcion || 'dinámica').replace('dinamica', 'dinámica');
+    const tipoLabel = propLabel(r);
     return { r, monto, pct1, pct2, montoP1, montoP2, tipoLabel };
   });
 
@@ -1689,7 +1751,7 @@ function renderDeudaDetailPanel(debtRows, p1, p2) {
           <tr>
             <td class="td-muted">${r.fecha || '—'}</td>
             <td>${r.descripcion || r.subcategoria || '—'}
-              <br><span class="td-muted" style="font-size:0.65rem">pagó: ${r.pago}${(r.corresponde_a && r.corresponde_a !== 'Común') ? ' · para: <strong>' + r.corresponde_a + '</strong>' : ''}</span>
+              <br><span class="td-muted" style="font-size:0.65rem">pagó: ${r.pago}</span>
             </td>
             <td style="text-align:right">${fmt(monto)}</td>
             <td style="text-align:right" class="td-muted">${pct1}%</td>
@@ -1810,30 +1872,75 @@ function renderGastosTable(rows) {
   }
 
   const sorted = [...rows].sort((a, b) => b.fecha?.localeCompare(a.fecha));
+  // colspan=10 coincide con la cantidad de columnas de esta tabla (para toggleRowDetail)
   document.getElementById('gastos-table-wrap').innerHTML = `
     <table>
       <thead><tr>
         <th>Fecha</th><th>Categoría</th><th>Descripción</th>
-        <th>Medio</th><th>Pagó</th><th style="text-align:right">Monto</th>
-        <th>Cuota</th><th></th>
+        <th>Medio</th><th>Pagó</th><th>Proporción</th><th>Corresponde a</th>
+        <th style="text-align:right">Monto</th><th>Cuota</th><th></th>
       </tr></thead>
       <tbody>
         ${sorted.map(r => `
-          <tr>
+          <tr style="cursor:pointer" onclick="toggleRowDetail(this, '${r.id}', 10)">
             <td class="td-muted">${r.fecha || '—'}</td>
             <td>${r.categoria || '—'} <span class="td-muted">${r.subcategoria ? '/ ' + r.subcategoria : ''}</span></td>
             <td>${r.descripcion || '—'}</td>
             <td><span class="badge badge-${(r.medio_pago||'').toLowerCase()}">${r.medio_pago || '—'}</span></td>
             <td><span class="badge badge-${(r.pago||'comun').toLowerCase()}">${r.pago || '—'}</span></td>
+            <td class="td-muted">${propLabel(r)}</td>
+            <td class="td-muted">${correspondeLabel(r)}</td>
             <td class="td-amount td-accent">${fmt(r.monto_total)}</td>
             <td class="td-muted">${cuotaLabel(r)}</td>
-            <td><button class="btn-delete" onclick="deleteEntry('${r.id}')">borrar</button></td>
+            <td><button class="btn-delete" onclick="event.stopPropagation();deleteEntry('${r.id}')">borrar</button></td>
           </tr>`).join('')}
       </tbody>
     </table>`;
 }
 
 // ── VISTA INVERSIONES ─────────────────────────────────────────────────────────
+
+// === SECCIÓN: Zoom e interactividad — Vista Inversiones (F10) ===
+// Qué hace: controla cuántos meses muestra el gráfico de evolución y qué tipo de chart usa la torta.
+// Por qué variables de sesión: el zoom es una preferencia de visualización transitoria, no un filtro de datos.
+// Cómo funciona: setInvZoom() actualiza _invZoom y re-renderiza solo el line chart.
+//   toggleInvPieType() alterna _invPieType y re-renderiza solo el pie.
+
+// Genera un array de N meses hacia atrás desde currentMonth (YYYY-MM), inclusive.
+// Si n=0 (Todo), devuelve todos los meses presentes en el log de inversiones.
+function lastNMonths(currentMonth, n) {
+  if (n === 0) {
+    // "Todo": extraer meses únicos del log de inversiones, ordenados asc
+    const all = filterLog({ tipo: 'Inversión' });
+    const uniq = [...new Set(all.map(r => String(r.fecha || '').substring(0, 7)).filter(Boolean))].sort();
+    return uniq.length ? uniq : [currentMonth];
+  }
+  const months = [];
+  const [y, m] = currentMonth.split('-').map(Number);
+  for (let i = n - 1; i >= 0; i--) {
+    let mm = m - i, yy = y;
+    while (mm < 1) { mm += 12; yy--; }
+    months.push(yy + '-' + String(mm).padStart(2, '0'));
+  }
+  return months;
+}
+
+function setInvZoom(n) {
+  _invZoom = n;
+  [1, 3, 6, 12, 0].forEach(v => {
+    const btn = document.getElementById('inv-zoom-' + v);
+    if (btn) btn.classList.toggle('active', v === n);
+  });
+  renderInvLine();
+}
+
+function toggleInvPieType() {
+  _invPieType = _invPieType === 'doughnut' ? 'bar' : 'doughnut';
+  const btn = document.getElementById('inv-pie-toggle');
+  if (btn) btn.textContent = _invPieType === 'doughnut' ? 'barras' : 'torta';
+  const rows = filterLog({ tipo: 'Inversión', from: S.period.from, to: S.period.to });
+  renderInvPie(rows);
+}
 
 function renderInversiones() {
   const rows = filterLog({ tipo: 'Inversión', from: S.period.from, to: S.period.to });
@@ -1881,16 +1988,70 @@ function renderInvPie(rows) {
   const data    = labels.map(k => sum(grouped[k], 'monto_total'));
   if (!data.length) return;
 
+  const total = data.reduce((a, b) => a + b, 0);
+
+  // === Modo barras (horizontal) ===
+  if (_invPieType === 'bar') {
+    S.charts['inv-pie'] = new Chart(document.getElementById('chart-inv-pie'), {
+      type: 'bar',
+      data: { labels, datasets: [{ data, backgroundColor: PALETTE, borderWidth: 0 }] },
+      options: {
+        ...barDefaults(),
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ' ' + fmtShort(ctx.raw) } },
+        },
+        scales: {
+          x: { ...axisStyle(), ticks: { ...tickStyle(), callback: v => fmtShort(v) } },
+          y: axisStyle(),
+        },
+      },
+    });
+    return;
+  }
+
+  // === Modo doughnut con monto + porcentaje en la leyenda ===
   S.charts['inv-pie'] = new Chart(document.getElementById('chart-inv-pie'), {
     type: 'doughnut',
     data: { labels, datasets: [{ data, backgroundColor: PALETTE, borderWidth: 0 }] },
-    options: { ...pieDefaults(), cutout: '60%' },
+    options: {
+      ...pieDefaults(),
+      cutout: '60%',
+      plugins: {
+        ...pieDefaults().plugins,
+        legend: {
+          position: 'right',
+          labels: {
+            color: '#6b6860',
+            font: { size: 10 },
+            // Qué hace: inyecta monto y % en cada item de la leyenda
+            generateLabels: chart => {
+              const ds = chart.data.datasets[0];
+              return chart.data.labels.map((label, i) => ({
+                text: label + '  ' + fmtShort(ds.data[i]) + '  (' + Math.round(ds.data[i] / total * 100) + '%)',
+                fillStyle: PALETTE[i % PALETTE.length],
+                strokeStyle: PALETTE[i % PALETTE.length],
+                hidden: !!(chart.getDatasetMeta(0).data[i]?.hidden),
+                index: i,
+              }));
+            },
+          },
+          // Toggle por clic en leyenda (Chart.js nativo, confirmado activo)
+          onClick: (e, item, legend) => {
+            const meta = legend.chart.getDatasetMeta(0);
+            meta.data[item.index].hidden = !meta.data[item.index].hidden;
+            legend.chart.update();
+          },
+        },
+      },
+    },
   });
 }
 
 function renderInvLine() {
   destroyChart('inv-line');
-  const months  = last6Months(S.month);
+  const months  = lastNMonths(S.month, _invZoom); // zoom controlado por _invZoom (F10)
   const allRows = filterLog({ tipo: 'Inversión' });
 
   // Subcategorías únicas presentes en todo el historial (no solo el mes actual)
@@ -1991,7 +2152,6 @@ function renderIngresos() {
   }
 
   renderIncLines(p1, p2);
-  renderIncBar(rows);
 
   // Tabla
   const sorted = [...rows].sort((a,b) => b.fecha?.localeCompare(a.fecha));
@@ -2049,34 +2209,6 @@ function renderIncLines(p1, p2) {
     },
     options: {
       ...lineDefaults(),
-      scales: {
-        x: axisStyle(),
-        y: { ...axisStyle(), ticks: { ...tickStyle(), callback: v => fmtShort(v) } },
-      },
-    },
-  });
-}
-
-function renderIncBar(rows) {
-  destroyChart('inc-bar');
-  const grouped = groupBy(rows, 'subcategoria');
-  const labels  = Object.keys(grouped);
-  const data    = labels.map(k => sum(grouped[k], 'monto_total'));
-  if (!data.length) return;
-
-  S.charts['inc-bar'] = new Chart(document.getElementById('chart-inc-bar'), {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        data,
-        backgroundColor: PALETTE,
-        borderWidth: 0,
-        borderRadius: 3,
-      }],
-    },
-    options: {
-      ...barDefaults(),
       scales: {
         x: axisStyle(),
         y: { ...axisStyle(), ticks: { ...tickStyle(), callback: v => fmtShort(v) } },
@@ -2234,6 +2366,57 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 4000);
 }
 
+// === HELPERS DE PROPORCIÓN (F6 / F7) ===
+// propLabel: texto que muestra el split de una fila según su tipo_proporcion.
+//   "dinamica" o vacío → "57% / 43%" (usa S.proportions del mes)
+//   "50/50"            → "50/50"
+//   "custom"           → "70% / 30%" (usa proporcion_jd del registro)
+function propLabel(row) {
+  const tipo = (row.tipo_proporcion || '').toLowerCase().trim();
+  if (tipo === '50/50') return '50/50';
+  const p1 = S.config.nombre_persona1 || 'JD';
+  const p2 = S.config.nombre_persona2 || 'Pinki';
+  const { pct1, pct2 } = getRowPct(row, p1, p2);
+  return pct1 + '% / ' + pct2 + '%';
+}
+
+// correspondeLabel: a quién pertenece el gasto según tipo_proporcion.
+//   custom + proporcion_jd=100 → nombre persona 1
+//   custom + proporcion_jd=0   → nombre persona 2
+//   cualquier otro caso        → "Común"
+function correspondeLabel(row) {
+  const tipo = (row.tipo_proporcion || '').toLowerCase().trim();
+  if (tipo === 'custom') {
+    const pjd = parseFloat(row.proporcion_jd) ?? 50;
+    if (pjd === 100) return S.config.nombre_persona1 || 'JD';
+    if (pjd === 0)   return S.config.nombre_persona2 || 'Pinki';
+  }
+  return 'Común';
+}
+
+// toggleRowDetail: inserta/quita una fila inline debajo de la fila clickeada.
+//   Muestra el monto en pesos que le corresponde a cada persona según getRowPct().
+//   El parámetro `colspan` se pasa desde el template para ajustarse a la tabla.
+function toggleRowDetail(tr, id, colspan) {
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains('row-detail')) { next.remove(); return; }
+  const row = S.log.find(r => r.id === id);
+  if (!row) return;
+  const p1 = S.config.nombre_persona1 || 'JD';
+  const p2 = S.config.nombre_persona2 || 'Pinki';
+  const { pct1, pct2 } = getRowPct(row, p1, p2);
+  const m  = parseFloat(row.monto_total) || 0;
+  const m1 = Math.round(m * pct1 / 100);
+  const m2 = Math.round(m * pct2 / 100);
+  const detail = document.createElement('tr');
+  detail.className = 'row-detail';
+  detail.innerHTML = `<td colspan="${colspan}" class="row-detail-cell">
+    <span><strong>${p1}:</strong> ${fmt(m1)} (${pct1}%)</span>
+    <span><strong>${p2}:</strong> ${fmt(m2)} (${pct2}%)</span>
+  </td>`;
+  tr.after(detail);
+}
+
 // ── HELPERS — CHARTS ──────────────────────────────────────────────────────────
 
 const PALETTE = ['#8fb87a','#c4a96b','#7a8fb8','#b87a8f','#7ab8b0','#b0a07a','#a07ab8','#7ab8a4'];
@@ -2316,6 +2499,9 @@ function toggleFijosDetail() {
 }
 
 // Renderiza la tabla de fijos dentro del panel colapsable de la vista Gastos.
+// Columnas: Descripción · Categoría · Proporción · Monto mensual · JD $ · Pinki $
+// "JD $" y "Pinki $" se calculan aplicando getRowPct() a cada fila de fijos,
+// que respeta tipo_proporcion (dinamica/50/50/custom) y proporciones del mes.
 function renderFijosDetailTable() {
   const inner = document.getElementById('fijos-detail-inner');
   const data  = S.fixed?.data;
@@ -2323,24 +2509,94 @@ function renderFijosDetailTable() {
     inner.innerHTML = '<div class="empty-state" style="padding:1rem">Sin gastos fijos para este mes.</div>';
     return;
   }
+  const p1 = S.config.nombre_persona1 || 'JD';
+  const p2 = S.config.nombre_persona2 || 'Pinki';
+
+  // Precalcular montos individuales por fila
+  const rows = data.map(r => {
+    const { pct1, pct2 } = getRowPct(r, p1, p2);
+    return {
+      ...r,
+      montoP1: Math.round(r.monto_mensual * pct1) / 100,
+      montoP2: Math.round(r.monto_mensual * pct2) / 100,
+    };
+  });
+
+  const totalP1 = rows.reduce((acc, r) => acc + r.montoP1, 0);
+  const totalP2 = rows.reduce((acc, r) => acc + r.montoP2, 0);
+
   inner.innerHTML = `
     <table>
       <thead><tr>
         <th>Descripción</th><th>Categoría</th>
-        <th>Responsable</th><th style="text-align:right">Monto mensual</th>
+        <th>Proporción</th>
+        <th style="text-align:right">Mensual</th>
+        <th style="text-align:right">${p1} $</th>
+        <th style="text-align:right">${p2} $</th>
       </tr></thead>
       <tbody>
-        ${data.map(r => `
+        ${rows.map(r => `
           <tr>
             <td>${r.descripcion}${r.es_bimestral ? ' <span class="badge-bimestral">bimestral</span>' : ''}</td>
             <td class="td-muted">${r.categoria}${r.subcategoria ? ' / ' + r.subcategoria : ''}</td>
-            <td class="td-muted">${r.responsable || '—'}</td>
+            <td class="td-muted" style="font-size:0.72rem">${propLabel(r)}</td>
             <td class="td-amount td-accent">${fmt(r.monto_mensual)}</td>
+            <td class="td-amount">${fmt(r.montoP1)}</td>
+            <td class="td-amount">${fmt(r.montoP2)}</td>
           </tr>`).join('')}
       </tbody>
       <tfoot><tr>
         <td colspan="3" class="td-muted" style="padding:0.65rem 1rem">Total fijos</td>
         <td class="td-amount td-accent" style="padding:0.65rem 1rem">${fmt(S.fixed.total)}</td>
+        <td class="td-amount" style="padding:0.65rem 1rem">${fmt(totalP1)}</td>
+        <td class="td-amount" style="padding:0.65rem 1rem">${fmt(totalP2)}</td>
+      </tr></tfoot>
+    </table>`;
+}
+
+// === SECCIÓN: Cuotas comprometidas — panel desplegable (F5) ===
+// Qué hace: muestra la lista de cuotas diferidas activas en el período (cuota_nro > 1).
+// Por qué separado de "En cuotas" del card: la card muestra el total de filas con cuotas_total > 1
+//   (incluye cuota 1/N), el panel solo muestra las cuotas diferidas — las que ya son compromisos.
+// Cómo funciona: reutiliza filterCuotasComprometidas para consistencia con F-01 y F-02.
+
+function toggleCuotasDetail() {
+  const panel = document.getElementById('cuotas-detail');
+  const isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) renderCuotasDetailTable();
+}
+
+function renderCuotasDetailTable() {
+  const inner = document.getElementById('cuotas-detail-inner');
+  const rows  = filterCuotasComprometidas(S.period.from, S.period.to)
+    .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+
+  if (!rows.length) {
+    inner.innerHTML = '<div class="empty-state" style="padding:1rem">Sin cuotas comprometidas en este período.</div>';
+    return;
+  }
+
+  const total = sum(rows, 'monto_total');
+
+  inner.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Fecha</th><th>Descripción</th><th>Cuota</th>
+        <th style="text-align:right">Monto</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r => `
+          <tr>
+            <td class="td-muted">${r.fecha || '—'}</td>
+            <td>${r.descripcion || '—'}</td>
+            <td class="td-muted">${cuotaLabel(r)}</td>
+            <td class="td-amount td-accent">${fmt(r.monto_total)}</td>
+          </tr>`).join('')}
+      </tbody>
+      <tfoot><tr>
+        <td colspan="3" class="td-muted" style="padding:0.65rem 1rem">Total cuotas</td>
+        <td class="td-amount td-accent" style="padding:0.65rem 1rem">${fmt(total)}</td>
       </tr></tfoot>
     </table>`;
 }
@@ -2411,6 +2667,8 @@ function renderCreditoDetailPanel(rows) {
         <td class="td-muted" style="width:90px">${r.fecha || '—'}</td>
         <td>${r.descripcion || '—'}${esCuota ? ' <span class="badge-bimestral">cuota ' + r.cuota_nro + '/' + r.cuotas_total + '</span>' : ''}</td>
         <td class="td-muted">${r.categoria || '—'}</td>
+        <td class="td-muted"><span class="badge badge-${(r.pago||'comun').toLowerCase()}">${r.pago || '—'}</span></td>
+        <td class="td-muted">${propLabel(r)}</td>
         <td class="td-amount">${fmt(r.monto_total)}</td>
       </tr>`;
     }).join('');
@@ -2420,11 +2678,12 @@ function renderCreditoDetailPanel(rows) {
       <table>
         <thead><tr>
           <th>Fecha</th><th>Descripción</th><th>Categoría</th>
+          <th>Pagó</th><th>Proporción</th>
           <th style="text-align:right">Monto</th>
         </tr></thead>
         <tbody>${filas}</tbody>
         <tfoot><tr>
-          <td colspan="3" class="td-muted" style="padding:0.65rem 1rem">Subtotal</td>
+          <td colspan="5" class="td-muted" style="padding:0.65rem 1rem">Subtotal</td>
           <td class="td-amount" style="padding:0.65rem 1rem">${fmt(subtotal)}</td>
         </tr></tfoot>
       </table>`;
@@ -2434,7 +2693,7 @@ function renderCreditoDetailPanel(rows) {
   inner.innerHTML = bloques + `
     <table style="border-top:2px solid var(--border)">
       <tfoot><tr>
-        <td colspan="3" style="padding:0.65rem 1rem;font-size:0.72rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--muted)">Total en crédito</td>
+        <td colspan="5" style="padding:0.65rem 1rem;font-size:0.72rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--muted)">Total en crédito</td>
         <td class="td-amount td-accent" style="padding:0.65rem 1rem">${fmt(total)}</td>
       </tr></tfoot>
     </table>`;
@@ -2914,6 +3173,52 @@ init();
 
 // ── APPSHEET DRAWER ───────────────────────────────────────────────────────────
 
+// === SECCIÓN: Drawer resize (F9) ===
+// Qué hace: permite arrastrar el borde izquierdo del drawer para cambiar su ancho.
+// Por qué: mejora ergonomía en pantallas grandes sin persistir preferencia entre sesiones.
+// Cómo funciona: mousedown en el handle → mousemove actualiza style.width en tiempo real
+//   → mouseup limpia listeners. La transición CSS se desactiva durante el drag.
+let _drawerWidth = 420; // ancho en px, variable de sesión (se resetea al recargar)
+let _invZoom     = 6;   // meses visibles en gráfico de evolución (1/3/6/12/0=Todo)
+let _invPieType  = 'doughnut'; // tipo del gráfico "Por tipo" ('doughnut' o 'bar')
+
+function initDrawerResize(drawerId, handleId) {
+  if (window.innerWidth < 768) return; // handle inactivo en mobile
+  const drawer = document.getElementById(drawerId);
+  const handle = document.getElementById(handleId);
+  if (!drawer || !handle) return;
+
+  // Aplicar ancho guardado en la sesión al abrir
+  drawer.style.width = _drawerWidth + 'px';
+
+  // Evitar registrar el listener múltiples veces
+  if (handle._resizeInit) return;
+  handle._resizeInit = true;
+
+  handle.addEventListener('mousedown', e => {
+    if (window.innerWidth < 768) return;
+    e.preventDefault();
+    handle.classList.add('dragging');
+    drawer.style.transition = 'none'; // drag fluido sin transición
+
+    const onMove = ev => {
+      const newW = window.innerWidth - ev.clientX;
+      const minW = 280;
+      const maxW = Math.floor(window.innerWidth * 0.82);
+      _drawerWidth = Math.max(minW, Math.min(maxW, newW));
+      drawer.style.width = _drawerWidth + 'px';
+    };
+    const onUp = () => {
+      handle.classList.remove('dragging');
+      drawer.style.transition = ''; // restaurar transición CSS
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
 function toggleDrawer() {
   const drawer = document.getElementById('appsheet-drawer');
   const fab    = document.getElementById('fab');
@@ -2942,11 +3247,14 @@ function toggleDrawer() {
     fab.classList.add('open');
     fab.innerHTML = '&times;';
     fab.title = 'Cerrar';
+    initDrawerResize('appsheet-drawer', 'drawer-resize-handle');
   } else {
     drawer.classList.remove('open');
     fab.classList.remove('open');
     fab.innerHTML = '+';
     fab.title = 'Agregar entrada';
+    // Refetch al cerrar: actualiza datos con lo que se haya cargado en AppSheet
+    reload();
   }
 }
 
