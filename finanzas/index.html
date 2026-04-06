@@ -284,6 +284,33 @@
     letter-spacing: 0.05em;
   }
 
+  /* ── PRESUPUESTO — CARDS SPLIT (F16) ─────────────────── */
+  .card-split-rows {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .card-split-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .card-split-name {
+    font-size: 0.58rem;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  .card-split-val {
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+  .card-split-val.accent { color: var(--accent); }
+  .card-split-val.danger { color: var(--danger); }
+
   /* ── CHARTS ROW ──────────────────────────────────────── */
   .charts-row {
     display: grid;
@@ -532,6 +559,50 @@
   .dist-disponible-pos { color: var(--accent); }
   .dist-disponible-neg { color: var(--danger); }
   .dist-pct-sub { font-size: 0.65rem; color: var(--muted); margin-top: 0.1rem; }
+
+  /* ── PRESUPUESTO — GASTOS PERSONALES (F17) ──────────── */
+  .gastos-personales-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+  }
+  .gp-col {
+    background: var(--surface);
+    padding: 1rem 1.25rem;
+  }
+  .gp-col-header {
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-bottom: 0.6rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .gp-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.28rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.73rem;
+  }
+  .gp-row-label { color: var(--muted); }
+  .gp-row-val { font-variant-numeric: tabular-nums; }
+  .gp-saldo {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.5rem 0 0;
+    margin-top: 0.2rem;
+    border-top: 2px solid var(--border);
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+  .gp-saldo-label { color: var(--text); }
+  .gp-saldo-pos { color: var(--accent); font-variant-numeric: tabular-nums; }
+  .gp-saldo-neg { color: var(--danger); font-variant-numeric: tabular-nums; }
 
   /* ── EMPTY STATE ─────────────────────────────────────── */
   .empty-state {
@@ -816,6 +887,61 @@
   .composicion-leg-val   { color: var(--text); }
   .composicion-leg-pct   { color: var(--muted); }
 
+  /* ── COMPOSICIÓN — Labels sobre la barra (F11) ── */
+  .composicion-seg:not(:last-child) { border-right: 2px solid rgba(255,255,255,0.45); box-sizing: border-box; }
+  .composicion-labels-row { display: flex; margin-bottom: 0.4rem; }
+  .composicion-label-item {
+    text-align: center;
+    overflow: hidden;
+    transition: width 0.4s ease;
+    padding: 0 2px;
+  }
+  .composicion-label-name { display: block; font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .composicion-label-val  { display: block; font-size: 0.65rem; color: var(--text); }
+
+  /* ── GASTOS — DRILL-DOWN SUBCATEGORÍA (F13) ─────────── */
+  .gastos-drilldown-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .drilldown-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  .drilldown-back {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 3px;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.62rem;
+    font-family: 'DM Mono', monospace;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    line-height: 1.4;
+    flex-shrink: 0;
+  }
+  .drilldown-back:hover { border-color: var(--accent); color: var(--accent); }
+  .drilldown-title {
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    flex: 1;
+  }
+  .drilldown-title em {
+    color: var(--text);
+    font-style: normal;
+    letter-spacing: 0;
+    text-transform: none;
+    font-size: 0.7rem;
+  }
+
   /* ── PRESUPUESTO — BARRA DE PROGRESO ─────────────────── */
   .ppto-bar-wrap { margin-bottom: 2rem; }
 
@@ -928,6 +1054,24 @@
   }
   .sim-input:focus { border-bottom-color: var(--accent); }
   .sim-input-monto { text-align: right; }
+  .sim-select {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-family: 'DM Mono', monospace;
+    padding: 0.2rem 0;
+    cursor: pointer;
+    outline: none;
+    width: auto;
+  }
+  .sim-select:focus { border-bottom-color: var(--accent); }
+  .sim-select option { background: var(--bg); }
+  .sim-input-pct {
+    width: 52px;
+    margin-left: 0.4rem;
+  }
 
   .btn-add-sim {
     display: block;
@@ -1150,6 +1294,7 @@
       <!-- Composición del gasto total: fijos / variables / cuotas (F-03) -->
       <div class="composicion-wrap" id="g-composicion">
         <div class="composicion-title">Composición del gasto</div>
+        <div class="composicion-labels-row" id="comp-labels-row"></div>
         <div class="composicion-bar">
           <div class="composicion-seg composicion-seg-fijos"  id="comp-seg-fijos"  style="width:0%"></div>
           <div class="composicion-seg composicion-seg-var"    id="comp-seg-var"    style="width:0%"></div>
@@ -1174,6 +1319,16 @@
           <div class="chart-title">Últimos 6 meses</div>
           <div class="chart-wrap"><canvas id="chart-gastos-bar"></canvas></div>
         </div>
+      </div>
+
+      <!-- Drill-down subcategoría (F13) — oculto hasta que se clica una categoría -->
+      <div class="gastos-drilldown-box" id="gastos-drilldown-box" style="display:none">
+        <div class="drilldown-header">
+          <button class="drilldown-back" onclick="resetGastosDrilldown()">&#8592; volver</button>
+          <div class="drilldown-title">Subcategorías de <em id="drilldown-cat-name"></em></div>
+          <button class="btn-chart-toggle" id="subcat-toggle" onclick="toggleSubcatType()">barras</button>
+        </div>
+        <div class="chart-wrap"><canvas id="chart-gastos-subcat"></canvas></div>
       </div>
 
       <!-- Tabla -->
@@ -1302,36 +1457,96 @@
         <div class="section-line"></div>
       </div>
 
-      <!-- 4 cards principales -->
+      <!-- 6 cards principales — F16: cada card incluye filas split JD / Pinki -->
       <div class="cards-row" id="ppto-cards">
         <div class="card">
-          <div class="card-label">Ingresos del mes</div>
+          <div class="card-label">Ingresos del período</div>
           <div class="card-value accent" id="ppto-ingresos">—</div>
+          <div class="card-split-rows">
+            <div class="card-split-row">
+              <span class="card-split-name card-split-name-1">JD</span>
+              <span class="card-split-val" id="ppto-ingresos-1">—</span>
+            </div>
+            <div class="card-split-row">
+              <span class="card-split-name card-split-name-2">Pinki</span>
+              <span class="card-split-val" id="ppto-ingresos-2">—</span>
+            </div>
+          </div>
         </div>
         <div class="card">
           <div class="card-label">Gastos fijos</div>
           <div class="card-value accent2" id="ppto-fijos-val">—</div>
           <div class="card-sub" id="ppto-fijos-count">— ítems</div>
+          <div class="card-split-rows">
+            <div class="card-split-row">
+              <span class="card-split-name card-split-name-1">JD</span>
+              <span class="card-split-val" id="ppto-fijos-1">—</span>
+            </div>
+            <div class="card-split-row">
+              <span class="card-split-name card-split-name-2">Pinki</span>
+              <span class="card-split-val" id="ppto-fijos-2">—</span>
+            </div>
+          </div>
         </div>
         <div class="card">
           <div class="card-label">Variables ejecutados</div>
           <div class="card-value" id="ppto-var-val">—</div>
           <div class="card-sub" id="ppto-var-count">— ítems</div>
+          <div class="card-split-rows">
+            <div class="card-split-row">
+              <span class="card-split-name card-split-name-1">JD</span>
+              <span class="card-split-val" id="ppto-var-1">—</span>
+            </div>
+            <div class="card-split-row">
+              <span class="card-split-name card-split-name-2">Pinki</span>
+              <span class="card-split-val" id="ppto-var-2">—</span>
+            </div>
+          </div>
         </div>
         <div class="card">
           <div class="card-label">Cuotas comprometidas</div>
           <div class="card-value" id="ppto-cuotas-val">—</div>
           <div class="card-sub" id="ppto-cuotas-count">— ítems</div>
+          <div class="card-split-rows">
+            <div class="card-split-row">
+              <span class="card-split-name card-split-name-1">JD</span>
+              <span class="card-split-val" id="ppto-cuotas-1">—</span>
+            </div>
+            <div class="card-split-row">
+              <span class="card-split-name card-split-name-2">Pinki</span>
+              <span class="card-split-val" id="ppto-cuotas-2">—</span>
+            </div>
+          </div>
         </div>
         <div class="card">
           <div class="card-label">Simulados</div>
           <div class="card-value" id="ppto-sim-val">$0</div>
           <div class="card-sub" id="ppto-sim-count">0 ítems</div>
+          <div class="card-split-rows">
+            <div class="card-split-row">
+              <span class="card-split-name card-split-name-1">JD</span>
+              <span class="card-split-val" id="ppto-sim-1">—</span>
+            </div>
+            <div class="card-split-row">
+              <span class="card-split-name card-split-name-2">Pinki</span>
+              <span class="card-split-val" id="ppto-sim-2">—</span>
+            </div>
+          </div>
         </div>
         <div class="card">
           <div class="card-label">Disponible</div>
           <div class="card-value" id="ppto-disponible">—</div>
           <div class="card-sub" id="ppto-disponible-sub"></div>
+          <div class="card-split-rows">
+            <div class="card-split-row">
+              <span class="card-split-name card-split-name-1">JD</span>
+              <span class="card-split-val" id="ppto-disp-1">—</span>
+            </div>
+            <div class="card-split-row">
+              <span class="card-split-name card-split-name-2">Pinki</span>
+              <span class="card-split-val" id="ppto-disp-2">—</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1350,6 +1565,30 @@
           <span><span class="ppto-leg-dot" style="background:#9a7fc4"></span>Cuotas</span>
           <span><span class="ppto-leg-dot" style="background:var(--accent2)"></span>Simulados</span>
           <span><span class="ppto-leg-dot" style="background:var(--accent)"></span>Disponible</span>
+        </div>
+      </div>
+
+      <!-- Simulador de gastos variables (F14-3: movido arriba de fijos, F14-4: col Proporción) -->
+      <div class="table-box" style="margin-top:2rem">
+        <div class="table-header">
+          <span class="section-label">Simulador de gastos variables</span>
+          <button class="btn-link" onclick="clearSimulator()">Limpiar todo</button>
+        </div>
+        <div id="ppto-simulator">
+          <table class="sim-table">
+            <thead><tr>
+              <th>Concepto</th>
+              <th style="width:140px">Proporción</th>
+              <th style="text-align:right;width:120px">Monto</th>
+              <th style="width:40px"></th>
+            </tr></thead>
+            <tbody id="ppto-sim-body">
+              <tr id="ppto-sim-empty">
+                <td colspan="4" class="empty-state" style="padding:1.5rem 0.75rem">Sin gastos simulados. Agregá uno para proyectar.</td>
+              </tr>
+            </tbody>
+          </table>
+          <button class="btn-add-sim" onclick="addSimRow()">+ Agregar gasto</button>
         </div>
       </div>
 
@@ -1376,29 +1615,6 @@
         </div>
       </div>
 
-      <!-- Simulador de gastos variables (100% client-side) -->
-      <div class="table-box" style="margin-top:2rem">
-        <div class="table-header">
-          <span class="section-label">Simulador de gastos variables</span>
-          <button class="btn-link" onclick="clearSimulator()">Limpiar todo</button>
-        </div>
-        <div id="ppto-simulator">
-          <table class="sim-table">
-            <thead><tr>
-              <th>Concepto</th>
-              <th style="text-align:right;width:140px">Monto</th>
-              <th style="width:40px"></th>
-            </tr></thead>
-            <tbody id="ppto-sim-body">
-              <tr id="ppto-sim-empty">
-                <td colspan="3" class="empty-state" style="padding:1.5rem 0.75rem">Sin gastos simulados. Agregá uno para proyectar.</td>
-              </tr>
-            </tbody>
-          </table>
-          <button class="btn-add-sim" onclick="addSimRow()">+ Agregar gasto</button>
-        </div>
-      </div>
-
       <!-- Distribución individual JD | Pinki -->
       <div class="table-box dist-section">
         <div class="table-header">
@@ -1406,6 +1622,18 @@
           <span class="hint-text">Cómo impacta el presupuesto en cada uno</span>
         </div>
         <div id="dist-container">
+          <div class="empty-state">Cargando…</div>
+        </div>
+      </div>
+
+      <!-- ACOTACIÓN PARA R.P.: Sección nueva F17 — gastos exclusivos por persona (custom 100/0) -->
+      <!-- Gastos personales JD | Pinki (F17) -->
+      <div class="table-box" style="margin-top:2rem">
+        <div class="table-header">
+          <span class="section-label">Gastos personales</span>
+          <span class="hint-text">Solo gastos exclusivos (tipo_proporcion=custom, 100% o 0%)</span>
+        </div>
+        <div id="gastos-personales-container">
           <div class="empty-state">Cargando…</div>
         </div>
       </div>
@@ -1592,12 +1820,15 @@ function renderView(view) {
 // ── VISTA GASTOS ──────────────────────────────────────────────────────────────
 
 function renderGastos() {
+  // Cerrar drill-down al re-renderizar (cambio de período → datos de la cat anterior quedarían desactualizados)
+  resetGastosDrilldown();
+
   const rows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to });
 
   // === Gastos variables del Log + gastos fijos del endpoint fixed ===
-  // El total real = variables registrados en el mes + fijos vigentes
+  // El total real = variables registrados en el período + fijos (acumulado multi-mes via F12)
   const varTotal = sum(rows, 'monto_total');
-  const fixTotal = S.fixed?.total || 0;
+  const fixTotal = computeFixedTotalForPeriod();
   const total    = varTotal + fixTotal;
 
   const cuotas = rows.filter(r => (parseInt(r.cuotas_total) || 1) > 1);
@@ -1814,6 +2045,9 @@ function renderGastosPie(rows) {
   const data    = keys.map(k => sum(grouped[k], 'monto_total'));
   if (!data.length) return;
 
+  // Guardar keys en estado global para que onClick pueda mapear índice → categoría
+  _gastosCategories = keys;
+
   const total  = data.reduce((a, b) => a + b, 0) || 1;
   // Label incluye monto y % para que la leyenda sea autoexplicativa sin hover
   const labels = keys.map((k, i) => `${k}  ${fmtShort(data[i])}  ${((data[i] / total) * 100).toFixed(0)}%`);
@@ -1831,6 +2065,15 @@ function renderGastosPie(rows) {
         legend: { position: 'right', labels: { color: '#6b6860', font: { size: 10 } } },
         // Tooltip solo muestra el monto — el label ya tiene monto y % en la leyenda
         tooltip: { callbacks: { label: ctx => '  ' + fmtShort(ctx.raw) } },
+      },
+      // F13: clic en un segmento → drill-down a subcategorías de esa categoría
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        drillDownToSubcat(_gastosCategories[elements[0].index]);
+      },
+      // Cursor pointer para indicar que es clickeable
+      onHover: (evt, elements) => {
+        evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
       },
     },
   });
@@ -1863,6 +2106,100 @@ function renderGastosBar() {
       },
     },
   });
+}
+
+// === SECCIÓN: Drill-down subcategoría (F13) ===
+// Qué hace: al hacer clic en un segmento de la torta de gastos, muestra un segundo gráfico
+//   con el desglose por subcategoría de esa categoría.
+// Por qué: la torta principal solo muestra un nivel. El drill-down permite ver el detalle
+//   sin necesidad de ir a la tabla.
+// Cómo funciona:
+//   1. renderGastosPie guarda las keys y registra el onClick
+//   2. drillDownToSubcat filtra el Log por categoría y dibuja el subcat chart
+//   3. toggleSubcatType alterna doughnut/bar y redibuja
+//   4. resetGastosDrilldown oculta el panel
+
+function drillDownToSubcat(cat) {
+  _gastosActiveCat = cat;
+  document.getElementById('drilldown-cat-name').textContent = cat;
+  document.getElementById('gastos-drilldown-box').style.display = 'block';
+  // Scroll suave al panel de drill-down
+  document.getElementById('gastos-drilldown-box').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  renderSubcatChart(cat);
+}
+
+function renderSubcatChart(cat) {
+  destroyChart('gastos-subcat');
+  const rows    = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })
+    .filter(r => r.categoria === cat);
+  const grouped = groupBy(rows, 'subcategoria');
+  const keys    = Object.keys(grouped).filter(Boolean);
+
+  // Si no hay subcategorías, mostrar la categoría entera como un solo segmento
+  const displayKeys = keys.length ? keys : [cat];
+  const data = displayKeys.map(k => sum(k === cat && !keys.length ? rows : (grouped[k] || []), 'monto_total'));
+  const total = data.reduce((a, b) => a + b, 0) || 1;
+
+  // Actualizar texto del botón toggle según tipo actual
+  const btn = document.getElementById('subcat-toggle');
+  if (btn) btn.textContent = _gastosSubcatType === 'doughnut' ? 'barras' : 'torta';
+
+  const canvas = document.getElementById('chart-gastos-subcat');
+
+  if (_gastosSubcatType === 'bar') {
+    // === Modo barras horizontal — fácil de comparar magnitudes ===
+    const labels = displayKeys.map((k, i) => `${k}  ${fmtShort(data[i])}`);
+    S.charts['gastos-subcat'] = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ data, backgroundColor: PALETTE, borderWidth: 0, borderRadius: 3 }],
+      },
+      options: {
+        ...barDefaults(),
+        indexAxis: 'y',   // barras horizontales — más legibles con muchas subcategorías
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => '  ' + fmt(ctx.raw) } },
+        },
+        scales: {
+          x: { ...axisStyle(), ticks: { ...tickStyle(), callback: v => fmtShort(v) } },
+          y: { ...axisStyle() },
+        },
+      },
+    });
+  } else {
+    // === Modo doughnut — labels con monto y % igual que torta principal ===
+    const labels = displayKeys.map((k, i) => `${k}  ${fmtShort(data[i])}  ${((data[i] / total) * 100).toFixed(0)}%`);
+    S.charts['gastos-subcat'] = new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{ data, backgroundColor: PALETTE, borderWidth: 0 }],
+      },
+      options: {
+        ...pieDefaults(),
+        cutout: '60%',
+        plugins: {
+          legend: { position: 'right', labels: { color: '#6b6860', font: { size: 10 } } },
+          tooltip: { callbacks: { label: ctx => '  ' + fmtShort(ctx.raw) } },
+        },
+      },
+    });
+  }
+}
+
+// Alterna el tipo de gráfico del drill-down entre doughnut y barras y redibuja.
+function toggleSubcatType() {
+  _gastosSubcatType = _gastosSubcatType === 'doughnut' ? 'bar' : 'doughnut';
+  if (_gastosActiveCat) renderSubcatChart(_gastosActiveCat);
+}
+
+// Cierra el panel de drill-down y resetea el estado.
+function resetGastosDrilldown() {
+  _gastosActiveCat = null;
+  destroyChart('gastos-subcat');
+  document.getElementById('gastos-drilldown-box').style.display = 'none';
 }
 
 function renderGastosTable(rows) {
@@ -2699,16 +3036,68 @@ function renderCreditoDetailPanel(rows) {
     </table>`;
 }
 
-// === SECCIÓN: Composición del gasto total (F-03) ===
-// Qué hace: desglosa el gasto total del mes en 3 componentes con barra horizontal proporcional.
-//   - Fijos: S.fixed.total (gastos fijos del endpoint)
-//   - Variables: gastos del Log del mes con cuota_nro=1 (gasto directo del mes)
-//   - Cuotas: filterCuotasComprometidas — cuotas de compras anteriores que vencen este mes
-// Por qué: "Total gastos" solo muestra el número, no explica de dónde viene.
-//   Esta barra da contexto inmediato sobre la composición sin necesidad de expandir nada.
+// === SECCIÓN: Helpers de fijos multi-mes (F12) ===
+
+// Qué hace: devuelve un array de strings 'YYYY-MM' con todos los meses incluidos en [from, to].
+// Por qué: los gastos fijos deben calcularse mes a mes (cada uno puede tener distinto monto
+//   si hubo actualizaciones con vigente_desde). Sin esto, multi-mes multiplica el último monto
+//   por N meses, ignorando actualizaciones históricas.
+function getMonthsInPeriod(from, to) {
+  if (!from || !to) return [S.month];   // período 'all' — usar mes de referencia
+  let [y, m] = from.substring(0, 7).split('-').map(Number);
+  const [ey, em] = to.substring(0, 7).split('-').map(Number);
+  const months = [];
+  while (y < ey || (y === ey && m <= em)) {
+    months.push(y + '-' + String(m).padStart(2, '0'));
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return months;
+}
+
+// Qué hace: calcula el total de gastos fijos correcto para el período activo.
+// Cómo funciona:
+//   - Si el período es 1 mes → devuelve S.fixed.total (valor ya calculado por el endpoint).
+//   - Si es multi-mes → itera cada mes × cada gasto fijo del historial,
+//     toma el monto vigente en ese mes (último vigente_desde ≤ mes), y los suma.
+//   - Fallback: si no hay historial, multiplica total × cantidad de meses (aproximación).
+function computeFixedTotalForPeriod() {
+  if (!S.fixed) return 0;
+  const months = getMonthsInPeriod(S.period.from, S.period.to);
+  if (months.length <= 1) return S.fixed.total || 0;
+
+  const history = S.fixed.history;
+  if (!history || Object.keys(history).length === 0) {
+    // Sin historial: fallback simple (puede no ser exacto si hubo actualizaciones)
+    return (S.fixed.total || 0) * months.length;
+  }
+
+  let total = 0;
+  for (const [, hist] of Object.entries(history)) {
+    // Ordenar historial por vigente_desde para poder hacer búsqueda secuencial
+    const sorted = [...hist].sort((a, b) => a.vigente_desde.localeCompare(b.vigente_desde));
+    for (const month of months) {
+      // Buscar el último registro cuyo vigente_desde ≤ mes consultado
+      let monto = 0;
+      for (const h of sorted) {
+        if (h.vigente_desde <= month) monto = h.monto;
+        else break;
+      }
+      total += monto;
+    }
+  }
+  return total;
+}
+
+// === SECCIÓN: Composición del gasto total (F-03, F11, F12) ===
+// Qué hace: desglosa el gasto total del período en 3 componentes con barra horizontal proporcional.
+//   - Fijos: computeFixedTotalForPeriod() — respeta vigente_desde en rangos multi-mes (F12)
+//   - Variables: gastos del Log con cuota_nro=1 (gasto directo del período)
+//   - Cuotas: filterCuotasComprometidas — cuotas de compras anteriores que vencen en el período
+// F11: labels sobre cada segmento (nombre + monto) y separador blanco entre segmentos.
 function renderComposicion() {
   const gastosRows  = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to });
-  const fijosTotal  = S.fixed?.total || 0;
+  const fijosTotal  = computeFixedTotalForPeriod();
   const varTotal    = sum(gastosRows.filter(r => (parseInt(r.cuota_nro) || 1) === 1), 'monto_total');
   const cuotasTotal = sum(filterCuotasComprometidas(S.period.from, S.period.to), 'monto_total');
   const grandTotal  = fijosTotal + varTotal + cuotasTotal || 1;
@@ -2721,11 +3110,24 @@ function renderComposicion() {
   document.getElementById('comp-seg-var').style.width    = pctVar.toFixed(1)    + '%';
   document.getElementById('comp-seg-cuotas').style.width = pctCuotas.toFixed(1) + '%';
 
-  document.getElementById('comp-legend').innerHTML = [
-    { color: 'var(--danger)', label: 'Fijos',    total: fijosTotal,  pct: pctFijos  },
-    { color: '#c4895a',       label: 'Variables', total: varTotal,    pct: pctVar    },
-    { color: '#9a7fc4',       label: 'Cuotas',    total: cuotasTotal, pct: pctCuotas },
-  ].map(({ color, label, total, pct }) => `
+  // F11 — Labels sobre cada segmento: nombre y monto centrados en el ancho del segmento.
+  // Umbral 8%: segmentos muy chicos no muestran label para evitar superposición.
+  const MIN_PCT_LABEL = 8;
+  const segments = [
+    { pct: pctFijos,  label: 'Fijo',     total: fijosTotal,  color: 'var(--danger)' },
+    { pct: pctVar,    label: 'Variable',  total: varTotal,    color: '#c4895a'       },
+    { pct: pctCuotas, label: 'Cuotas',   total: cuotasTotal, color: '#9a7fc4'       },
+  ];
+  document.getElementById('comp-labels-row').innerHTML = segments.map(({ pct, label, total, color }) =>
+    pct < MIN_PCT_LABEL
+      ? `<div style="width:${pct.toFixed(1)}%"></div>`
+      : `<div class="composicion-label-item" style="width:${pct.toFixed(1)}%">
+           <span class="composicion-label-name" style="color:${color}">${label}</span>
+           <span class="composicion-label-val">${fmt(total)}</span>
+         </div>`
+  ).join('');
+
+  document.getElementById('comp-legend').innerHTML = segments.map(({ color, label, total, pct }) => `
     <div class="composicion-leg-item">
       <span class="composicion-leg-dot" style="background:${color}"></span>
       <span class="composicion-leg-label">${label}</span>
@@ -2736,38 +3138,153 @@ function renderComposicion() {
 
 // ── VISTA PRESUPUESTO ─────────────────────────────────────────────────────────
 
-function renderPresupuesto() {
-  const ingresos   = sum(filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to }), 'monto_total');
-  const fijosTotal = S.fixed?.total || 0;
-  const fijosCount = S.fixed?.data?.length || 0;
+// === SECCIÓN: Cálculo centralizado del período (F16) ===
+// Qué hace: concentra todos los cálculos de totales y splits JD/Pinki del período.
+// Por qué: renderPresupuesto() y updateSimTotals() la usan para poblar tanto los
+//   cards de totales como las nuevas filas split por persona (F16).
+// Cómo funciona: aplica getRowPct() por fila para cada categoría, de modo que
+//   cada gasto aporta su monto a cada persona según su tipo_proporcion individual.
+//   El "disponible por persona" = sus ingresos − su parte de cada categoría de egreso.
+function computePresupuestoParts() {
+  const p1 = S.config.nombre_persona1 || 'JD';
+  const p2 = S.config.nombre_persona2 || 'Pinki';
 
-  // Capa 1: gastos variables ejecutados — tipo=Gasto, no fijo, cuota propia (nro 1 o sin cuotas)
+  // Ingresos del período — split por quien cobró
+  const ingRows  = filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to });
+  const ingresos = sum(ingRows, 'monto_total');
+  const ing1     = sum(ingRows.filter(r => r.pago === p1), 'monto_total');
+  const ing2     = sum(ingRows.filter(r => r.pago === p2), 'monto_total');
+
+  // Fijos — total por período + split por persona (fill-forward multi-mes, misma lógica que F15)
+  const fijosTotal = computeFixedTotalForPeriod();
+  const fijosCount = S.fixed?.data?.length || 0;
+  const fixedData  = S.fixed?.data || [];
+  const fixHistory = S.fixed?.history || {};
+  const fixMonths  = getMonthsInPeriod(S.period.from, S.period.to);
+  let fijos1 = 0, fijos2 = 0;
+  fixedData.forEach(item => {
+    let itemTotal = 0;
+    if (fixMonths.length <= 1 || !fixHistory[item.descripcion]) {
+      itemTotal = (item.monto_mensual || 0) * fixMonths.length;
+    } else {
+      const sorted = [...fixHistory[item.descripcion]]
+        .sort((a, b) => a.vigente_desde.localeCompare(b.vigente_desde));
+      for (const month of fixMonths) {
+        let monto = 0;
+        for (const h of sorted) {
+          if (h.vigente_desde <= month) monto = h.monto;
+          else break;
+        }
+        itemTotal += monto;
+      }
+    }
+    const { pct1: rp1, pct2: rp2 } = getRowPct(item, p1, p2);
+    fijos1 += itemTotal * (rp1 / 100);
+    fijos2 += itemTotal * (rp2 / 100);
+  });
+
+  // Variables ejecutados — cuota propia del período, excluye es_fijo
+  // Split sobre TODAS las filas (no solo pagó='Común') para que p1+p2 ≈ varTotal
   const varRows  = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })
     .filter(r => !r.es_fijo && (parseInt(r.cuota_nro) || 1) === 1);
   const varTotal = sum(varRows, 'monto_total');
+  let var1 = 0, var2 = 0;
+  varRows.forEach(r => {
+    const monto = parseFloat(r.monto_total) || 0;
+    const { pct1: rp1, pct2: rp2 } = getRowPct(r, p1, p2);
+    var1 += monto * (rp1 / 100);
+    var2 += monto * (rp2 / 100);
+  });
 
-  // Capa 2: cuotas de compras anteriores que vencen en este mes
+  // Cuotas comprometidas del período
   const cuotasRows  = filterCuotasComprometidas(S.period.from, S.period.to);
   const cuotasTotal = sum(cuotasRows, 'monto_total');
+  let cuotas1 = 0, cuotas2 = 0;
+  cuotasRows.forEach(r => {
+    const monto = parseFloat(r.monto_total) || 0;
+    const { pct1: rp1, pct2: rp2 } = getRowPct(r, p1, p2);
+    cuotas1 += monto * (rp1 / 100);
+    cuotas2 += monto * (rp2 / 100);
+  });
 
-  const simTotal   = S.simRows.reduce((acc, r) => acc + (parseFloat(r.monto) || 0), 0);
+  // Simulados
+  const simTotal = S.simRows.reduce((acc, r) => acc + (parseFloat(r.monto) || 0), 0);
+  let sim1 = 0, sim2 = 0;
+  S.simRows.forEach(r => {
+    const monto = parseFloat(r.monto) || 0;
+    const { pct1: rp1, pct2: rp2 } = getRowPct(r, p1, p2);
+    sim1 += monto * (rp1 / 100);
+    sim2 += monto * (rp2 / 100);
+  });
+
+  // Disponible global y por persona
   const disponible = ingresos - fijosTotal - varTotal - cuotasTotal - simTotal;
+  const disp1      = ing1 - fijos1 - var1 - cuotas1 - sim1;
+  const disp2      = ing2 - fijos2 - var2 - cuotas2 - sim2;
 
-  // Cards
-  setText('ppto-ingresos',      fmt(ingresos));
-  setText('ppto-fijos-val',     fmt(fijosTotal));
-  setText('ppto-fijos-count',   fijosCount + ' ítem' + (fijosCount !== 1 ? 's' : ''));
-  setText('ppto-var-val',       fmt(varTotal));
-  setText('ppto-var-count',     varRows.length + ' ítem' + (varRows.length !== 1 ? 's' : ''));
-  setText('ppto-cuotas-val',    fmt(cuotasTotal));
-  setText('ppto-cuotas-count',  cuotasRows.length + ' ítem' + (cuotasRows.length !== 1 ? 's' : ''));
-  setText('ppto-sim-val',       fmt(simTotal));
-  setText('ppto-sim-count',     S.simRows.length + ' ítem' + (S.simRows.length !== 1 ? 's' : ''));
+  return {
+    p1, p2,
+    ingresos, ing1, ing2,
+    fijosTotal, fijosCount, fijos1, fijos2,
+    varTotal, varRows, var1, var2,
+    cuotasTotal, cuotasRows, cuotas1, cuotas2,
+    simTotal, sim1, sim2,
+    disponible, disp1, disp2,
+  };
+}
+
+function renderPresupuesto() {
+  const parts = computePresupuestoParts();
+  const { p1, p2,
+          ingresos, ing1, ing2,
+          fijosTotal, fijosCount, fijos1, fijos2,
+          varTotal, varRows, var1, var2,
+          cuotasTotal, cuotasRows, cuotas1, cuotas2,
+          simTotal, sim1, sim2,
+          disponible, disp1, disp2 } = parts;
+
+  // Actualizar nombres de personas en todos los cards de una vez
+  document.querySelectorAll('.card-split-name-1').forEach(el => el.textContent = p1);
+  document.querySelectorAll('.card-split-name-2').forEach(el => el.textContent = p2);
+
+  // Cards — totales
+  setText('ppto-ingresos',     fmt(ingresos));
+  setText('ppto-fijos-val',    fmt(fijosTotal));
+  setText('ppto-fijos-count',  fijosCount + ' ítem' + (fijosCount !== 1 ? 's' : ''));
+  setText('ppto-var-val',      fmt(varTotal));
+  setText('ppto-var-count',    varRows.length + ' ítem' + (varRows.length !== 1 ? 's' : ''));
+  setText('ppto-cuotas-val',   fmt(cuotasTotal));
+  setText('ppto-cuotas-count', cuotasRows.length + ' ítem' + (cuotasRows.length !== 1 ? 's' : ''));
+  setText('ppto-sim-val',      fmt(simTotal));
+  setText('ppto-sim-count',    S.simRows.length + ' ítem' + (S.simRows.length !== 1 ? 's' : ''));
 
   const dispEl = document.getElementById('ppto-disponible');
   dispEl.textContent = fmt(Math.abs(disponible));
   dispEl.className = 'card-value ' + (disponible >= 0 ? 'accent' : 'danger');
   setText('ppto-disponible-sub', disponible >= 0 ? 'de margen' : 'de déficit');
+
+  // Cards — filas split JD / Pinki (F16)
+  const fmtSplit = v => v === 0 ? '—' : fmt(v);
+  setText('ppto-ingresos-1', fmtSplit(ing1));
+  setText('ppto-ingresos-2', fmtSplit(ing2));
+  setText('ppto-fijos-1',    fmtSplit(fijos1));
+  setText('ppto-fijos-2',    fmtSplit(fijos2));
+  setText('ppto-var-1',      fmtSplit(var1));
+  setText('ppto-var-2',      fmtSplit(var2));
+  setText('ppto-cuotas-1',   fmtSplit(cuotas1));
+  setText('ppto-cuotas-2',   fmtSplit(cuotas2));
+  setText('ppto-sim-1',      fmtSplit(sim1));
+  setText('ppto-sim-2',      fmtSplit(sim2));
+
+  // Disponible split: color independiente por persona
+  const setDispSplit = (id, v) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = fmt(Math.abs(v)) + (v < 0 ? ' ⚠' : '');
+    el.className = 'card-split-val ' + (v >= 0 ? 'accent' : 'danger');
+  };
+  setDispSplit('ppto-disp-1', disp1);
+  setDispSplit('ppto-disp-2', disp2);
 
   updateProgressBar(ingresos, fijosTotal, varTotal, cuotasTotal, simTotal);
   renderFixedEvolution();   // todos los fijos por defecto
@@ -2968,12 +3485,16 @@ function showFixedHistory(descripcion) {
 
 // ── SIMULADOR ─────────────────────────────────────────────────────────────────
 
-// Agrega una fila editable al simulador de gastos variables.
-// El simulador es 100% client-side: no guarda datos en ningún lado.
-// Cada cambio recalcula los totales y la barra de progreso en tiempo real.
+// === SECCIÓN: Simulador de gastos variables (F14-4) ===
+// Qué hace: agrega una fila editable con campos Concepto, Proporción y Monto.
+// El campo Proporción tiene tres opciones:
+//   - "dinamica": usa la proporción calculada del mes (igual que un gasto común)
+//   - "50/50": divide exactamente a la mitad
+//   - "custom": muestra un input numérico para ingresar el % de JD (0–100)
+// Esto alimenta renderDistribucion (F15) para calcular el impacto individual.
 function addSimRow() {
   const id = ++S.simCounter;
-  S.simRows.push({ id, concepto: '', monto: 0 });
+  S.simRows.push({ id, concepto: '', monto: 0, tipo_proporcion: 'dinamica', proporcion_jd: null });
 
   const empty = document.getElementById('ppto-sim-empty');
   if (empty) empty.remove();
@@ -2984,6 +3505,16 @@ function addSimRow() {
   tr.innerHTML = `
     <td><input class="sim-input" type="text" placeholder="Concepto…"
          oninput="updateSimRow(${id}, 'concepto', this.value)"></td>
+    <td>
+      <select class="sim-select" id="sim-sel-${id}" onchange="updateSimProp(${id}, this.value)">
+        <option value="dinamica">dinámica</option>
+        <option value="50/50">50/50</option>
+        <option value="custom">custom</option>
+      </select>
+      <input class="sim-input sim-input-pct" type="number" id="sim-pct-${id}"
+             placeholder="JD %" min="0" max="100" style="display:none"
+             oninput="updateSimRowPct(${id}, this.value)">
+    </td>
     <td><input class="sim-input sim-input-monto" type="number" placeholder="0"
          oninput="updateSimRow(${id}, 'monto', this.value)"></td>
     <td><button class="btn-link" onclick="removeSimRow(${id})">✕</button></td>`;
@@ -2997,6 +3528,24 @@ function updateSimRow(id, field, value) {
   updateSimTotals();
 }
 
+// Actualiza tipo_proporcion de una fila del simulador y muestra/oculta el input custom.
+function updateSimProp(id, tipo) {
+  const row = S.simRows.find(r => r.id === id);
+  if (!row) return;
+  row.tipo_proporcion = tipo;
+  const pctInput = document.getElementById('sim-pct-' + id);
+  if (pctInput) pctInput.style.display = (tipo === 'custom') ? 'inline-block' : 'none';
+  updateSimTotals();
+}
+
+// Actualiza el porcentaje custom de JD para una fila del simulador.
+function updateSimRowPct(id, value) {
+  const row = S.simRows.find(r => r.id === id);
+  if (!row) return;
+  row.proporcion_jd = parseFloat(value) || 0;
+  updateSimTotals();
+}
+
 function removeSimRow(id) {
   S.simRows = S.simRows.filter(r => r.id !== id);
   const tr = document.getElementById('sim-row-' + id);
@@ -3006,7 +3555,7 @@ function removeSimRow(id) {
   if (S.simRows.length === 0) {
     const tbody = document.getElementById('ppto-sim-body');
     tbody.innerHTML = `<tr id="ppto-sim-empty">
-      <td colspan="3" class="empty-state" style="padding:1.5rem 0.75rem">Sin gastos simulados. Agregá uno para proyectar.</td>
+      <td colspan="4" class="empty-state" style="padding:1.5rem 0.75rem">Sin gastos simulados. Agregá uno para proyectar.</td>
     </tr>`;
   }
   updateSimTotals();
@@ -3017,43 +3566,53 @@ function clearSimulator() {
   S.simCounter = 0;
   const tbody = document.getElementById('ppto-sim-body');
   tbody.innerHTML = `<tr id="ppto-sim-empty">
-    <td colspan="3" class="empty-state" style="padding:1.5rem 0.75rem">Sin gastos simulados. Agregá uno para proyectar.</td>
+    <td colspan="4" class="empty-state" style="padding:1.5rem 0.75rem">Sin gastos simulados. Agregá uno para proyectar.</td>
   </tr>`;
   updateSimTotals();
 }
 
 // Recalcula los totales del simulador y actualiza las cards + barra de progreso.
 // Se llama cada vez que el usuario edita un input del simulador.
+// F16: también actualiza las filas split de sim y disponible.
 function updateSimTotals() {
-  const simTotal    = S.simRows.reduce((acc, r) => acc + (parseFloat(r.monto) || 0), 0);
-  const ingresos    = sum(filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to }), 'monto_total');
-  const fijosTotal  = S.fixed?.total || 0;
-  const varRows     = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })
-    .filter(r => !r.es_fijo && (parseInt(r.cuota_nro) || 1) === 1);
-  const varTotal    = sum(varRows, 'monto_total');
-  const cuotasTotal = sum(filterCuotasComprometidas(S.period.from, S.period.to), 'monto_total');
-  const disponible  = ingresos - fijosTotal - varTotal - cuotasTotal - simTotal;
+  const parts = computePresupuestoParts();
+  const { ingresos, fijosTotal, varTotal, cuotasTotal,
+          simTotal, sim1, sim2, disponible, disp1, disp2 } = parts;
 
+  const fmtSplit = v => v === 0 ? '—' : fmt(v);
   setText('ppto-sim-val',   fmt(simTotal));
   setText('ppto-sim-count', S.simRows.length + ' ítem' + (S.simRows.length !== 1 ? 's' : ''));
+  setText('ppto-sim-1',     fmtSplit(sim1));
+  setText('ppto-sim-2',     fmtSplit(sim2));
 
   const dispEl = document.getElementById('ppto-disponible');
   dispEl.textContent = fmt(Math.abs(disponible));
   dispEl.className = 'card-value ' + (disponible >= 0 ? 'accent' : 'danger');
   setText('ppto-disponible-sub', disponible >= 0 ? 'de margen' : 'de déficit');
 
+  const setDispSplit = (id, v) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = fmt(Math.abs(v)) + (v < 0 ? ' ⚠' : '');
+    el.className = 'card-split-val ' + (v >= 0 ? 'accent' : 'danger');
+  };
+  setDispSplit('ppto-disp-1', disp1);
+  setDispSplit('ppto-disp-2', disp2);
+
   updateProgressBar(ingresos, fijosTotal, varTotal, cuotasTotal, simTotal);
   renderDistribucion();
 }
 
-// === SECCIÓN: Distribución individual (F-05) ===
-// Qué hace: muestra cómo impacta el presupuesto del mes en JD y Pinki por separado.
-// Lógica:
-//   - Salario: ingresos tipo=Salario del mes, filtrados por pagó=persona
-//   - Fijos: S.fixed.total × proporción de la persona (dinámica del mes)
-//   - Variables: gastos comunes tipo=Gasto, cuota propia (nro=1), × getRowPct() por fila
-//   - Cuotas: cuotas comprometidas del mes, pagó="Común", × getRowPct() por fila
-//   - Simulados: suma del simulador × proporción dinámica del mes
+// === SECCIÓN: Distribución individual (F-05, F15) ===
+// Qué hace: muestra cómo impacta el presupuesto del período en JD y Pinki por separado.
+// F15: Fijos y Simulados ahora usan proporción individual por ítem (getRowPct),
+//   no la proporción global del mes. Variables y Cuotas ya lo hacían antes.
+// Lógica por categoría:
+//   - Salario: ingresos tipo=Salario del período, filtrados por pagó=persona
+//   - Fijos: iterar S.fixed.data × getRowPct(item) por ítem; multi-mes usa historial
+//   - Variables: gastos comunes, cuota propia del período, × getRowPct(row) por fila
+//   - Cuotas: cuotas comprometidas del período, × getRowPct(row) por fila
+//   - Simulados: iterar S.simRows × getRowPct(row) por fila (usa tipo_proporcion del sim)
 //   - Propios: gastos donde pagó=persona (no "Común") — fila condicional
 //   - Disponible: salario − todos los egresos
 function renderDistribucion() {
@@ -3063,23 +3622,43 @@ function renderDistribucion() {
   const p1 = S.config.nombre_persona1 || 'JD';
   const p2 = S.config.nombre_persona2 || 'Pinki';
 
-  // Proporción dinámica del mes (fallback 50/50)
-  const pct1 = S.proportions?.[p1]?.porcentaje ?? 50;
-  const pct2 = S.proportions?.[p2]?.porcentaje ?? 50;
-
   // Salarios individuales
   const salRows = filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to })
     .filter(r => (r.categoria || '').toLowerCase() === 'salario');
   const sal1 = sum(salRows.filter(r => r.pago === p1), 'monto_total');
   const sal2 = sum(salRows.filter(r => r.pago === p2), 'monto_total');
 
-  // Fijos: proporción del mes aplicada al total
-  const fijosTotal = S.fixed?.total || 0;
-  const fijos1 = fijosTotal * (pct1 / 100);
-  const fijos2 = fijosTotal * (pct2 / 100);
+  // F15 — Fijos: aplicar tipo_proporcion individual de cada gasto fijo.
+  // Para multi-mes, se reconstruye el monto correcto por item/mes desde el historial
+  // (misma lógica que computeFixedTotalForPeriod pero separando el resultado por persona).
+  let fijos1 = 0, fijos2 = 0;
+  const fixedData  = S.fixed?.data || [];
+  const fixHistory = S.fixed?.history || {};
+  const fixMonths  = getMonthsInPeriod(S.period.from, S.period.to);
+  fixedData.forEach(item => {
+    let itemTotal = 0;
+    if (fixMonths.length <= 1 || !fixHistory[item.descripcion]) {
+      // Un mes o sin historial: usar monto_mensual × número de meses como aproximación
+      itemTotal = (item.monto_mensual || 0) * fixMonths.length;
+    } else {
+      // Multi-mes: fill-forward desde el historial del ítem
+      const sorted = [...fixHistory[item.descripcion]]
+        .sort((a, b) => a.vigente_desde.localeCompare(b.vigente_desde));
+      for (const month of fixMonths) {
+        let monto = 0;
+        for (const h of sorted) {
+          if (h.vigente_desde <= month) monto = h.monto;
+          else break;
+        }
+        itemTotal += monto;
+      }
+    }
+    const { pct1: rp1, pct2: rp2 } = getRowPct(item, p1, p2);
+    fijos1 += itemTotal * (rp1 / 100);
+    fijos2 += itemTotal * (rp2 / 100);
+  });
 
-  // Variables ejecutados: gastos comunes, cuota propia del mes
-  // getRowPct() lee tipo_proporcion de cada fila (dinamica/50-50/custom)
+  // Variables ejecutados: gastos comunes, cuota propia del período
   const varRows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })
     .filter(r => !r.es_fijo && (parseInt(r.cuota_nro) || 1) === 1 && r.pago === 'Común');
   let var1 = 0, var2 = 0;
@@ -3090,7 +3669,7 @@ function renderDistribucion() {
     var2 += monto * (rp2 / 100);
   });
 
-  // Cuotas comprometidas del mes (pagó="Común")
+  // Cuotas comprometidas del período (pagó="Común")
   const cuotasRows = filterCuotasComprometidas(S.period.from, S.period.to).filter(r => r.pago === 'Común');
   let cuotas1 = 0, cuotas2 = 0;
   cuotasRows.forEach(r => {
@@ -3100,12 +3679,16 @@ function renderDistribucion() {
     cuotas2 += monto * (rp2 / 100);
   });
 
-  // Simulados: usan siempre la proporción dinámica del mes
-  const simTotal = S.simRows.reduce((acc, r) => acc + (parseFloat(r.monto) || 0), 0);
-  const sim1 = simTotal * (pct1 / 100);
-  const sim2 = simTotal * (pct2 / 100);
+  // F15 — Simulados: aplicar tipo_proporcion individual de cada fila del simulador (F14-4)
+  let sim1 = 0, sim2 = 0;
+  S.simRows.forEach(r => {
+    const monto = parseFloat(r.monto) || 0;
+    const { pct1: rp1, pct2: rp2 } = getRowPct(r, p1, p2);
+    sim1 += monto * (rp1 / 100);
+    sim2 += monto * (rp2 / 100);
+  });
 
-  // Gastos propios: pagó=persona, tipo=Gasto (no "Común") — condicional
+  // Gastos propios: pagó=persona, tipo=Gasto — fila condicional
   const propios1 = sum(filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to }).filter(r => r.pago === p1), 'monto_total');
   const propios2 = sum(filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to }).filter(r => r.pago === p2), 'monto_total');
   const hayPropios = propios1 > 0 || propios2 > 0;
@@ -3123,13 +3706,14 @@ function renderDistribucion() {
       <td>${fmtC(propios2)}</td>
     </tr>` : '';
 
+  // F15: columnas muestran solo nombre (sin %) — la proporción ya no es uniforme por ítem
   container.innerHTML = `
     <table class="dist-table">
       <thead>
         <tr>
           <th></th>
-          <th>${p1}<div class="dist-pct-sub">${pct1.toFixed(0)}%</div></th>
-          <th>${p2}<div class="dist-pct-sub">${pct2.toFixed(0)}%</div></th>
+          <th>${p1}</th>
+          <th>${p2}</th>
         </tr>
       </thead>
       <tbody>
@@ -3166,6 +3750,99 @@ function renderDistribucion() {
         </tr>
       </tbody>
     </table>`;
+
+  renderGastosPersonales(p1, p2);
+}
+
+// === SECCIÓN: Gastos personales (F17) ===
+// Qué hace: muestra ingresos, gastos propios, deudas y saldo personal para cada persona.
+// Por qué: permite ver cuánto queda a cada uno considerando solo los gastos que les
+//   corresponden 100% (tipo_proporcion=custom, proporcion_jd=100 para JD o =0 para Pinki).
+// Cómo funciona:
+//   - "Gastos propios": tipo_proporcion=custom + proporcion_jd=100(JD)/0(Pinki) + pagó=esa persona
+//   - "Deuda a cobrar": esta persona pagó algo que 100% corresponde al otro → puede cobrar
+//   - "Deuda propia": el otro pagó algo que 100% le corresponde a esta persona → debe pagar
+//   - Saldo = ingresos propios − gastos propios + deuda_cobrar − deuda_propia
+function renderGastosPersonales(p1, p2) {
+  const container = document.getElementById('gastos-personales-container');
+  if (!container) return;
+
+  const allGastos   = filterLog({ tipo: 'Gasto',   from: S.period.from, to: S.period.to });
+  const allIngresos = filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to });
+
+  const ingProp1 = sum(allIngresos.filter(r => r.pago === p1), 'monto_total');
+  const ingProp2 = sum(allIngresos.filter(r => r.pago === p2), 'monto_total');
+
+  // Gastos propios: gasto pagado por esta persona y que 100% le corresponde a ella
+  const prop1 = sum(allGastos.filter(r =>
+    (r.tipo_proporcion || '').toLowerCase() === 'custom' &&
+    parseFloat(r.proporcion_jd) === 100 && r.pago === p1
+  ), 'monto_total');
+  const prop2 = sum(allGastos.filter(r =>
+    (r.tipo_proporcion || '').toLowerCase() === 'custom' &&
+    parseFloat(r.proporcion_jd) === 0 && r.pago === p2
+  ), 'monto_total');
+
+  // Deuda a cobrar: esta persona pagó algo que 100% corresponde al otro
+  // JD pagó pero era 100% Pinki → JD puede cobrar a Pinki
+  const deudaCobrar1 = sum(allGastos.filter(r =>
+    (r.tipo_proporcion || '').toLowerCase() === 'custom' &&
+    parseFloat(r.proporcion_jd) === 0 && r.pago === p1
+  ), 'monto_total');
+  // Pinki pagó pero era 100% JD → Pinki puede cobrar a JD
+  const deudaCobrar2 = sum(allGastos.filter(r =>
+    (r.tipo_proporcion || '').toLowerCase() === 'custom' &&
+    parseFloat(r.proporcion_jd) === 100 && r.pago === p2
+  ), 'monto_total');
+
+  // Deuda propia: el otro pagó algo que 100% le corresponde a esta persona
+  // Pinki pagó algo que era 100% de JD → JD le debe a Pinki
+  const deudaPropia1 = deudaCobrar2;  // simétrico: lo que Pinki puede cobrar = lo que JD debe
+  // JD pagó algo que era 100% de Pinki → Pinki le debe a JD
+  const deudaPropia2 = deudaCobrar1;  // simétrico
+
+  const saldo1 = ingProp1 - prop1 + deudaCobrar1 - deudaPropia1;
+  const saldo2 = ingProp2 - prop2 + deudaCobrar2 - deudaPropia2;
+
+  const noData = ingProp1 === 0 && prop1 === 0 && deudaCobrar1 === 0 &&
+                 ingProp2 === 0 && prop2 === 0 && deudaCobrar2 === 0;
+  if (noData) {
+    container.innerHTML = '<div class="empty-state">Sin gastos personales identificados en este período.<br>Requiere gastos con tipo_proporcion = custom y proporcion_jd = 100 o 0.</div>';
+    return;
+  }
+
+  const fmtR = v => v === 0 ? '—' : fmt(v);
+
+  const colHtml = (name, ingP, prop, cobrar, propia, saldo) => `
+    <div class="gp-col">
+      <div class="gp-col-header">${name}</div>
+      <div class="gp-row">
+        <span class="gp-row-label">Ingresos propios</span>
+        <span class="gp-row-val">${fmtR(ingP)}</span>
+      </div>
+      <div class="gp-row">
+        <span class="gp-row-label">− Gastos propios</span>
+        <span class="gp-row-val">${fmtR(prop)}</span>
+      </div>
+      <div class="gp-row">
+        <span class="gp-row-label">+ Deuda a cobrar</span>
+        <span class="gp-row-val">${fmtR(cobrar)}</span>
+      </div>
+      <div class="gp-row">
+        <span class="gp-row-label">− Deuda propia</span>
+        <span class="gp-row-val">${fmtR(propia)}</span>
+      </div>
+      <div class="gp-saldo">
+        <span class="gp-saldo-label">= Saldo personal</span>
+        <span class="${saldo >= 0 ? 'gp-saldo-pos' : 'gp-saldo-neg'}">${fmt(Math.abs(saldo))}${saldo < 0 ? ' ⚠' : ''}</span>
+      </div>
+    </div>`;
+
+  container.innerHTML = `
+    <div class="gastos-personales-grid">
+      ${colHtml(p1, ingProp1, prop1, deudaCobrar1, deudaPropia1, saldo1)}
+      ${colHtml(p2, ingProp2, prop2, deudaCobrar2, deudaPropia2, saldo2)}
+    </div>`;
 }
 
 // ── ARRANQUE ──────────────────────────────────────────────────────────────────
@@ -3179,8 +3856,11 @@ init();
 // Cómo funciona: mousedown en el handle → mousemove actualiza style.width en tiempo real
 //   → mouseup limpia listeners. La transición CSS se desactiva durante el drag.
 let _drawerWidth = 420; // ancho en px, variable de sesión (se resetea al recargar)
-let _invZoom     = 6;   // meses visibles en gráfico de evolución (1/3/6/12/0=Todo)
-let _invPieType  = 'doughnut'; // tipo del gráfico "Por tipo" ('doughnut' o 'bar')
+let _invZoom        = 6;         // meses visibles en gráfico de evolución (1/3/6/12/0=Todo)
+let _invPieType     = 'doughnut'; // tipo del gráfico "Por tipo" ('doughnut' o 'bar')
+let _gastosCategories = [];       // keys de la torta de gastos (para mapear índice → cat en onClick)
+let _gastosActiveCat  = null;     // categoría actualmente drillada (o null)
+let _gastosSubcatType = 'doughnut'; // tipo del gráfico de subcategorías ('doughnut' o 'bar')
 
 function initDrawerResize(drawerId, handleId) {
   if (window.innerWidth < 768) return; // handle inactivo en mobile
