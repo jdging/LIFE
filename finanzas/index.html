@@ -126,7 +126,7 @@
 
   /* ── TOP BAR ─────────────────────────────────────────── */
   .topbar {
-    padding: 1.25rem 2.5rem;
+    padding: 1.25rem 1.5rem;
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
@@ -215,7 +215,7 @@
 
   /* ── CONTENT ─────────────────────────────────────────── */
   .content {
-    padding: 2rem 2.5rem;
+    padding: 2rem 1.5rem;
     flex: 1;
   }
 
@@ -329,7 +329,7 @@
 
   .chart-box {
     background: var(--surface);
-    padding: 1.5rem;
+    padding: 1.25rem;
   }
 
   .chart-title {
@@ -381,7 +381,7 @@
   }
 
   .table-header {
-    padding: 1rem 1.5rem;
+    padding: 1rem 1rem;
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
@@ -395,7 +395,7 @@
   }
 
   thead th {
-    padding: 0.7rem 1rem;
+    padding: 0.7rem 0.75rem;
     text-align: left;
     font-weight: 400;
     font-size: 0.6rem;
@@ -414,7 +414,7 @@
   tbody tr:last-child { border-bottom: none; }
 
   tbody td {
-    padding: 0.65rem 1rem;
+    padding: 0.65rem 0.75rem;
     color: var(--text);
     vertical-align: middle;
     white-space: nowrap;
@@ -463,6 +463,21 @@
     letter-spacing: 0.05em;
   }
   .btn-delete:hover { border-color: var(--danger); color: var(--danger); }
+
+  .btn-saldar {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-family: inherit;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: border-color 0.2s, color 0.2s;
+    white-space: nowrap;
+  }
+  .btn-saldar:hover { border-color: var(--accent); color: var(--accent); }
 
   /* ── RECORDATORIO TARJETAS ───────────────────────────── */
   .tarjetas-alert {
@@ -513,7 +528,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-top: none;
-    padding: 1rem 1.5rem;
+    padding: 1rem 1rem;
     margin-bottom: 2rem;
     overflow-x: auto;
   }
@@ -1312,7 +1327,10 @@
       <!-- Charts -->
       <div class="charts-row" id="gastos-charts">
         <div class="chart-box">
-          <div class="chart-title">Por categoría</div>
+          <div class="chart-title" style="display:flex;align-items:center;justify-content:space-between">
+            Por categoría
+            <button class="btn-chart-toggle" id="categ-pie-toggle" onclick="toggleGastosCategType()">barras</button>
+          </div>
           <div class="chart-wrap"><canvas id="chart-gastos-pie"></canvas></div>
         </div>
         <div class="chart-box">
@@ -1592,8 +1610,8 @@
         </div>
       </div>
 
-      <!-- Gráfico de evolución de gastos fijos (todos por defecto, filtrable por fila) -->
-      <div class="chart-box" id="ppto-history-box">
+      <!-- Gráfico de evolución de gastos fijos (oculto por defecto, se abre al hacer clic en ↗) -->
+      <div class="chart-box" id="ppto-history-box" style="display:none">
         <div class="chart-title ppto-history-header">
           <span id="ppto-history-label">Evolución — todos los gastos fijos</span>
           <div class="ppto-history-controls">
@@ -1608,7 +1626,7 @@
       <div class="table-box">
         <div class="table-header">
           <span class="section-label">Gastos fijos vigentes</span>
-          <span class="hint-text">Clic en una fila para filtrar el gráfico</span>
+          <span class="hint-text">Usá ↗ por fila para ver la evolución</span>
         </div>
         <div id="ppto-fijos-table">
           <div class="empty-state">Cargando…</div>
@@ -1660,7 +1678,7 @@
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbweHCK9P2uFzOnuSRkhcUzhFYOWuGJL6Fm-U8HVQXqC2K28EMBP53ZJwJ769R2e5kY7ew/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwkADnBVVuQHKOlHFDxlzJx48MmFsC9LdteVxiG2Utz0e_wf1oeXGW7kWq6aq3p5rRIWg/exec';
 const APPSHEET_URL = 'https://www.appsheet.com/start/01dde697-d530-4d07-89d9-34f4ec40b45e'; // ← Pegá acá la URL pública de tu app AppSheet
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
@@ -1872,7 +1890,8 @@ function getRowPct(row, p1, p2) {
   const tipo = (row.tipo_proporcion || '').toLowerCase().trim();
   if (tipo === '50/50') return { pct1: 50, pct2: 50 };
   if (tipo === 'custom') {
-    const pjd = parseFloat(row.proporcion_jd) || 50;
+    const raw = row.proporcion_jd;
+    const pjd = (raw !== undefined && raw !== null && raw !== '') ? parseFloat(raw) : 50;
     return { pct1: pjd, pct2: 100 - pjd };
   }
   // "dinamica" o vacío: usa la proporción calculada del mes
@@ -1891,7 +1910,10 @@ function renderDeuda(rows) {
   // La proporción por fila (getRowPct) determina cuánto le corresponde a cada uno
   const debtRows = rows.filter(r => r.pago === p1 || r.pago === p2);
 
-  if (!S.proportions && debtRows.length) {
+  // Para el balance del card, excluimos las saldadas (ya se resolvieron)
+  const activeDebtRows = debtRows.filter(r => !r.saldado);
+
+  if (!S.proportions && activeDebtRows.length) {
     setText('g-deuda', '—');
     setText('g-deuda-quien', 'sin datos de proporción');
     return;
@@ -1900,7 +1922,7 @@ function renderDeuda(rows) {
   // === Balance neto usando proporción por fila (H4: respeta corresponde_a) ===
   // Positivo = p2 le debe a p1. Negativo = p1 le debe a p2.
   let balance = 0;
-  debtRows.forEach(r => {
+  activeDebtRows.forEach(r => {
     const monto = parseFloat(r.monto_total) || 0;
     const { pct1, pct2 } = getRowPct(r, p1, p2);
     if (r.pago === p1) balance += monto * (pct2 / 100);
@@ -1923,7 +1945,7 @@ function renderDeuda(rows) {
     setText('g-deuda-quien', p1 + ' le debe a ' + p2 + ' · ver detalle');
   }
 
-  // Si el panel ya está abierto, re-renderizarlo con datos frescos
+  // Si el panel ya está abierto, re-renderizarlo con datos frescos (todas las filas, incluyendo saldadas)
   const panel = document.getElementById('deuda-detail');
   if (panel && panel.style.display !== 'none') renderDeudaDetailPanel(debtRows, p1, p2);
 }
@@ -1945,18 +1967,19 @@ function toggleDeudaDetail() {
 function renderDeudaDetailPanel(debtRows, p1, p2) {
   const sorted = [...debtRows].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
 
-  // === Calcular aportes por persona y deuda resultante ===
-  // Cuando p1 pagó: p2 queda debiendo su porción. Cuando p2 pagó: p1 queda debiendo su porción.
+  // === Calcular deuda solo en filas NO saldadas ===
+  // Las saldadas aparecen en el panel pero no suman al balance
   let debeP1 = 0, debeP2 = 0;
   const rowsData = sorted.map(r => {
     const monto = parseFloat(r.monto_total) || 0;
     const { pct1, pct2 } = getRowPct(r, p1, p2);
     const montoP1 = monto * (pct1 / 100);
     const montoP2 = monto * (pct2 / 100);
-    if (r.pago === p1) debeP2 += montoP2;
-    if (r.pago === p2) debeP1 += montoP1;
-    const tipoLabel = propLabel(r);
-    return { r, monto, pct1, pct2, montoP1, montoP2, tipoLabel };
+    if (!r.saldado) {
+      if (r.pago === p1) debeP2 += montoP2;
+      if (r.pago === p2) debeP1 += montoP1;
+    }
+    return { r, monto, pct1, pct2, montoP1, montoP2 };
   });
 
   const net = debeP2 - debeP1;
@@ -1975,11 +1998,17 @@ function renderDeudaDetailPanel(debtRows, p1, p2) {
         <th style="text-align:right">% ${p2}</th>
         <th style="text-align:right">$ ${p1}</th>
         <th style="text-align:right">$ ${p2}</th>
-        <th>Tipo</th>
+        <th></th>
       </tr></thead>
       <tbody>
-        ${rowsData.map(({ r, monto, pct1, pct2, montoP1, montoP2, tipoLabel }) => `
-          <tr>
+        ${rowsData.map(({ r, monto, pct1, pct2, montoP1, montoP2 }) => {
+          const isSaldado = !!r.saldado;
+          const rowStyle  = isSaldado ? 'opacity:0.4' : '';
+          const accion    = isSaldado
+            ? '<span style="font-size:0.65rem;color:var(--muted)">saldado</span>'
+            : `<button class="btn-saldar" onclick="saldarRow('${r.id}')">Saldar</button>`;
+          return `
+          <tr style="${rowStyle}">
             <td class="td-muted">${r.fecha || '—'}</td>
             <td>${r.descripcion || r.subcategoria || '—'}
               <br><span class="td-muted" style="font-size:0.65rem">pagó: ${r.pago}</span>
@@ -1987,14 +2016,15 @@ function renderDeudaDetailPanel(debtRows, p1, p2) {
             <td style="text-align:right">${fmt(monto)}</td>
             <td style="text-align:right" class="td-muted">${pct1}%</td>
             <td style="text-align:right" class="td-muted">${pct2}%</td>
-            <td style="text-align:right">${fmt(montoP1)}</td>
-            <td style="text-align:right">${fmt(montoP2)}</td>
-            <td class="td-muted" style="font-size:0.68rem">${tipoLabel}</td>
-          </tr>`).join('')}
+            <td style="text-align:right">${isSaldado ? '<span class="td-muted">—</span>' : fmt(montoP1)}</td>
+            <td style="text-align:right">${isSaldado ? '<span class="td-muted">—</span>' : fmt(montoP2)}</td>
+            <td style="text-align:center">${accion}</td>
+          </tr>`;
+        }).join('')}
       </tbody>
       <tfoot>
         <tr>
-          <td colspan="5" style="text-align:right;color:var(--muted);font-size:0.7rem">Subtotales deuda generada</td>
+          <td colspan="5" style="text-align:right;color:var(--muted);font-size:0.7rem">Subtotales deuda activa</td>
           <td style="text-align:right;color:var(--accent)">${fmt(debeP1)}</td>
           <td style="text-align:right;color:var(--accent)">${fmt(debeP2)}</td>
           <td></td>
@@ -2041,29 +2071,62 @@ function renderTarjetasAlert() {
 function renderGastosPie(rows) {
   destroyChart('gastos-pie');
   const grouped = groupBy(rows, 'categoria');
-  const keys    = Object.keys(grouped);
-  const data    = keys.map(k => sum(grouped[k], 'monto_total'));
+  // Ordenar por monto descendente para que barras y torta sean consistentes
+  const keys = Object.keys(grouped).sort((a, b) => sum(grouped[b], 'monto_total') - sum(grouped[a], 'monto_total'));
+  const data  = keys.map(k => sum(grouped[k], 'monto_total'));
   if (!data.length) return;
 
-  // Guardar keys en estado global para que onClick pueda mapear índice → categoría
+  // Guardar en estado global para re-render en toggle y drill-down por índice
   _gastosCategories = keys;
+  _gastosCategRows  = rows;
+
+  // Actualizar texto del botón según el modo opuesto (muestra lo que va a cambiar)
+  const btn = document.getElementById('categ-pie-toggle');
+  if (btn) btn.textContent = _gastosCategPieType === 'doughnut' ? 'barras' : 'torta';
 
   const total  = data.reduce((a, b) => a + b, 0) || 1;
-  // Label incluye monto y % para que la leyenda sea autoexplicativa sin hover
-  const labels = keys.map((k, i) => `${k}  ${fmtShort(data[i])}  ${((data[i] / total) * 100).toFixed(0)}%`);
+  const canvas = document.getElementById('chart-gastos-pie');
+  const mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
 
-  S.charts['gastos-pie'] = new Chart(document.getElementById('chart-gastos-pie'), {
+  if (_gastosCategPieType === 'bar') {
+    // === Modo barras horizontal — compara magnitudes entre categorías ===
+    const labels = keys.map((k, i) => `${k}  ${fmtShort(data[i])}`);
+    S.charts['gastos-pie'] = new Chart(canvas, {
+      type: 'bar',
+      data: { labels, datasets: [{ data, backgroundColor: PALETTE, borderWidth: 0, borderRadius: 3 }] },
+      options: {
+        ...barDefaults(),
+        indexAxis: 'y',
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          drillDownToSubcat(_gastosCategories[elements[0].index]);
+        },
+        onHover: (evt, elements) => {
+          evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => '  ' + fmt(ctx.raw) } },
+        },
+        scales: {
+          x: { ...axisStyle(), ticks: { ...tickStyle(), callback: v => fmtShort(v) } },
+          y: { ...axisStyle() },
+        },
+      },
+    });
+    return;
+  }
+
+  // === Modo doughnut — label con monto y % en leyenda lateral ===
+  const labels = keys.map((k, i) => `${k}  ${fmtShort(data[i])}  ${((data[i] / total) * 100).toFixed(0)}%`);
+  S.charts['gastos-pie'] = new Chart(canvas, {
     type: 'doughnut',
-    data: {
-      labels,
-      datasets: [{ data, backgroundColor: PALETTE, borderWidth: 0 }],
-    },
+    data: { labels, datasets: [{ data, backgroundColor: PALETTE, borderWidth: 0 }] },
     options: {
       ...pieDefaults(),
       cutout: '60%',
       plugins: {
-        legend: { position: 'right', labels: { color: getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(), font: { size: 10 } } },
-        // Tooltip solo muestra el monto — el label ya tiene monto y % en la leyenda
+        legend: { position: 'right', labels: { color: mutedColor, font: { size: 10 } } },
         tooltip: { callbacks: { label: ctx => '  ' + fmtShort(ctx.raw) } },
       },
       // F13: clic en un segmento → drill-down a subcategorías de esa categoría
@@ -2071,12 +2134,16 @@ function renderGastosPie(rows) {
         if (!elements.length) return;
         drillDownToSubcat(_gastosCategories[elements[0].index]);
       },
-      // Cursor pointer para indicar que es clickeable
       onHover: (evt, elements) => {
         evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
       },
     },
   });
+}
+
+function toggleGastosCategType() {
+  _gastosCategPieType = _gastosCategPieType === 'doughnut' ? 'bar' : 'doughnut';
+  if (_gastosCategRows) renderGastosPie(_gastosCategRows);
 }
 
 function renderGastosBar() {
@@ -2181,7 +2248,7 @@ function renderSubcatChart(cat) {
         ...pieDefaults(),
         cutout: '60%',
         plugins: {
-          legend: { position: 'right', labels: { color: '#6b6860', font: { size: 10 } } },
+          legend: { position: 'right', labels: { color: getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(), font: { size: 10 } } },
           tooltip: { callbacks: { label: ctx => '  ' + fmtShort(ctx.raw) } },
         },
       },
@@ -2568,6 +2635,21 @@ async function deleteEntry(id) {
   }
 }
 
+// ── SALDAR ────────────────────────────────────────────────────────────────────
+
+async function saldarRow(id) {
+  if (!confirm('¿Marcar como saldada la entrada ' + id + '? Dejará de computar en la deuda neta.')) return;
+  try {
+    const res = await apiFetch('saldar', { id });
+    if (!res.ok) throw new Error(res.error);
+    // Marcar localmente sin remover del estado — la fila sigue visible en el panel
+    S.log = S.log.map(r => r.id === id ? { ...r, saldado: true } : r);
+    renderView(S.view);
+  } catch (err) {
+    showToast('Error al saldar: ' + err.message);
+  }
+}
+
 // ── API ───────────────────────────────────────────────────────────────────────
 
 async function apiFetch(action, extra = {}) {
@@ -2913,25 +2995,43 @@ function renderCuotasDetailTable() {
     return;
   }
 
+  const p1 = S.config.nombre_persona1 || 'JD';
+  const p2 = S.config.nombre_persona2 || 'Pinki';
+
+  // Resolver nombre de tarjeta por ID → "Banco – Nombre"
+  const labelTarjeta = id => {
+    const t = S.tarjetas.find(t => t.id === id);
+    if (!t) return id || '—';
+    return t.banco ? t.banco + ' – ' + t.nombre : t.nombre;
+  };
+
   const total = sum(rows, 'monto_total');
 
   inner.innerHTML = `
     <table>
       <thead><tr>
-        <th>Fecha</th><th>Descripción</th><th>Cuota</th>
+        <th>Fecha</th><th>Descripción</th><th>Cuota</th><th>Tarjeta</th>
+        <th style="text-align:right">${p1} $</th>
+        <th style="text-align:right">${p2} $</th>
         <th style="text-align:right">Monto</th>
       </tr></thead>
       <tbody>
-        ${rows.map(r => `
-          <tr>
+        ${rows.map(r => {
+          const { pct1, pct2 } = getRowPct(r, p1, p2);
+          const monto = parseFloat(r.monto_total) || 0;
+          return `<tr>
             <td class="td-muted">${r.fecha || '—'}</td>
             <td>${r.descripcion || '—'}</td>
             <td class="td-muted">${cuotaLabel(r)}</td>
-            <td class="td-amount td-accent">${fmt(r.monto_total)}</td>
-          </tr>`).join('')}
+            <td class="td-muted">${labelTarjeta(r.tarjeta)}</td>
+            <td class="td-amount">${fmt(monto * pct1 / 100)}</td>
+            <td class="td-amount">${fmt(monto * pct2 / 100)}</td>
+            <td class="td-amount td-accent">${fmt(monto)}</td>
+          </tr>`;
+        }).join('')}
       </tbody>
       <tfoot><tr>
-        <td colspan="3" class="td-muted" style="padding:0.65rem 1rem">Total cuotas</td>
+        <td colspan="6" class="td-muted" style="padding:0.65rem 1rem">Total cuotas</td>
         <td class="td-amount td-accent" style="padding:0.65rem 1rem">${fmt(total)}</td>
       </tr></tfoot>
     </table>`;
@@ -2995,17 +3095,24 @@ function renderCreditoDetailPanel(rows) {
     return t.banco ? t.banco + ' – ' + t.nombre : t.nombre;
   };
 
+  const p1 = S.config.nombre_persona1 || 'JD';
+  const p2 = S.config.nombre_persona2 || 'Pinki';
+
   const bloques = Object.entries(grupos).map(([id, items]) => {
     const subtotal = sum(items, 'monto_total');
     const filas = items.map(r => {
       const esCuota = (parseInt(r.cuota_nro) || 1) > 1;
+      const { pct1, pct2 } = getRowPct(r, p1, p2);
+      const monto = parseFloat(r.monto_total) || 0;
       return `<tr>
         <td class="td-muted" style="width:90px">${r.fecha || '—'}</td>
         <td>${r.descripcion || '—'}${esCuota ? ' <span class="badge-bimestral">cuota ' + r.cuota_nro + '/' + r.cuotas_total + '</span>' : ''}</td>
         <td class="td-muted">${r.categoria || '—'}</td>
         <td class="td-muted"><span class="badge badge-${(r.pago||'comun').toLowerCase()}">${r.pago || '—'}</span></td>
         <td class="td-muted">${propLabel(r)}</td>
-        <td class="td-amount">${fmt(r.monto_total)}</td>
+        <td class="td-amount">${fmt(monto * pct1 / 100)}</td>
+        <td class="td-amount">${fmt(monto * pct2 / 100)}</td>
+        <td class="td-amount">${fmt(monto)}</td>
       </tr>`;
     }).join('');
 
@@ -3015,11 +3122,13 @@ function renderCreditoDetailPanel(rows) {
         <thead><tr>
           <th>Fecha</th><th>Descripción</th><th>Categoría</th>
           <th>Pagó</th><th>Proporción</th>
+          <th style="text-align:right">${p1} $</th>
+          <th style="text-align:right">${p2} $</th>
           <th style="text-align:right">Monto</th>
         </tr></thead>
         <tbody>${filas}</tbody>
         <tfoot><tr>
-          <td colspan="5" class="td-muted" style="padding:0.65rem 1rem">Subtotal</td>
+          <td colspan="7" class="td-muted" style="padding:0.65rem 1rem">Subtotal</td>
           <td class="td-amount" style="padding:0.65rem 1rem">${fmt(subtotal)}</td>
         </tr></tfoot>
       </table>`;
@@ -3029,7 +3138,7 @@ function renderCreditoDetailPanel(rows) {
   inner.innerHTML = bloques + `
     <table style="border-top:2px solid var(--border)">
       <tfoot><tr>
-        <td colspan="5" style="padding:0.65rem 1rem;font-size:0.72rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--muted)">Total en crédito</td>
+        <td colspan="7" style="padding:0.65rem 1rem;font-size:0.72rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--muted)">Total en crédito</td>
         <td class="td-amount td-accent" style="padding:0.65rem 1rem">${fmt(total)}</td>
       </tr></tfoot>
     </table>`;
@@ -3286,7 +3395,6 @@ function renderPresupuesto() {
   setDispSplit('ppto-disp-2', disp2);
 
   updateProgressBar(ingresos, fijosTotal, varTotal, cuotasTotal, simTotal);
-  renderFixedEvolution();   // todos los fijos por defecto
   renderPptoFijosTable();
   renderDistribucion();
 }
@@ -3435,7 +3543,8 @@ function showAllFixedHistory() {
 }
 
 // Tabla de gastos fijos vigentes en la vista Presupuesto.
-// Cada fila es clickeable → filtra el gráfico de evolución a ese gasto.
+// Columnas: Descripción, Categoría, Responsable, Medio, Proporción, JD $, Pinki $, Monto mensual, ↗
+// El botón ↗ abre el gráfico de evolución filtrado para ese gasto.
 function renderPptoFijosTable() {
   const container = document.getElementById('ppto-fijos-table');
   const data = S.fixed?.data;
@@ -3444,38 +3553,70 @@ function renderPptoFijosTable() {
     return;
   }
 
+  const p1 = S.config.nombre_persona1 || 'JD';
+  const p2 = S.config.nombre_persona2 || 'Pinki';
+
+  // Calcular totales por persona para el tfoot
+  let total1 = 0, total2 = 0;
+  data.forEach(r => {
+    const { pct1, pct2 } = getRowPct(r, p1, p2);
+    const monto = r.monto_mensual || 0;
+    total1 += monto * pct1 / 100;
+    total2 += monto * pct2 / 100;
+  });
+
   container.innerHTML = `
     <table>
       <thead><tr>
         <th>Descripción</th><th>Categoría</th>
         <th>Responsable</th><th>Medio</th>
+        <th>Proporción</th>
+        <th style="text-align:right">${p1} $</th>
+        <th style="text-align:right">${p2} $</th>
         <th style="text-align:right">Monto mensual</th>
+        <th></th>
       </tr></thead>
       <tbody>
-        ${data.map(r => `
-          <tr class="fijos-row-clickable" onclick="showFixedHistory('${r.descripcion}')">
+        ${data.map(r => {
+          const { pct1, pct2 } = getRowPct(r, p1, p2);
+          const monto = r.monto_mensual || 0;
+          const descEsc = r.descripcion.replace(/'/g, "\\'");
+          return `
+          <tr class="fijos-row-clickable" data-desc="${r.descripcion}" onclick="showFixedHistory('${descEsc}')">
             <td>${r.descripcion}${r.es_bimestral ? ' <span class="badge-bimestral">bimestral</span>' : ''}</td>
             <td class="td-muted">${r.categoria}${r.subcategoria ? ' / ' + r.subcategoria : ''}</td>
             <td class="td-muted">${r.responsable || '—'}</td>
             <td class="td-muted">${r.medio_pago || '—'}</td>
-            <td class="td-amount td-accent">${fmt(r.monto_mensual)}</td>
-          </tr>`).join('')}
+            <td class="td-muted">${propLabel(r)}</td>
+            <td class="td-amount">${fmt(monto * pct1 / 100)}</td>
+            <td class="td-amount">${fmt(monto * pct2 / 100)}</td>
+            <td class="td-amount td-accent">${fmt(monto)}</td>
+            <td><button class="btn-chart-toggle" onclick="event.stopPropagation(); showFixedHistory('${descEsc}')">↗</button></td>
+          </tr>`;
+        }).join('')}
       </tbody>
       <tfoot><tr>
-        <td colspan="4" class="td-muted" style="padding:0.65rem 1rem">Total fijos mensuales</td>
-        <td class="td-amount td-accent" style="padding:0.65rem 1rem">${fmt(S.fixed.total)}</td>
+        <td colspan="4" class="td-muted" style="padding:0.65rem 0.75rem">Total fijos mensuales</td>
+        <td></td>
+        <td class="td-amount" style="padding:0.65rem 0.75rem">${fmt(total1)}</td>
+        <td class="td-amount" style="padding:0.65rem 0.75rem">${fmt(total2)}</td>
+        <td class="td-amount td-accent" style="padding:0.65rem 0.75rem">${fmt(S.fixed.total)}</td>
+        <td></td>
       </tr></tfoot>
     </table>`;
 }
 
 // Filtra el gráfico de evolución al gasto fijo clickeado.
-// Delega en renderFixedEvolution() que construye el chart completo.
+// Muestra el chart box si estaba oculto y delega en renderFixedEvolution().
 function showFixedHistory(descripcion) {
   if (!S.fixed?.history?.[descripcion]) return;
 
-  // Marcar fila activa visualmente (resaltado)
+  // Mostrar el chart box (oculto por defecto, se revela al primer clic)
+  document.getElementById('ppto-history-box').style.display = '';
+
+  // Marcar fila activa usando data-desc para evitar falsos positivos con badges de texto
   document.querySelectorAll('.fijos-row-clickable').forEach(tr => {
-    tr.classList.toggle('active-history', tr.querySelector('td')?.textContent.trim() === descripcion);
+    tr.classList.toggle('active-history', tr.dataset.desc === descripcion);
   });
 
   renderFixedEvolution(descripcion);
@@ -3621,9 +3762,9 @@ function renderDistribucion() {
   const p1 = S.config.nombre_persona1 || 'JD';
   const p2 = S.config.nombre_persona2 || 'Pinki';
 
-  // Salarios individuales
+  // Salarios individuales — filtro por subcategoria (no categoria)
   const salRows = filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to })
-    .filter(r => (r.categoria || '').toLowerCase() === 'salario');
+    .filter(r => (r.subcategoria || '').toLowerCase() === 'salario');
   const sal1 = sum(salRows.filter(r => r.pago === p1), 'monto_total');
   const sal2 = sum(salRows.filter(r => r.pago === p2), 'monto_total');
 
@@ -3657,9 +3798,9 @@ function renderDistribucion() {
     fijos2 += itemTotal * (rp2 / 100);
   });
 
-  // Variables ejecutados: gastos comunes, cuota propia del período
+  // Variables ejecutados — mismas filas que computePresupuestoParts (sin filtro pago)
   const varRows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })
-    .filter(r => !r.es_fijo && (parseInt(r.cuota_nro) || 1) === 1 && r.pago === 'Común');
+    .filter(r => !r.es_fijo && (parseInt(r.cuota_nro) || 1) === 1);
   let var1 = 0, var2 = 0;
   varRows.forEach(r => {
     const monto = parseFloat(r.monto_total) || 0;
@@ -3668,8 +3809,8 @@ function renderDistribucion() {
     var2 += monto * (rp2 / 100);
   });
 
-  // Cuotas comprometidas del período (pagó="Común")
-  const cuotasRows = filterCuotasComprometidas(S.period.from, S.period.to).filter(r => r.pago === 'Común');
+  // Cuotas comprometidas del período — mismas filas que computePresupuestoParts (sin filtro pago)
+  const cuotasRows = filterCuotasComprometidas(S.period.from, S.period.to);
   let cuotas1 = 0, cuotas2 = 0;
   cuotasRows.forEach(r => {
     const monto = parseFloat(r.monto_total) || 0;
@@ -3687,23 +3828,12 @@ function renderDistribucion() {
     sim2 += monto * (rp2 / 100);
   });
 
-  // Gastos propios: pagó=persona, tipo=Gasto — fila condicional
-  const propios1 = sum(filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to }).filter(r => r.pago === p1), 'monto_total');
-  const propios2 = sum(filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to }).filter(r => r.pago === p2), 'monto_total');
-  const hayPropios = propios1 > 0 || propios2 > 0;
-
-  // Disponible
-  const disp1 = sal1 - fijos1 - var1 - cuotas1 - sim1 - propios1;
-  const disp2 = sal2 - fijos2 - var2 - cuotas2 - sim2 - propios2;
+  // Disponible — misma fórmula que computePresupuestoParts (sin propios separados,
+  // ya incluidos en var1/var2 via getRowPct)
+  const disp1 = sal1 - fijos1 - var1 - cuotas1 - sim1;
+  const disp2 = sal2 - fijos2 - var2 - cuotas2 - sim2;
 
   const fmtC = v => v === 0 ? '—' : fmt(v);
-
-  const propiosRow = hayPropios ? `
-    <tr class="dist-row-negative">
-      <td>− Gastos propios</td>
-      <td>${fmtC(propios1)}</td>
-      <td>${fmtC(propios2)}</td>
-    </tr>` : '';
 
   // F15: columnas muestran solo nombre (sin %) — la proporción ya no es uniforme por ítem
   container.innerHTML = `
@@ -3741,7 +3871,6 @@ function renderDistribucion() {
           <td>${fmtC(sim1)}</td>
           <td>${fmtC(sim2)}</td>
         </tr>
-        ${propiosRow}
         <tr class="dist-row-disponible">
           <td>= Disponible</td>
           <td class="${disp1 >= 0 ? 'dist-disponible-pos' : 'dist-disponible-neg'}">${fmt(Math.abs(disp1))}${disp1 < 0 ? ' ⚠' : ''}</td>
@@ -3857,9 +3986,11 @@ init();
 let _drawerWidth = 420; // ancho en px, variable de sesión (se resetea al recargar)
 let _invZoom        = 6;         // meses visibles en gráfico de evolución (1/3/6/12/0=Todo)
 let _invPieType     = 'doughnut'; // tipo del gráfico "Por tipo" ('doughnut' o 'bar')
-let _gastosCategories = [];       // keys de la torta de gastos (para mapear índice → cat en onClick)
-let _gastosActiveCat  = null;     // categoría actualmente drillada (o null)
-let _gastosSubcatType = 'doughnut'; // tipo del gráfico de subcategorías ('doughnut' o 'bar')
+let _gastosCategories  = [];         // keys de la torta de gastos (para mapear índice → cat en onClick)
+let _gastosActiveCat   = null;       // categoría actualmente drillada (o null)
+let _gastosSubcatType  = 'doughnut'; // tipo del gráfico de subcategorías ('doughnut' o 'bar')
+let _gastosCategPieType = 'doughnut'; // tipo del gráfico de categorías ('doughnut' o 'bar')
+let _gastosCategRows   = null;       // rows guardadas para re-render al hacer toggle
 
 function initDrawerResize(drawerId, handleId) {
   if (window.innerWidth < 768) return; // handle inactivo en mobile
