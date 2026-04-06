@@ -364,7 +364,11 @@
     line-height: 1.4;
   }
   .btn-zoom:hover, .btn-chart-toggle:hover { border-color: var(--accent); color: var(--accent); }
-  .btn-zoom.active { border-color: var(--accent); color: var(--accent); }
+  .btn-zoom.active, .btn-chart-toggle.active { border-color: var(--accent); color: var(--accent); }
+  /* Subtotales bajo torta de gastos (FEAT-01) */
+  .gastos-pie-subtotals { margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.2rem; }
+  .gastos-pie-sub-row { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--muted); padding: 0.1rem 0.2rem; }
+  .gastos-pie-sub-row span:last-child { color: var(--text); font-variant-numeric: tabular-nums; }
 
   .chart-wrap {
     position: relative;
@@ -1331,7 +1335,14 @@
             Por categoría
             <button class="btn-chart-toggle" id="categ-pie-toggle" onclick="toggleGastosCategType()">barras</button>
           </div>
+          <!-- FEAT-01: filtro por persona. Comunes=gastos compartidos; p1/p2=gastos 100% personales -->
+          <div id="gastos-persona-filter" style="display:flex;gap:0.35rem;margin-bottom:0.5rem">
+            <button class="btn-chart-toggle active" id="gastos-filter-comunes" onclick="setGastosPersonaFiltro(null)">Comunes</button>
+            <button class="btn-chart-toggle" id="gastos-filter-p1" onclick="setGastosPersonaFiltro('p1')">—</button>
+            <button class="btn-chart-toggle" id="gastos-filter-p2" onclick="setGastosPersonaFiltro('p2')">—</button>
+          </div>
           <div class="chart-wrap"><canvas id="chart-gastos-pie"></canvas></div>
+          <div class="gastos-pie-subtotals" id="gastos-pie-subtotals" style="display:none"></div>
         </div>
         <div class="chart-box">
           <div class="chart-title">Últimos 6 meses</div>
@@ -2070,15 +2081,68 @@ function renderTarjetasAlert() {
 
 function renderGastosPie(rows) {
   destroyChart('gastos-pie');
-  const grouped = groupBy(rows, 'categoria');
+
+  const p1 = S.config?.nombre_persona1 || 'JD';
+  const p2 = S.config?.nombre_persona2 || 'Pinki';
+
+  // Guardar rows originales (sin filtro persona) para re-render en toggle y cambio de filtro
+  _gastosCategRows = rows;
+
+  // Actualizar etiquetas de los botones de persona con los nombres reales del config
+  const btnP1 = document.getElementById('gastos-filter-p1');
+  const btnP2 = document.getElementById('gastos-filter-p2');
+  if (btnP1) btnP1.textContent = p1;
+  if (btnP2) btnP2.textContent = p2;
+
+  // === Aplicar filtro persona (FEAT-01) ===
+  let filteredRows;
+  if (_gastosPersonaFiltro === null) {
+    // Comunes: excluir gastos 100% personales (custom con proporcion 0 o 100)
+    filteredRows = rows.filter(r => {
+      const pJD = parseFloat(r.proporcion_jd);
+      return !((r.tipo_proporcion || '').toLowerCase() === 'custom' && (pJD === 0 || pJD === 100));
+    });
+  } else if (_gastosPersonaFiltro === 'p1') {
+    // Gastos 100% de persona 1 (proporcion_jd=100)
+    filteredRows = rows.filter(r =>
+      (r.tipo_proporcion || '').toLowerCase() === 'custom' && parseFloat(r.proporcion_jd) === 100
+    );
+  } else {
+    // Gastos 100% de persona 2 (proporcion_jd=0)
+    filteredRows = rows.filter(r =>
+      (r.tipo_proporcion || '').toLowerCase() === 'custom' && parseFloat(r.proporcion_jd) === 0
+    );
+  }
+
+  const grouped = groupBy(filteredRows, 'categoria');
   // Ordenar por monto descendente para que barras y torta sean consistentes
   const keys = Object.keys(grouped).sort((a, b) => sum(grouped[b], 'monto_total') - sum(grouped[a], 'monto_total'));
   const data  = keys.map(k => sum(grouped[k], 'monto_total'));
+
+  // Subtotales modo Comunes: cuánto le corresponde a cada persona según getRowPct
+  const subtotalsEl = document.getElementById('gastos-pie-subtotals');
+  if (subtotalsEl) {
+    if (_gastosPersonaFiltro === null && filteredRows.length > 0) {
+      let total1 = 0, total2 = 0;
+      filteredRows.forEach(r => {
+        const monto = parseFloat(r.monto_total) || 0;
+        const { pct1, pct2 } = getRowPct(r, p1, p2);
+        total1 += monto * (pct1 / 100);
+        total2 += monto * (pct2 / 100);
+      });
+      subtotalsEl.style.display = '';
+      subtotalsEl.innerHTML = `
+        <div class="gastos-pie-sub-row"><span>Corresponde a ${p1}</span><span>${fmt(total1)}</span></div>
+        <div class="gastos-pie-sub-row"><span>Corresponde a ${p2}</span><span>${fmt(total2)}</span></div>`;
+    } else {
+      subtotalsEl.style.display = 'none';
+    }
+  }
+
   if (!data.length) return;
 
-  // Guardar en estado global para re-render en toggle y drill-down por índice
+  // Guardar keys para drill-down por índice
   _gastosCategories = keys;
-  _gastosCategRows  = rows;
 
   // Actualizar texto del botón según el modo opuesto (muestra lo que va a cambiar)
   const btn = document.getElementById('categ-pie-toggle');
@@ -2143,6 +2207,23 @@ function renderGastosPie(rows) {
 
 function toggleGastosCategType() {
   _gastosCategPieType = _gastosCategPieType === 'doughnut' ? 'bar' : 'doughnut';
+  if (_gastosCategRows) renderGastosPie(_gastosCategRows);
+}
+
+// === SECCIÓN: Filtro persona torta gastos (FEAT-01) ===
+// Qué hace: permite ver gastos comunes (compartidos) o gastos 100% personales de cada uno.
+// Por qué: la torta mezclaba gastos comunes con personales dando una visión distorsionada.
+// Cómo funciona: guarda el filtro activo en _gastosPersonaFiltro y re-renderiza la torta.
+//   - null = Comunes: excluye tipo_proporcion=custom con proporcion_jd=0 o 100
+//   - 'p1' / 'p2' = solo los gastos 100% de esa persona
+function setGastosPersonaFiltro(val) {
+  _gastosPersonaFiltro = val;
+  const btnC  = document.getElementById('gastos-filter-comunes');
+  const btnP1 = document.getElementById('gastos-filter-p1');
+  const btnP2 = document.getElementById('gastos-filter-p2');
+  if (btnC)  btnC.classList.toggle('active',  val === null);
+  if (btnP1) btnP1.classList.toggle('active', val === 'p1');
+  if (btnP2) btnP2.classList.toggle('active', val === 'p2');
   if (_gastosCategRows) renderGastosPie(_gastosCategRows);
 }
 
@@ -3895,7 +3976,8 @@ function renderGastosPersonales(p1, p2) {
   const container = document.getElementById('gastos-personales-container');
   if (!container) return;
 
-  const allGastos   = filterLog({ tipo: 'Gasto',   from: S.period.from, to: S.period.to });
+  // Excluir saldado=true: deudas ya saldadas no cuentan como pendientes
+  const allGastos   = filterLog({ tipo: 'Gasto',   from: S.period.from, to: S.period.to }).filter(r => !r.saldado);
   const allIngresos = filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to });
 
   const ingProp1 = sum(allIngresos.filter(r => r.pago === p1), 'monto_total');
@@ -3990,7 +4072,8 @@ let _gastosCategories  = [];         // keys de la torta de gastos (para mapear 
 let _gastosActiveCat   = null;       // categoría actualmente drillada (o null)
 let _gastosSubcatType  = 'doughnut'; // tipo del gráfico de subcategorías ('doughnut' o 'bar')
 let _gastosCategPieType = 'doughnut'; // tipo del gráfico de categorías ('doughnut' o 'bar')
-let _gastosCategRows   = null;       // rows guardadas para re-render al hacer toggle
+let _gastosCategRows   = null;       // rows guardadas para re-render al hacer toggle (sin filtro persona)
+let _gastosPersonaFiltro = null;     // null=Comunes, 'p1'=persona1, 'p2'=persona2 (FEAT-01)
 
 function initDrawerResize(drawerId, handleId) {
   if (window.innerWidth < 768) return; // handle inactivo en mobile
