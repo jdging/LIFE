@@ -488,7 +488,7 @@
   .dist-table td:first-child { text-align: left; color: var(--muted); }
   .dist-table .dist-row-negative td { color: var(--muted); }
   .dist-table .dist-row-disponible td { border-top: 2px solid var(--border); border-bottom: none; font-weight: 500; }
-  .dist-table .dist-row-disponible td:first-child { color: var(--fg); }
+  .dist-table .dist-row-disponible td:first-child { color: var(--text); }
   .dist-disponible-pos { color: var(--accent); }
   .dist-disponible-neg { color: var(--danger); }
   .dist-pct-sub { font-size: 0.65rem; color: var(--muted); margin-top: 0.1rem; }
@@ -2700,14 +2700,12 @@ function showFixedHistory(descripcion) {
 
   // Marcar fila activa visualmente (resaltado)
   document.querySelectorAll('.fijos-row-clickable').forEach(tr => {
-    tr.classList.toggle('active-history', tr.querySelector('td')?.textContent.trim().startsWith(descripcion));
+    tr.classList.toggle('active-history', tr.querySelector('td')?.textContent.trim() === descripcion);
   });
 
   renderFixedEvolution(descripcion);
 }
 
-// Alias de compatibilidad — si algo llama closeHistoryChart() vuelve a "todos"
-function closeHistoryChart() { showAllFixedHistory(); }
 
 // ── SIMULADOR ─────────────────────────────────────────────────────────────────
 

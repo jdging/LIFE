@@ -778,7 +778,7 @@ function renderCards(items) {
   }, 0);
 
   const pinkiUSD = totalUSD - jdUSD;
-  const activos  = items.filter(i => (i.estado || 'Activo') === 'Activo').length;
+  const activos  = S.items.filter(i => (i.estado || 'Activo') === 'Activo').length;
 
   document.getElementById('card-total-usd').innerHTML = `<span class="currency">U$D</span>${fmtUSD(totalUSD)}`;
   document.getElementById('card-total-ars').innerHTML  = `≈ <strong>${fmtARS(totalUSD * cotHoy)}</strong> ARS hoy`;
