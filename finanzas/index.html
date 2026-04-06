@@ -2062,7 +2062,7 @@ function renderGastosPie(rows) {
       ...pieDefaults(),
       cutout: '60%',
       plugins: {
-        legend: { position: 'right', labels: { color: '#6b6860', font: { size: 10 } } },
+        legend: { position: 'right', labels: { color: getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(), font: { size: 10 } } },
         // Tooltip solo muestra el monto — el label ya tiene monto y % en la leyenda
         tooltip: { callbacks: { label: ctx => '  ' + fmtShort(ctx.raw) } },
       },
@@ -2302,7 +2302,7 @@ function renderInversiones() {
     <table>
       <thead><tr>
         <th>Fecha</th><th>Tipo</th><th>Descripción</th>
-        <th>Medio</th><th style="text-align:right">Monto</th><th></th>
+        <th style="text-align:right">Monto</th><th></th>
       </tr></thead>
       <tbody>
         ${sorted.map(r => `
@@ -2310,7 +2310,6 @@ function renderInversiones() {
             <td class="td-muted">${r.fecha||'—'}</td>
             <td><span class="badge badge-inversion">${r.subcategoria||'—'}</span></td>
             <td>${r.descripcion||'—'}</td>
-            <td class="td-muted">${r.medio_pago||'—'}</td>
             <td class="td-amount td-accent">${fmt(r.monto_total)}</td>
             <td><button class="btn-delete" onclick="deleteEntry('${r.id}')">borrar</button></td>
           </tr>`).join('')}
@@ -2360,7 +2359,7 @@ function renderInvPie(rows) {
         legend: {
           position: 'right',
           labels: {
-            color: '#6b6860',
+            color: getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(),
             font: { size: 10 },
             // Qué hace: inyecta monto y % en cada item de la leyenda
             generateLabels: chart => {
