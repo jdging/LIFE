@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recetario — LIFE</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0e0e0c;
+    --surface:   #161614;
+    --surface2:  #1e1e1b;
+    --border:    #2a2a26;
+    --text:      #e8e4da;
+    --muted:     #6b6860;
+    --accent:    #8fb87a;
+    --accent2:   #c4a96b;
+    --red:       #c46b6b;
+    --sidebar-w: 72px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-weight: 300;
+    min-height: 100vh;
+    display: flex;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: var(--sidebar-w);
+    min-height: 100vh;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 0;
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    z-index: 100;
+  }
+
+  .sidebar-logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    margin-bottom: 2rem;
+    text-decoration: none;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    flex: 1;
+  }
+
+  .nav-item {
+    width: 44px; height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    color: var(--muted);
+    text-decoration: none;
+    position: relative;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: var(--surface2); color: var(--accent); }
+  .nav-item svg { width: 20px; height: 20px; }
+
+  .nav-tooltip {
+    position: absolute;
+    left: calc(100% + 12px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+  }
+  .nav-item:hover .nav-tooltip { opacity: 1; }
+
+  /* ── MAIN ── */
+  .main {
+    margin-left: var(--sidebar-w);
+    flex: 1;
+    padding: 2rem 2.5rem;
+    max-width: 1100px;
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .topbar-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.6rem;
+    font-weight: 300;
+    letter-spacing: 0.04em;
+    color: var(--text);
+  }
+
+  /* ── STATUS BAR ── */
+  .status-bar {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+    min-height: 1.2em;
+  }
+  .status-bar.error { color: var(--red); }
+  .status-bar.loading { color: var(--accent2); }
+
+  /* ── FILTROS DE CATEGORÍA ── */
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .filter-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.35rem 0.8rem;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .filter-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    font-weight: 400;
+  }
+
+  /* ── GRID DE RECETAS ── */
+  .recetas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+  }
+
+  /* ── CARD DE RECETA ── */
+  .receta-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  .receta-card:hover { border-color: var(--accent); background: var(--surface2); }
+  .receta-card.expanded { border-color: var(--accent); }
+
+  .receta-cat {
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+
+  .receta-nombre {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.3rem;
+    font-weight: 400;
+    color: var(--text);
+    margin-bottom: 0.4rem;
+    line-height: 1.2;
+  }
+
+  .receta-porciones {
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+
+  .receta-card-arrow {
+    position: absolute;
+    top: 1.25rem;
+    right: 1.25rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+    transition: transform 0.2s, color 0.2s;
+  }
+  .receta-card.expanded .receta-card-arrow { transform: rotate(90deg); color: var(--accent); }
+
+  /* ── PANEL DE DETALLE (dentro de la card expandida) ── */
+  .receta-detalle {
+    display: none;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .receta-card.expanded .receta-detalle { display: block; }
+
+  /* Control de porciones */
+  .porciones-control {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .porciones-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .porciones-input {
+    width: 56px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.9rem;
+    text-align: center;
+    padding: 0.3rem 0.4rem;
+    -moz-appearance: textfield;
+  }
+  .porciones-input::-webkit-outer-spin-button,
+  .porciones-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .porciones-input:focus { outline: none; border-color: var(--accent); }
+
+  .porciones-btn {
+    width: 28px; height: 28px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s;
+  }
+  .porciones-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Tabla de ingredientes */
+  .ing-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    margin-bottom: 1rem;
+  }
+  .ing-table th {
+    text-align: left;
+    color: var(--muted);
+    font-weight: 300;
+    letter-spacing: 0.08em;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .ing-table td {
+    padding: 0.4rem 0;
+    border-bottom: 1px solid rgba(42,42,38,0.5);
+    color: var(--text);
+    vertical-align: top;
+  }
+  .ing-table td:first-child { color: var(--text); }
+  .ing-table td.ing-cant {
+    color: var(--accent);
+    white-space: nowrap;
+    text-align: right;
+    padding-right: 0.5rem;
+    width: 80px;
+  }
+  .ing-table td.ing-unidad {
+    color: var(--muted);
+    width: 50px;
+  }
+
+  /* Instrucciones */
+  .instrucciones-toggle {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    cursor: pointer;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    font-family: 'DM Mono', monospace;
+    padding: 0;
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+  .instrucciones-text {
+    display: none;
+    font-size: 0.78rem;
+    line-height: 1.7;
+    color: var(--muted);
+    white-space: pre-wrap;
+    margin-bottom: 1rem;
+  }
+  .instrucciones-text.visible { display: block; }
+
+  /* Botón agregar al super */
+  .btn-agregar-super {
+    width: 100%;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    color: var(--bg);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 400;
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn-agregar-super:hover { opacity: 0.85; }
+  .btn-agregar-super:disabled { opacity: 0.4; cursor: default; }
+
+  /* Estado de carga del detalle */
+  .detalle-loading {
+    font-size: 0.75rem;
+    color: var(--muted);
+    padding: 0.5rem 0;
+    letter-spacing: 0.08em;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.8;
+    letter-spacing: 0.04em;
+    grid-column: 1 / -1;
+  }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+
+  /* ── FAB ── */
+  .fab {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 52px; height: 52px;
+    background: var(--accent);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    color: var(--bg);
+    font-size: 1.6rem;
+    line-height: 1;
+    z-index: 200;
+    transition: opacity 0.15s, transform 0.15s;
+  }
+  .fab:hover { opacity: 0.85; transform: scale(1.05); }
+
+  /* ── DRAWER ── */
+  .drawer-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 300;
+  }
+  .drawer-overlay.open { display: block; }
+
+  .drawer {
+    position: fixed;
+    right: 0; top: 0; bottom: 0;
+    width: min(480px, 92vw);
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    z-index: 400;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    display: flex;
+    flex-direction: column;
+  }
+  .drawer.open { transform: translateX(0); }
+
+  .drawer-resize-handle {
+    position: absolute;
+    left: -4px; top: 0; bottom: 0;
+    width: 8px;
+    cursor: ew-resize;
+  }
+
+  .drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .drawer-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.1rem;
+    color: var(--text);
+    font-weight: 400;
+  }
+  .drawer-close {
+    background: none; border: none; color: var(--muted);
+    font-size: 1.4rem; cursor: pointer; line-height: 1;
+    padding: 0.2rem;
+    transition: color 0.15s;
+  }
+  .drawer-close:hover { color: var(--text); }
+  .drawer-body { flex: 1; overflow: hidden; padding: 0; }
+  .drawer-body iframe { width: 100%; height: 100%; border: none; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed;
+    bottom: 5rem;
+    right: 2rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    padding: 0.6rem 1.1rem;
+    border-radius: 6px;
+    z-index: 500;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    max-width: 320px;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { border-color: var(--accent); color: var(--accent); }
+  .toast.error   { border-color: var(--red); color: var(--red); }
+</style>
+</head>
+<body>
+
+<!-- ═══ SIDEBAR ═══ -->
+<nav class="sidebar">
+  <a href="../index.html" class="sidebar-logo" title="LIFE Hub">LIFE</a>
+
+  <div class="sidebar-nav">
+    <!-- Home -->
+    <a href="../index.html" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/>
+        <path d="M9 21V12h6v9"/>
+      </svg>
+      <span class="nav-tooltip">Inicio</span>
+    </a>
+
+    <!-- Jardín -->
+    <a href="../jardin/index.html" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M12 22V12m0 0C12 7 7 4 3 5c0 4 2 8 9 7m0 0c0-5 5-8 9-7-1 4-4 7-9 7"/>
+      </svg>
+      <span class="nav-tooltip">Jardín</span>
+    </a>
+
+    <!-- Finanzas -->
+    <a href="../finanzas/index.html" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <line x1="12" y1="1" x2="12" y2="23"/>
+        <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+      </svg>
+      <span class="nav-tooltip">Finanzas</span>
+    </a>
+
+    <!-- Inventario -->
+    <a href="../inventario/index.html" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M21 8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+        <path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>
+      </svg>
+      <span class="nav-tooltip">Inventario</span>
+    </a>
+
+    <!-- Compras -->
+    <a href="../compras/index.html" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+        <path d="M1 1h4l2.68 13.39a2 2 0 001.99 1.61H19a2 2 0 001.96-1.64l1.54-8H5"/>
+      </svg>
+      <span class="nav-tooltip">Compras</span>
+    </a>
+
+    <!-- Recetario (active) -->
+    <a href="index.html" class="nav-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 2h18v4H3zM3 6v16M21 6v16M8 10h8M8 14h5"/>
+      </svg>
+      <span class="nav-tooltip">Recetario</span>
+    </a>
+  </div>
+</nav>
+
+<!-- ═══ MAIN ═══ -->
+<main class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <span class="topbar-title">Recetario</span>
+  </div>
+
+  <!-- STATUS -->
+  <div class="status-bar" id="status-bar"></div>
+
+  <!-- FILTROS -->
+  <div class="filter-bar" id="filter-bar">
+    <button class="filter-btn active" onclick="setFiltro(null)" id="filtro-todos">Todas</button>
+  </div>
+
+  <!-- GRID DE RECETAS -->
+  <div class="recetas-grid" id="recetas-grid">
+    <div class="empty-state">
+      <div class="empty-icon">⏳</div>
+      <p>Cargando recetas…</p>
+    </div>
+  </div>
+
+</main>
+
+<!-- FAB: abrir AppSheet -->
+<button class="fab" onclick="openDrawer()" title="Agregar receta">+</button>
+
+<!-- DRAWER AppSheet -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-resize-handle" id="drawer-resize-handle"></div>
+  <div class="drawer-header">
+    <span class="drawer-title">Agregar receta</span>
+    <button class="drawer-close" onclick="closeDrawer()">×</button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONFIGURACIÓN
+// ═══════════════════════════════════════════════════════════════
+
+// TODO: pegar la URL del deployment de recetario-api.js (Apps Script Web App)
+const RECETARIO_API_URL = 'https://script.google.com/macros/s/AKfycbyTDdvmTxleJ1_qZco7NuGPRQkJJ2VTt-UZd9D_nl0yXTz6Jinn6NvLhqLO32JiapvF/exec';
+
+// TODO: pegar la URL del deployment de compras-api.js (misma que en compras/index.html)
+const COMPRAS_API_URL = 'https://script.google.com/macros/s/AKfycbxmG8XuQsSizrbcyeTrI3Lmb7KNdFxAH7X5u4yYIIO3hfhPPMfBfhKUSSplzl6gL-dz/exec';
+
+// TODO: pegar la URL de la app AppSheet (misma que en compras/index.html — DEC-B3)
+const APPSHEET_URL = 'https://www.appsheet.com/start/b7057c3e-0c24-47ef-aa4f-8a054d107864';
+
+// ═══════════════════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ═══════════════════════════════════════════════════════════════
+
+// S.recetas: lista completa del endpoint ?action=lista
+// S.detalles: cache de detalles ya fetcheados { [id]: { receta, ingredientes } }
+// S.filtro: categoría activa (null = todas)
+// S.expanded: id de la card actualmente expandida (solo una a la vez)
+const S = {
+  recetas:  [],
+  detalles: {},
+  filtro:   null,
+  expanded: null,
+};
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!RECETARIO_API_URL) {
+    setStatus('error', 'Configurar RECETARIO_API_URL en el codigo del dashboard.');
+    document.getElementById('recetas-grid').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚙</div>
+        <p>Falta configurar <code>RECETARIO_API_URL</code>.<br>Pegar la URL del deployment de recetario-api.js.</p>
+      </div>`;
+    return;
+  }
+  fetchRecetas();
+  initDrawerResize();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// FETCH Y RENDER
+// ═══════════════════════════════════════════════════════════════
+
+// === SECCIÓN: Carga de recetas ===
+// Qué hace: trae todas las recetas del API y construye el listado.
+// Cómo funciona: fetch → S.recetas = data → buildFiltros() → renderGrid()
+async function fetchRecetas() {
+  setStatus('loading', 'Cargando recetas…');
+  try {
+    const res  = await fetch(RECETARIO_API_URL + '?action=lista');
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'Error del servidor');
+    S.recetas = json.data || [];
+    setStatus('');
+    buildFiltros();
+    renderGrid();
+  } catch (err) {
+    setStatus('error', 'Error al cargar recetas: ' + err.message);
+  }
+}
+
+// === SECCIÓN: Construcción de filtros ===
+// Qué hace: extrae las categorías únicas del listado y genera los botones de filtro.
+// Por qué: los filtros son dinámicos — dependen de las categorías que existan en la Sheet.
+function buildFiltros() {
+  const cats = [...new Set(S.recetas.map(r => r.categoria).filter(Boolean))].sort();
+  const bar  = document.getElementById('filter-bar');
+
+  // Limpiar excepto "Todas"
+  while (bar.children.length > 1) bar.removeChild(bar.lastChild);
+
+  cats.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className   = 'filter-btn';
+    btn.textContent = cat;
+    btn.onclick     = () => setFiltro(cat);
+    bar.appendChild(btn);
+  });
+}
+
+// === SECCIÓN: Render del grid ===
+// Qué hace: renderiza las cards de recetas, filtrando por la categoría activa.
+// Cómo funciona: filtra S.recetas por S.filtro → genera HTML de card por cada una.
+function renderGrid() {
+  const grid = document.getElementById('recetas-grid');
+
+  const visibles = S.filtro
+    ? S.recetas.filter(r => r.categoria === S.filtro)
+    : S.recetas;
+
+  if (visibles.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📋</div>
+        <p>No hay recetas${S.filtro ? ' en esta categoria' : ''}.<br>Toca + para agregar.</p>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = visibles.map(r => buildCardHTML(r)).join('');
+}
+
+// === SECCIÓN: HTML de una card ===
+// Qué hace: genera el markup de una card de receta, incluyendo el panel de detalle vacío
+//   que se llena al expandir.
+// Por qué: el detalle (ingredientes) se carga lazy para no hacer N fetches al init.
+function buildCardHTML(r) {
+  const isExpanded = S.expanded === r.id;
+  return `
+    <div class="receta-card${isExpanded ? ' expanded' : ''}" id="card-${r.id}" onclick="toggleCard('${r.id}')">
+      <div class="receta-cat">${r.categoria || ''}</div>
+      <div class="receta-nombre">${r.nombre || '—'}</div>
+      <div class="receta-porciones">${r.porciones_base || 1} porcion${(r.porciones_base || 1) !== 1 ? 'es' : ''} base</div>
+      <span class="receta-card-arrow">▶</span>
+      <div class="receta-detalle" id="detalle-${r.id}">
+        <div class="detalle-loading">Cargando…</div>
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOGGLE Y DETALLE
+// ═══════════════════════════════════════════════════════════════
+
+// === SECCIÓN: Toggle de card ===
+// Qué hace: expande o colapsa una card. Solo una card puede estar expandida a la vez.
+// Cómo funciona:
+//   - Si la card ya estaba expandida → colapsarla.
+//   - Si había otra expandida → colapsarla primero.
+//   - Expandir la nueva y fetchear su detalle si no está en cache.
+async function toggleCard(id) {
+  if (S.expanded === id) {
+    // Colapsar
+    document.getElementById('card-' + id)?.classList.remove('expanded');
+    S.expanded = null;
+    return;
+  }
+
+  // Colapsar la anterior si había
+  if (S.expanded) {
+    document.getElementById('card-' + S.expanded)?.classList.remove('expanded');
+  }
+
+  S.expanded = id;
+  const card    = document.getElementById('card-' + id);
+  const detalle = document.getElementById('detalle-' + id);
+  card?.classList.add('expanded');
+
+  // Fetch lazy: si ya está en cache, renderizar directo
+  if (S.detalles[id]) {
+    renderDetalle(id, S.detalles[id]);
+    return;
+  }
+
+  detalle.innerHTML = '<div class="detalle-loading">Cargando ingredientes…</div>';
+
+  try {
+    const res  = await fetch(RECETARIO_API_URL + '?action=detalle&id=' + encodeURIComponent(id));
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'Error');
+
+    // Guardar en cache antes de renderizar
+    S.detalles[id] = json;
+    renderDetalle(id, json);
+  } catch (err) {
+    detalle.innerHTML = `<div class="detalle-loading" style="color:var(--red)">Error: ${err.message}</div>`;
+  }
+}
+
+// === SECCIÓN: Render del detalle de una receta ===
+// Qué hace: genera el panel con control de porciones, tabla de ingredientes e instrucciones.
+// Cómo funciona:
+//   - porciones_sel arranca en porciones_base
+//   - Cada ingrediente muestra cantidad_ajustada = cantidad_base * (porciones_sel / porciones_base)
+//   - El input de porciones actualiza las cantidades en tiempo real via updateCantidades()
+function renderDetalle(id, data) {
+  const detalle  = document.getElementById('detalle-' + id);
+  const receta   = data.receta;
+  const ings     = data.ingredientes || [];
+  const porBase  = parseFloat(receta.porciones_base) || 1;
+
+  // Generar filas de la tabla — las cantidades son texto para actualizar vía DOM
+  const filasIng = ings.map(ing => {
+    const cantBase = parseFloat(ing.cantidad) || 0;
+    const cantFmt  = fmtCant(cantBase);
+    return `
+      <tr data-id="${ing.id}" data-cant-base="${cantBase}">
+        <td>${ing.nombre || '—'}</td>
+        <td class="ing-cant">${cantFmt}</td>
+        <td class="ing-unidad">${ing.unidad || 'u'}</td>
+      </tr>`;
+  }).join('');
+
+  const tablaHTML = ings.length > 0 ? `
+    <table class="ing-table">
+      <thead>
+        <tr>
+          <th>Ingrediente</th>
+          <th style="text-align:right;padding-right:0.5rem">Cant.</th>
+          <th>Unidad</th>
+        </tr>
+      </thead>
+      <tbody id="ings-${id}">
+        ${filasIng}
+      </tbody>
+    </table>` : '<p style="font-size:0.75rem;color:var(--muted);margin-bottom:1rem">Sin ingredientes cargados.</p>';
+
+  const instrHtml = receta.instrucciones ? `
+    <button class="instrucciones-toggle" onclick="toggleInstrucciones('${id}')">Ver instrucciones</button>
+    <div class="instrucciones-text" id="instr-${id}">${receta.instrucciones}</div>` : '';
+
+  const btnLabel = ings.length > 0
+    ? 'Agregar ingredientes al super'
+    : 'Sin ingredientes';
+
+  detalle.innerHTML = `
+    <div class="porciones-control">
+      <span class="porciones-label">Porciones</span>
+      <button class="porciones-btn" onclick="ajustarPorciones('${id}', ${porBase}, -1); event.stopPropagation()">−</button>
+      <input class="porciones-input" type="number" min="1" max="99"
+        id="porciones-${id}" value="${porBase}"
+        oninput="updateCantidades('${id}', ${porBase}); event.stopPropagation()"
+        onclick="event.stopPropagation()">
+      <button class="porciones-btn" onclick="ajustarPorciones('${id}', ${porBase}, 1); event.stopPropagation()">+</button>
+    </div>
+    ${tablaHTML}
+    ${instrHtml}
+    <button class="btn-agregar-super" id="btn-super-${id}"
+      onclick="agregarAlSuper('${id}', '${receta.nombre}', ${porBase}); event.stopPropagation()"
+      ${ings.length === 0 ? 'disabled' : ''}>
+      ${btnLabel}
+    </button>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PORCIONES Y CANTIDADES
+// ═══════════════════════════════════════════════════════════════
+
+// === SECCIÓN: Control de porciones ===
+// Qué hace: los botones +/− ajustan el valor del input y disparan el recalculo.
+function ajustarPorciones(id, porBase, delta) {
+  const input = document.getElementById('porciones-' + id);
+  if (!input) return;
+  const nuevo = Math.max(1, parseInt(input.value || porBase) + delta);
+  input.value = nuevo;
+  updateCantidades(id, porBase);
+}
+
+// === SECCIÓN: Recalculo proporcional de cantidades ===
+// Qué hace: cuando cambia el número de porciones, recalcula y actualiza en el DOM
+//   la cantidad de cada ingrediente: cantidad_ajustada = cantidad_base * (porciones / porciones_base)
+// Por qué: el recalculo es puramente en el cliente — los datos originales (data-cant-base)
+//   están guardados como atributos del DOM para no perder la referencia base.
+function updateCantidades(id, porBase) {
+  const input   = document.getElementById('porciones-' + id);
+  const tbody   = document.getElementById('ings-' + id);
+  if (!input || !tbody) return;
+
+  const porciones = Math.max(1, parseFloat(input.value) || porBase);
+  const factor    = porciones / porBase;
+
+  tbody.querySelectorAll('tr[data-cant-base]').forEach(tr => {
+    const cantBase = parseFloat(tr.dataset.cantBase) || 0;
+    const ajustada = cantBase * factor;
+    const td = tr.querySelector('.ing-cant');
+    if (td) td.textContent = fmtCant(ajustada);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AGREGAR AL SUPER
+// ═══════════════════════════════════════════════════════════════
+
+// === SECCIÓN: Enviar ingredientes a la lista de compras ===
+// Qué hace: itera los ingredientes con sus cantidades ajustadas y llama al endpoint
+//   add de compras-api.js por cada uno.
+// Por qué: la deduplicación la resuelve compras-api.js — si el ingrediente ya está
+//   en la lista como pendiente, suma la cantidad en lugar de insertar fila nueva.
+// Cómo funciona:
+//   1. Leer cantidades ajustadas del DOM (td.ing-cant) junto con nombre y unidad.
+//   2. Mapear unidad de recetario (cdita/cda/taza) a unidades válidas en Compras (u).
+//   3. Hacer fetch al COMPRAS_API_URL?action=add con cada ingrediente.
+//   4. Si todos OK → toast success. Si alguno falla → toast con conteo de errores.
+async function agregarAlSuper(recetaId, nombreReceta, porBase) {
+  if (!COMPRAS_API_URL) {
+    showToast('Configurar COMPRAS_API_URL en el codigo del dashboard.', 'error');
+    return;
+  }
+
+  const tbody = document.getElementById('ings-' + recetaId);
+  if (!tbody) return;
+
+  const btn = document.getElementById('btn-super-' + recetaId);
+  if (btn) { btn.disabled = true; btn.textContent = 'Agregando…'; }
+
+  const filas   = [...tbody.querySelectorAll('tr[data-cant-base]')];
+  const detalle = S.detalles[recetaId];
+
+  if (!detalle || !detalle.ingredientes?.length) {
+    showToast('Sin ingredientes para agregar.', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Agregar ingredientes al super'; }
+    return;
+  }
+
+  // Leer cantidades ajustadas del DOM y cruzar con datos originales (nombre, unidad)
+  const items = detalle.ingredientes.map((ing, i) => {
+    const fila   = filas[i];
+    const cantTd = fila?.querySelector('.ing-cant');
+    const cantStr = cantTd ? cantTd.textContent.trim() : '0';
+    const cant    = parseFloat(cantStr.replace(',', '.')) || 0;
+
+    // Unidades propias del recetario que no están en el dropdown de Compras → 'u'
+    const unidadesExtra = ['cdita', 'cda', 'taza'];
+    const unidad = unidadesExtra.includes(ing.unidad) ? 'u' : (ing.unidad || 'u');
+
+    return { nombre: ing.nombre, cantidad: cant, unidad, origen: nombreReceta };
+  });
+
+  let ok = 0, errores = 0;
+
+  // Envío secuencial para no sobrecargar Apps Script con requests en paralelo
+  for (const item of items) {
+    if (!item.nombre || item.cantidad <= 0) { errores++; continue; }
+    try {
+      const url  = COMPRAS_API_URL + '?action=add'
+        + '&nombre='   + encodeURIComponent(item.nombre)
+        + '&cantidad=' + item.cantidad
+        + '&unidad='   + encodeURIComponent(item.unidad)
+        + '&categoria=Otro'
+        + '&urgente=false'
+        + '&origen='   + encodeURIComponent(item.origen)
+        + '&notas=';
+      const res  = await fetch(url);
+      const json = await res.json();
+      if (json.ok) ok++;
+      else errores++;
+    } catch {
+      errores++;
+    }
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Agregar ingredientes al super'; }
+
+  if (errores === 0) {
+    showToast(ok + ' ingrediente' + (ok !== 1 ? 's' : '') + ' agregado' + (ok !== 1 ? 's' : '') + ' a Compras.', 'success');
+  } else if (ok > 0) {
+    showToast(ok + ' OK, ' + errores + ' con error. Revisar Compras.', 'error');
+  } else {
+    showToast('No se pudo agregar ningún ingrediente.', 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FILTROS
+// ═══════════════════════════════════════════════════════════════
+
+function setFiltro(cat) {
+  S.filtro   = cat;
+  S.expanded = null;
+
+  // Actualizar botones activos
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    const isTodos = btn.id === 'filtro-todos';
+    btn.classList.toggle('active',
+      (cat === null && isTodos) || (cat !== null && btn.textContent === cat)
+    );
+  });
+
+  renderGrid();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INSTRUCCIONES TOGGLE
+// ═══════════════════════════════════════════════════════════════
+
+function toggleInstrucciones(id) {
+  const el = document.getElementById('instr-' + id);
+  if (!el) return;
+  const visible = el.classList.toggle('visible');
+  const btn = el.previousElementSibling;
+  if (btn) btn.textContent = visible ? 'Ocultar instrucciones' : 'Ver instrucciones';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DRAWER APPSHEET (lazy)
+// ═══════════════════════════════════════════════════════════════
+
+// === SECCIÓN: Drawer de carga de recetas ===
+// Qué hace: abre un panel lateral con la app AppSheet embebida como iframe.
+// Por qué: mismo patrón lazy que Compras/Finanzas/Inventario — el iframe se crea
+//   solo al primer clic para no bloquear la carga inicial del dashboard.
+// Cómo funciona: openDrawer() verifica si el iframe ya existe; si no, lo crea.
+function openDrawer() {
+  const body = document.getElementById('drawer-body');
+
+  if (!APPSHEET_URL) {
+    body.innerHTML = '<div style="padding:2rem;color:var(--muted);font-size:0.8rem">Configurar APPSHEET_URL en el codigo del dashboard.</div>';
+  } else if (!body.querySelector('iframe')) {
+    const iframe = document.createElement('iframe');
+    iframe.src   = APPSHEET_URL;
+    iframe.allow = 'camera; microphone';
+    body.appendChild(iframe);
+  }
+
+  document.getElementById('drawer-overlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+}
+
+function closeDrawer() {
+  document.getElementById('drawer-overlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+  // Refrescar lista al cerrar (puede haber cargado recetas nuevas)
+  if (RECETARIO_API_URL) {
+    S.detalles = {}; // limpiar cache de detalles
+    fetchRecetas();
+  }
+}
+
+// ─── Resize del drawer (arrastrar el borde izquierdo) ───────────
+function initDrawerResize() {
+  const handle = document.getElementById('drawer-resize-handle');
+  const drawer = document.getElementById('drawer');
+  let startX, startW;
+
+  handle.addEventListener('mousedown', e => {
+    startX = e.clientX;
+    startW = drawer.offsetWidth;
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  function onMove(e) {
+    const newW = Math.max(300, Math.min(800, startW + (startX - e.clientX)));
+    drawer.style.width = newW + 'px';
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+// === Formatear cantidades ===
+// Qué hace: muestra números sin decimales innecesarios (ej: 1.5 → "1.5", 1.0 → "1").
+function fmtCant(n) {
+  if (n === 0) return '0';
+  const s = parseFloat(n.toFixed(2));
+  return s % 1 === 0 ? String(Math.round(s)) : String(s);
+}
+
+function setStatus(type, msg) {
+  const el = document.getElementById('status-bar');
+  if (!el) return;
+  el.textContent  = msg || '';
+  el.className    = 'status-bar' + (type ? ' ' + type : '');
+}
+
+// === Toast de notificación ===
+// Qué hace: muestra un mensaje flotante que desaparece solo.
+function showToast(msg, type) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className   = 'toast show' + (type ? ' ' + type : '');
+
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => { toast.className = 'toast'; }, 3500);
+}
+</script>
+</body>
+</html>

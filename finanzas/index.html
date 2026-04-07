@@ -1210,6 +1210,14 @@
       </svg>
       <span class="nav-tooltip">Compras</span>
     </a>
+
+    <!-- Recetario (link externo, sale del SPA) -->
+    <a href="../recetario/index.html" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 2h18v4H3zM3 6v16M21 6v16M8 10h8M8 14h5"/>
+      </svg>
+      <span class="nav-tooltip">Recetario</span>
+    </a>
   </div>
 
   <div class="sidebar-bottom">
@@ -3922,6 +3930,11 @@ function renderDistribucion() {
   // ya incluidos en var1/var2 via getRowPct)
   const disp1 = sal1 - fijos1 - var1 - cuotas1 - sim1;
   const disp2 = sal2 - fijos2 - var2 - cuotas2 - sim2;
+
+  // Exponer en estado global para que F-16/F-17 (Gastos Personales) use estos
+  // valores como "Disponible del mes" sin recalcular desde cero.
+  S.disponible1 = disp1;
+  S.disponible2 = disp2;
 
   const fmtC = v => v === 0 ? '—' : fmt(v);
 
