@@ -670,10 +670,13 @@ function renderGrid() {
     : S.recetas;
 
   if (visibles.length === 0) {
+    const msg = S.filtro
+      ? 'No hay recetas en esta categoría.<br>Probá con otra o agregá una nueva.'
+      : 'No hay recetas cargadas todavía.<br>Usá el botón + para agregar tu primera receta.';
     grid.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">📋</div>
-        <p>No hay recetas${S.filtro ? ' en esta categoria' : ''}.<br>Toca + para agregar.</p>
+        <p>${msg}</p>
       </div>`;
     return;
   }

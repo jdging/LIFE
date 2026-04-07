@@ -3145,8 +3145,10 @@ function renderCuotasDetailTable() {
 //   El Log guarda el ID (TC1, TD1…), no el nombre, para independizarse de renombres.
 
 function renderCreditoCard(gastosRows) {
-  // Capa 1: gastos propios del mes con crédito
-  const gastosCredito = gastosRows.filter(r => r.medio_pago === 'Crédito');
+  // Capa 1: gastos propios del mes con crédito — excluir cuota_nro > 1 para que
+  // las cuotas comprometidas solo entren por filterCuotasComprometidas() (Capa 2)
+  // y no aparezcan duplicadas.
+  const gastosCredito = gastosRows.filter(r => r.medio_pago === 'Crédito' && (parseInt(r.cuota_nro) || 1) === 1);
 
   // Capa 2: cuotas comprometidas del mes que sean de crédito
   const cuotasCredito = filterCuotasComprometidas(S.period.from, S.period.to)
@@ -3169,7 +3171,7 @@ function toggleCreditoDetail() {
   panel.style.display = isHidden ? 'block' : 'none';
   if (isHidden) {
     const gastosRows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to });
-    const gastosCredito = gastosRows.filter(r => r.medio_pago === 'Crédito');
+    const gastosCredito = gastosRows.filter(r => r.medio_pago === 'Crédito' && (parseInt(r.cuota_nro) || 1) === 1);
     const cuotasCredito = filterCuotasComprometidas(S.period.from, S.period.to).filter(r => r.medio_pago === 'Crédito');
     renderCreditoDetailPanel([...gastosCredito, ...cuotasCredito]);
   }
@@ -4002,8 +4004,10 @@ function renderGastosPersonales(p1, p2) {
   const allGastos   = filterLog({ tipo: 'Gasto',   from: S.period.from, to: S.period.to }).filter(r => !r.saldado);
   const allIngresos = filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to });
 
-  const ingProp1 = sum(allIngresos.filter(r => r.pago === p1), 'monto_total');
-  const ingProp2 = sum(allIngresos.filter(r => r.pago === p2), 'monto_total');
+  // Disponible del mes: calculado en renderDistribucion() y expuesto en S.disponible1/2.
+  // Representa salario − fijos − variables − cuotas − simulados, por persona.
+  const ingProp1 = S.disponible1 ?? sum(allIngresos.filter(r => r.pago === p1), 'monto_total');
+  const ingProp2 = S.disponible2 ?? sum(allIngresos.filter(r => r.pago === p2), 'monto_total');
 
   // Gastos propios: gasto pagado por esta persona y que 100% le corresponde a ella
   const prop1 = sum(allGastos.filter(r =>
@@ -4049,7 +4053,7 @@ function renderGastosPersonales(p1, p2) {
     <div class="gp-col">
       <div class="gp-col-header">${name}</div>
       <div class="gp-row">
-        <span class="gp-row-label">Ingresos propios</span>
+        <span class="gp-row-label">Disponible del mes</span>
         <span class="gp-row-val">${fmtR(ingP)}</span>
       </div>
       <div class="gp-row">
