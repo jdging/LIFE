@@ -1281,9 +1281,11 @@
         <span class="section-label">Gastos</span>
         <!-- Filtro persona (3B): afecta cards totales, barra de composición y torta -->
         <div id="gastos-persona-filter" style="display:flex;gap:0.2rem;margin-left:0.75rem">
-          <button class="persona-btn active" id="gastos-filter-comunes" onclick="setGastosPersonaFiltro(null)">Comunes</button>
-          <button class="persona-btn" id="gastos-filter-p1" onclick="setGastosPersonaFiltro('p1')">—</button>
-          <button class="persona-btn" id="gastos-filter-p2" onclick="setGastosPersonaFiltro('p2')">—</button>
+          <button class="persona-btn active" id="gastos-filter-comun"       onclick="setGastosPersonaFiltro('comun')">Comunes</button>
+          <button class="persona-btn"        id="gastos-filter-jd-comun"    onclick="setGastosPersonaFiltro('jd_comun')">—+Común</button>
+          <button class="persona-btn"        id="gastos-filter-jd"          onclick="setGastosPersonaFiltro('jd')">—</button>
+          <button class="persona-btn"        id="gastos-filter-pinki-comun" onclick="setGastosPersonaFiltro('pinki_comun')">—+Común</button>
+          <button class="persona-btn"        id="gastos-filter-pinki"       onclick="setGastosPersonaFiltro('pinki')">—</button>
         </div>
         <div class="section-line"></div>
       </div>
@@ -1718,7 +1720,7 @@
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbxikLLQOGk_GjiS7d_yoov5tPh5LJ7isz28ylSMj7fZeONEMg4roi1JFjzhWh8WIZkTeA/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbw4ctqVqbGYNd3Y2Y_LLyEsL_bwTdFAM3gxy6CAu518HCIJYaovxu2nnZgSvPT0mDpcXQ/exec';
 const APPSHEET_URL = 'https://www.appsheet.com/start/01dde697-d530-4d07-89d9-34f4ec40b45e'; // ← Pegá acá la URL pública de tu app AppSheet
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
@@ -1890,18 +1892,21 @@ function renderGastos() {
 
   // varTotal: excluye cuota_nro > 1 (cuotas diferidas) para evitar doble conteo con cuotasTotal
   const varTotal  = sum(filteredRows.filter(r => (parseInt(r.cuota_nro) || 1) === 1), 'monto_total');
-  // Fijos: aplican solo en modo Común (son gastos compartidos por naturaleza)
-  const fixTotal  = (_gastosPersonaFiltro === null) ? computeFixedTotalForPeriod() : 0;
-  // Cuotas comprometidas: cuota_nro > 1 en el período, también filtradas por persona
-  const cuotasTotal = sum(applyPersonaFiltro(filterCuotasComprometidas(S.period.from, S.period.to)), 'monto_total');
+  // Fijos: filtrados según el modo de persona activo (PARTE C)
+  const fixTotal  = computeFixedForPersona(_gastosPersonaFiltro);
+  // Cuotas comprometidas: filtradas Y con monto proporcional según persona (PARTE D)
+  const p1    = S.config?.nombre_persona1 || 'JD';
+  const p2    = S.config?.nombre_persona2 || 'Pinki';
+  const cuotasTotal = sum(
+    applyPersonaMonto(applyPersonaFiltro(filterCuotasComprometidas(S.period.from, S.period.to)), _gastosPersonaFiltro, p1, p2),
+    'monto_total'
+  );
   const total       = varTotal + fixTotal + cuotasTotal;
 
   // Sub-líneas JD/Pinki en el card total (solo en modo Común)
-  const p1    = S.config?.nombre_persona1 || 'JD';
-  const p2    = S.config?.nombre_persona2 || 'Pinki';
   const subEl = document.getElementById('g-total-sub');
   if (subEl) {
-    if (_gastosPersonaFiltro === null && filteredRows.length > 0) {
+    if (_gastosPersonaFiltro === 'comun' && filteredRows.length > 0) {
       let sub1 = 0, sub2 = 0;
       filteredRows.forEach(r => {
         const monto = parseFloat(r.monto_total) || 0;
@@ -1929,9 +1934,10 @@ function renderGastos() {
   // Re-renderizar panel de cuotas si ya estaba abierto
   if (document.getElementById('cuotas-detail').style.display !== 'none') renderCuotasDetailTable();
 
-  // Deuda y crédito: usan el set completo de rows (no filtrado por persona)
+  // Deuda: usa el set completo (sin filtro persona — la deuda es entre personas, no de una sola)
   renderDeuda(rows);
-  renderCreditoCard(rows);
+  // Crédito: filtra por persona para mostrar solo la carga de crédito relevante (PARTE D)
+  renderCreditoCard(applyPersonaFiltro(rows));
 
   // Composición del gasto total (también respeta filtro persona)
   renderComposicion();
@@ -1971,9 +1977,15 @@ function renderDeuda(rows) {
   const p1 = S.config.nombre_persona1 || 'JD';
   const p2 = S.config.nombre_persona2 || 'Pinki';
 
-  // Solo filas donde una persona pagó (pago=JD o Pinki), son candidatas a generar deuda
-  // La proporción por fila (getRowPct) determina cuánto le corresponde a cada uno
-  const debtRows = rows.filter(r => r.pago === p1 || r.pago === p2);
+  // Solo filas donde una persona pagó (pago=JD o Pinki), son candidatas a generar deuda.
+  // Excluir filas donde la contraparte tiene pct=0 → gasto 100% personal, no genera deuda.
+  const debtRows = rows.filter(r => {
+    if (r.pago !== p1 && r.pago !== p2) return false;
+    const { pct1, pct2 } = getRowPct(r, p1, p2);
+    if (r.pago === p1 && pct2 === 0) return false;
+    if (r.pago === p2 && pct1 === 0) return false;
+    return true;
+  });
 
   // Para el balance del card, excluimos las saldadas (ya se resolvieron)
   const activeDebtRows = debtRows.filter(r => !r.saldado);
@@ -2142,11 +2154,12 @@ function renderGastosPie(rows) {
   // Guardar rows originales (sin filtro persona) para re-render en toggle y cambio de filtro
   _gastosCategRows = rows;
 
-  // Actualizar etiquetas de los botones de persona con los nombres reales del config
-  const btnP1 = document.getElementById('gastos-filter-p1');
-  const btnP2 = document.getElementById('gastos-filter-p2');
-  if (btnP1) btnP1.textContent = p1;
-  if (btnP2) btnP2.textContent = p2;
+  // Actualizar etiquetas de los 4 botones de persona con los nombres reales del config
+  const _setBtn = (id, txt) => { const b = document.getElementById(id); if (b) b.textContent = txt; };
+  _setBtn('gastos-filter-jd-comun',    p1 + '+Común');
+  _setBtn('gastos-filter-jd',          p1);
+  _setBtn('gastos-filter-pinki-comun', p2 + '+Común');
+  _setBtn('gastos-filter-pinki',       p2);
 
   // === Aplicar filtro persona — reutiliza applyPersonaFiltro (3B) ===
   const filteredRows = applyPersonaFiltro(rows);
@@ -2159,7 +2172,7 @@ function renderGastosPie(rows) {
   // Subtotales modo Comunes: cuánto le corresponde a cada persona según getRowPct
   const subtotalsEl = document.getElementById('gastos-pie-subtotals');
   if (subtotalsEl) {
-    if (_gastosPersonaFiltro === null && filteredRows.length > 0) {
+    if (_gastosPersonaFiltro === 'comun' && filteredRows.length > 0) {
       let total1 = 0, total2 = 0;
       filteredRows.forEach(r => {
         const monto = parseFloat(r.monto_total) || 0;
@@ -2247,20 +2260,15 @@ function toggleGastosCategType() {
   if (_gastosCategRows) renderGastosPie(_gastosCategRows);
 }
 
-// === SECCIÓN: Filtro persona torta gastos (FEAT-01) ===
-// Qué hace: permite ver gastos comunes (compartidos) o gastos 100% personales de cada uno.
-// Por qué: la torta mezclaba gastos comunes con personales dando una visión distorsionada.
-// Cómo funciona: guarda el filtro activo en _gastosPersonaFiltro y re-renderiza la torta.
-//   - null = Comunes: excluye tipo_proporcion=custom con proporcion_jd=0 o 100
-//   - 'p1' / 'p2' = solo los gastos 100% de esa persona
+// === SECCIÓN: Filtro persona torta gastos (FEAT-01, extendido T4) ===
+// Qué hace: permite ver gastos comunes, parciales o 100% personales de cada persona.
+// Valores: 'comun' | 'jd_comun' | 'jd' | 'pinki_comun' | 'pinki'
 function setGastosPersonaFiltro(val) {
   _gastosPersonaFiltro = val;
-  const btnC  = document.getElementById('gastos-filter-comunes');
-  const btnP1 = document.getElementById('gastos-filter-p1');
-  const btnP2 = document.getElementById('gastos-filter-p2');
-  if (btnC)  btnC.classList.toggle('active',  val === null);
-  if (btnP1) btnP1.classList.toggle('active', val === 'p1');
-  if (btnP2) btnP2.classList.toggle('active', val === 'p2');
+  ['comun','jd_comun','jd','pinki_comun','pinki'].forEach(v => {
+    const btn = document.getElementById('gastos-filter-' + v.replace('_', '-'));
+    if (btn) btn.classList.toggle('active', v === val);
+  });
   // Re-renderizar toda la vista Gastos (cards + composición + torta)
   renderGastos();
 }
@@ -3176,8 +3184,8 @@ function renderCreditoCard(gastosRows) {
   // y no aparezcan duplicadas.
   const gastosCredito = gastosRows.filter(r => r.medio_pago === 'Crédito' && (parseInt(r.cuota_nro) || 1) === 1);
 
-  // Capa 2: cuotas comprometidas del mes que sean de crédito
-  const cuotasCredito = filterCuotasComprometidas(S.period.from, S.period.to)
+  // Capa 2: cuotas comprometidas del mes que sean de crédito, también filtradas por persona (PARTE D)
+  const cuotasCredito = applyPersonaFiltro(filterCuotasComprometidas(S.period.from, S.period.to))
     .filter(r => r.medio_pago === 'Crédito');
 
   const allRows = [...gastosCredito, ...cuotasCredito];
@@ -3323,6 +3331,25 @@ function computeFixedTotalForPeriod() {
   return total;
 }
 
+// Qué hace: calcula el total de fijos filtrado según el modo de persona activo (PARTE C, T4).
+// Para 'comun' delega en computeFixedTotalForPeriod(). Para los otros modos aplica la
+// proporción correspondiente a cada ítem de S.fixed.data usando getRowPct.
+// Usa monto_mensual (no monto) porque el API ya divide bimestrales por 2.
+function computeFixedForPersona(filtro) {
+  if (filtro === 'comun') return computeFixedTotalForPeriod();
+  if (!S.fixed?.data?.length) return 0;
+  const p1 = S.config?.nombre_persona1 || 'JD';
+  const p2 = S.config?.nombre_persona2 || 'Pinki';
+  return S.fixed.data.reduce((acc, item) => {
+    const { pct1, pct2 } = getRowPct(item, p1, p2);
+    if (filtro === 'jd_comun'    && pct1 > 0)    return acc + item.monto_mensual * pct1 / 100;
+    if (filtro === 'jd'          && pct1 === 100) return acc + item.monto_mensual;
+    if (filtro === 'pinki_comun' && pct2 > 0)    return acc + item.monto_mensual * pct2 / 100;
+    if (filtro === 'pinki'       && pct2 === 100) return acc + item.monto_mensual;
+    return acc;
+  }, 0);
+}
+
 // === SECCIÓN: Composición del gasto total (F-03, F11, F12) ===
 // Qué hace: desglosa el gasto total del período en 3 componentes con barra horizontal proporcional.
 //   - Fijos: computeFixedTotalForPeriod() — respeta vigente_desde en rangos multi-mes (F12)
@@ -3330,11 +3357,19 @@ function computeFixedTotalForPeriod() {
 //   - Cuotas: filterCuotasComprometidas — cuotas de compras anteriores que vencen en el período
 // F11: labels sobre cada segmento (nombre + monto) y separador blanco entre segmentos.
 function renderComposicion() {
-  // Aplicar el mismo filtro persona que los cards (3B): modo JD/Pinki excluye fijos y filtra rows
-  const gastosRows  = applyPersonaFiltro(filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to }));
-  const fijosTotal  = (_gastosPersonaFiltro === null) ? computeFixedTotalForPeriod() : 0;
+  const p1 = S.config?.nombre_persona1 || 'JD';
+  const p2 = S.config?.nombre_persona2 || 'Pinki';
+  // Aplicar filtro persona + monto proporcional para consistencia con cards (PARTE C/D)
+  const gastosRows  = applyPersonaMonto(
+    applyPersonaFiltro(filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })),
+    _gastosPersonaFiltro, p1, p2
+  );
+  const fijosTotal  = computeFixedForPersona(_gastosPersonaFiltro);
   const varTotal    = sum(gastosRows.filter(r => (parseInt(r.cuota_nro) || 1) === 1), 'monto_total');
-  const cuotasTotal = sum(applyPersonaFiltro(filterCuotasComprometidas(S.period.from, S.period.to)), 'monto_total');
+  const cuotasTotal = sum(
+    applyPersonaMonto(applyPersonaFiltro(filterCuotasComprometidas(S.period.from, S.period.to)), _gastosPersonaFiltro, p1, p2),
+    'monto_total'
+  );
   const grandTotal  = fijosTotal + varTotal + cuotasTotal || 1;
 
   const pctFijos  = (fijosTotal  / grandTotal * 100);
@@ -4126,41 +4161,48 @@ let _gastosActiveCat   = null;       // categoría actualmente drillada (o null)
 let _gastosSubcatType  = 'doughnut'; // tipo del gráfico de subcategorías ('doughnut' o 'bar')
 let _gastosCategPieType = 'doughnut'; // tipo del gráfico de categorías ('doughnut' o 'bar')
 let _gastosCategRows   = null;       // rows guardadas para re-render al hacer toggle (sin filtro persona)
-let _gastosPersonaFiltro = null;     // null=Comunes, 'p1'=persona1, 'p2'=persona2 (FEAT-01)
+let _gastosPersonaFiltro = 'comun';  // 'comun'|'jd_comun'|'jd'|'pinki_comun'|'pinki' (T4)
 
-// === HELPER: filtro persona (3B) ===
-// Filtra un array de rows de gastos según _gastosPersonaFiltro.
-// Aplica a rows del Log y también a cuotas comprometidas (que heredan tipo_proporcion del gasto original).
-//   null  = Común: excluye tipo_proporcion='custom' con proporcion_jd=0 o 100 (solo gastos compartidos)
-//   'p1'  = solo gastos 100% de persona 1 (custom + proporcion_jd=100)
-//   'p2'  = solo gastos 100% de persona 2 (custom + proporcion_jd=0)
 // === HELPER: monto proporcional por persona (T4) ===
 // Devuelve copia de rows con monto_total reemplazado por el monto que le corresponde a la persona.
-// persona=null → sin cambios (modo Comunes). No muta el array original.
-// Uso: gráfico histórico y tabla de gastos variables en modo JD/Pinki.
+// 'comun' → sin cambios. No muta el array original.
+// Uso: gráfico histórico, tabla de gastos variables y cuotas comprometidas en modo no-Común.
 function applyPersonaMonto(rows, persona, pJD, pPinki) {
-  if (persona === null) return rows;
+  if (persona === 'comun') return rows;
   return rows.map(row => {
     const { pct1, pct2 } = getRowPct(row, pJD, pPinki);
-    const pct = persona === 'p1' ? pct1 : pct2;
+    // jd_comun y jd → proporción de persona 1; pinki_comun y pinki → proporción de persona 2
+    const pct = (persona === 'jd_comun' || persona === 'jd') ? pct1 : pct2;
     return { ...row, monto_total: (parseFloat(row.monto_total) || 0) * pct / 100 };
   });
 }
 
+// === HELPER: filtro persona (3B, extendido T4) ===
+// Filtra rows según _gastosPersonaFiltro usando getRowPct para respetar tipo_proporcion.
+//   'comun':       ambos participan (pct1 > 0 && pct2 > 0)
+//   'jd_comun':    JD tiene cualquier % (pct1 > 0)
+//   'jd':          JD al 100% (pct1 === 100)
+//   'pinki_comun': Pinki tiene cualquier % (pct2 > 0)
+//   'pinki':       Pinki al 100% (pct2 === 100)
 function applyPersonaFiltro(rows) {
-  if (_gastosPersonaFiltro === null) {
-    return rows.filter(r => {
-      const pJD = parseFloat(r.proporcion_jd);
-      return !((r.tipo_proporcion || '').toLowerCase() === 'custom' && (pJD === 0 || pJD === 100));
-    });
-  } else if (_gastosPersonaFiltro === 'p1') {
-    return rows.filter(r =>
-      (r.tipo_proporcion || '').toLowerCase() === 'custom' && parseFloat(r.proporcion_jd) === 100
-    );
-  } else {
-    return rows.filter(r =>
-      (r.tipo_proporcion || '').toLowerCase() === 'custom' && parseFloat(r.proporcion_jd) === 0
-    );
+  const p1 = S.config?.nombre_persona1 || 'JD';
+  const p2 = S.config?.nombre_persona2 || 'Pinki';
+  switch (_gastosPersonaFiltro) {
+    case 'comun':
+      return rows.filter(r => {
+        const { pct1, pct2 } = getRowPct(r, p1, p2);
+        return pct1 > 0 && pct2 > 0;
+      });
+    case 'jd_comun':
+      return rows.filter(r => getRowPct(r, p1, p2).pct1 > 0);
+    case 'jd':
+      return rows.filter(r => getRowPct(r, p1, p2).pct1 === 100);
+    case 'pinki_comun':
+      return rows.filter(r => getRowPct(r, p1, p2).pct2 > 0);
+    case 'pinki':
+      return rows.filter(r => getRowPct(r, p1, p2).pct2 === 100);
+    default:
+      return rows;
   }
 }
 
@@ -4252,4 +4294,3 @@ document.addEventListener('keydown', e => {
 
 </body>
 </html>
-//deploy
