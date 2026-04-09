@@ -1720,7 +1720,7 @@
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbw4ctqVqbGYNd3Y2Y_LLyEsL_bwTdFAM3gxy6CAu518HCIJYaovxu2nnZgSvPT0mDpcXQ/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycby2AClPXU3Zbof0YwWsZXAgJkJibvYShVxLHCKVWnlrlhd92C_RiCS2DRg0NQ-yujUJ4w/exec';
 const APPSHEET_URL = 'https://www.appsheet.com/start/01dde697-d530-4d07-89d9-34f4ec40b45e'; // ← Pegá acá la URL pública de tu app AppSheet
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
@@ -1921,15 +1921,18 @@ function renderGastos() {
     }
   }
 
-  const cuotas = rows.filter(r => (parseInt(r.cuotas_total) || 1) > 1);
+  // Card "En Cuotas" — filas del período con cuotas_total > 1, filtradas y ajustadas por persona (T4)
+  const cuotasAll      = rows.filter(r => (parseInt(r.cuotas_total) || 1) > 1);
+  const cuotasFiltered = applyPersonaFiltro(cuotasAll);
+  const cuotasAdjusted = applyPersonaMonto(cuotasFiltered, _gastosPersonaFiltro, p1, p2);
 
   // Card "Gastos fijos" — muestra datos del endpoint fixed
   const fijosCount = S.fixed?.data?.length || 0;
   setText('g-total',        fmt(total));
   setText('g-fijos',        fmt(fixTotal));
   setText('g-fijos-count',  fijosCount + ' ítem' + (fijosCount !== 1 ? 's' : '') + ' · ver detalle');
-  setText('g-cuotas',       fmt(sum(cuotas, 'monto_total')));
-  setText('g-cuotas-count', cuotas.length + ' cuota' + (cuotas.length !== 1 ? 's' : '') + ' activa' + (cuotas.length !== 1 ? 's' : '') + ' · ver detalle');
+  setText('g-cuotas',       fmt(sum(cuotasAdjusted, 'monto_total')));
+  setText('g-cuotas-count', cuotasFiltered.length + ' cuota' + (cuotasFiltered.length !== 1 ? 's' : '') + ' activa' + (cuotasFiltered.length !== 1 ? 's' : '') + ' · ver detalle');
 
   // Re-renderizar panel de cuotas si ya estaba abierto
   if (document.getElementById('cuotas-detail').style.display !== 'none') renderCuotasDetailTable();
@@ -3241,7 +3244,7 @@ function renderCreditoDetailPanel(rows) {
       return `<tr>
         <td class="td-muted" style="width:90px">${r.fecha || '—'}</td>
         <td>${r.descripcion || '—'}${esCuota ? ' <span class="badge-bimestral">cuota ' + r.cuota_nro + '/' + r.cuotas_total + '</span>' : ''}</td>
-        <td class="td-muted">${r.categoria || '—'}</td>
+        <td class="td-muted">${r.categoria || '—'}${r.subcategoria ? ' / ' + r.subcategoria : ''}</td>
         <td class="td-muted"><span class="badge badge-${(r.pago||'comun').toLowerCase()}">${r.pago || '—'}</span></td>
         <td class="td-muted">${propLabel(r)}</td>
         <td class="td-amount">${fmt(monto * pct1 / 100)}</td>
