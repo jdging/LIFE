@@ -1943,8 +1943,8 @@ function renderGastos() {
   renderGastosPie(rows);
   renderGastosBar();
 
-  // Tabla
-  renderGastosTable(rows);
+  // Tabla — en modo JD/Pinki, muestra monto proporcional a esa persona
+  renderGastosTable(applyPersonaMonto(rows, _gastosPersonaFiltro, p1, p2));
 }
 
 // === HELPER: proporción por fila (F-04) ===
@@ -2268,6 +2268,8 @@ function setGastosPersonaFiltro(val) {
 function renderGastosBar() {
   destroyChart('gastos-bar');
   const months = last6Months(S.month);
+  const p1 = S.config?.nombre_persona1 || 'JD';
+  const p2 = S.config?.nombre_persona2 || 'Pinki';
 
   // Categorías únicas en el período
   const rows6m    = filterLog({ tipo: 'Gasto', months });
@@ -2275,7 +2277,10 @@ function renderGastosBar() {
 
   const datasets = cats.map((cat, i) => ({
     label: cat,
-    data: months.map(m => sum(filterLog({ tipo: 'Gasto', month: m, cat }), 'monto_total')),
+    data: months.map(m => {
+      const r = applyPersonaMonto(filterLog({ tipo: 'Gasto', month: m, cat }), _gastosPersonaFiltro, p1, p2);
+      return sum(r, 'monto_total');
+    }),
     backgroundColor: PALETTE[i % PALETTE.length],
     borderWidth: 0,
     borderRadius: 2,
@@ -4129,6 +4134,19 @@ let _gastosPersonaFiltro = null;     // null=Comunes, 'p1'=persona1, 'p2'=person
 //   null  = Común: excluye tipo_proporcion='custom' con proporcion_jd=0 o 100 (solo gastos compartidos)
 //   'p1'  = solo gastos 100% de persona 1 (custom + proporcion_jd=100)
 //   'p2'  = solo gastos 100% de persona 2 (custom + proporcion_jd=0)
+// === HELPER: monto proporcional por persona (T4) ===
+// Devuelve copia de rows con monto_total reemplazado por el monto que le corresponde a la persona.
+// persona=null → sin cambios (modo Comunes). No muta el array original.
+// Uso: gráfico histórico y tabla de gastos variables en modo JD/Pinki.
+function applyPersonaMonto(rows, persona, pJD, pPinki) {
+  if (persona === null) return rows;
+  return rows.map(row => {
+    const { pct1, pct2 } = getRowPct(row, pJD, pPinki);
+    const pct = persona === 'p1' ? pct1 : pct2;
+    return { ...row, monto_total: (parseFloat(row.monto_total) || 0) * pct / 100 };
+  });
+}
+
 function applyPersonaFiltro(rows) {
   if (_gastosPersonaFiltro === null) {
     return rows.filter(r => {
