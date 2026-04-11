@@ -1908,12 +1908,30 @@ function renderGastos() {
   if (subEl) {
     if (_gastosPersonaFiltro === 'comun' && filteredRows.length > 0) {
       let sub1 = 0, sub2 = 0;
-      filteredRows.forEach(r => {
+
+      // Capa 1: variable — solo cuota_nro === 1 para matchear varTotal (evita doble conteo con cuotasTotal)
+      filteredRows.filter(r => (parseInt(r.cuota_nro) || 1) === 1).forEach(r => {
         const monto = parseFloat(r.monto_total) || 0;
         const { pct1, pct2 } = getRowPct(r, p1, p2);
         sub1 += monto * (pct1 / 100);
         sub2 += monto * (pct2 / 100);
       });
+
+      // Capa 2: fijos — todos, para que sub1+sub2 = fixTotal
+      (S.fixed?.data || []).forEach(item => {
+        const { pct1, pct2 } = getRowPct(item, p1, p2);
+        sub1 += (item.monto_mensual || 0) * (pct1 / 100);
+        sub2 += (item.monto_mensual || 0) * (pct2 / 100);
+      });
+
+      // Capa 3: cuotas comprometidas
+      applyPersonaFiltro(filterCuotasComprometidas(S.period.from, S.period.to)).forEach(r => {
+        const monto = parseFloat(r.monto_total) || 0;
+        const { pct1, pct2 } = getRowPct(r, p1, p2);
+        sub1 += monto * (pct1 / 100);
+        sub2 += monto * (pct2 / 100);
+      });
+
       subEl.style.display = '';
       subEl.textContent   = p1 + ': ' + fmt(sub1) + '  ·  ' + p2 + ': ' + fmt(sub2);
     } else {
@@ -2187,6 +2205,22 @@ function renderGastosPie(rows) {
       subtotalsEl.innerHTML = `
         <div class="gastos-pie-sub-row"><span>Corresponde a ${p1}</span><span>${fmt(total1)}</span></div>
         <div class="gastos-pie-sub-row"><span>Corresponde a ${p2}</span><span>${fmt(total2)}</span></div>`;
+    } else if ((_gastosPersonaFiltro === 'jd_comun' || _gastosPersonaFiltro === 'pinki_comun') && filteredRows.length > 0) {
+      const isJD = _gastosPersonaFiltro === 'jd_comun';
+      let totalComun = 0, totalPropio = 0;
+      filteredRows.forEach(r => {
+        const monto = parseFloat(r.monto_total) || 0;
+        const { pct1, pct2 } = getRowPct(r, p1, p2);
+        const pct      = isJD ? pct1 : pct2;
+        const pctOther = isJD ? pct2 : pct1;
+        if (pct === 100)                   totalPropio += monto;
+        else if (pct > 0 && pctOther > 0)  totalComun  += monto * (pct / 100);
+      });
+      const grandTotal = totalComun + totalPropio || 1;
+      subtotalsEl.style.display = '';
+      subtotalsEl.innerHTML = `
+        <div class="gastos-pie-sub-row"><span>Común</span><span>${fmt(totalComun)} <span style="color:var(--muted)">(${Math.round(totalComun / grandTotal * 100)}%)</span></span></div>
+        <div class="gastos-pie-sub-row"><span>Propio</span><span>${fmt(totalPropio)} <span style="color:var(--muted)">(${Math.round(totalPropio / grandTotal * 100)}%)</span></span></div>`;
     } else {
       subtotalsEl.style.display = 'none';
     }
@@ -2933,6 +2967,16 @@ function propLabel(row) {
   return pct1 + '% / ' + pct2 + '%';
 }
 
+// getTarjetaLabel: resuelve el nombre amigable de una tarjeta por su ID.
+//   Usa el campo `label` de la hoja Tarjetas (col H) si existe; si no, arma "Banco – Nombre".
+function getTarjetaLabel(id) {
+  if (!S.tarjetas) return id || '—';
+  const t = S.tarjetas.find(t => t.id === id);
+  if (!t) return id || '—';
+  if (t.label) return t.label;
+  return t.banco ? t.banco + ' – ' + t.nombre : t.nombre;
+}
+
 // correspondeLabel: a quién pertenece el gasto según tipo_proporcion.
 //   custom + proporcion_jd=100 → nombre persona 1
 //   custom + proporcion_jd=0   → nombre persona 2
@@ -3065,8 +3109,20 @@ function renderFijosDetailTable() {
   const p1 = S.config.nombre_persona1 || 'JD';
   const p2 = S.config.nombre_persona2 || 'Pinki';
 
+  // Filtrar según persona activa
+  const filtro = S.gastosPersonaFiltro || 'comun';
+  const fijosParaMostrar = data.filter(item => {
+    const { pct1, pct2 } = getRowPct(item, p1, p2);
+    if (filtro === 'comun')        return pct1 > 0 && pct2 > 0;
+    if (filtro === 'jd_comun')    return pct1 > 0;
+    if (filtro === 'jd')          return pct1 === 100;
+    if (filtro === 'pinki_comun') return pct2 > 0;
+    if (filtro === 'pinki')       return pct2 === 100;
+    return true;
+  });
+
   // Precalcular montos individuales por fila
-  const rows = data.map(r => {
+  const rows = fijosParaMostrar.map(r => {
     const { pct1, pct2 } = getRowPct(r, p1, p2);
     return {
       ...r,
@@ -3100,7 +3156,7 @@ function renderFijosDetailTable() {
       </tbody>
       <tfoot><tr>
         <td colspan="3" class="td-muted" style="padding:0.65rem 1rem">Total fijos</td>
-        <td class="td-amount td-accent" style="padding:0.65rem 1rem">${fmt(S.fixed.total)}</td>
+        <td class="td-amount td-accent" style="padding:0.65rem 1rem">${fmt(fijosParaMostrar.reduce((acc, r) => acc + (r.monto_mensual || 0), 0))}</td>
         <td class="td-amount" style="padding:0.65rem 1rem">${fmt(totalP1)}</td>
         <td class="td-amount" style="padding:0.65rem 1rem">${fmt(totalP2)}</td>
       </tr></tfoot>
@@ -3133,13 +3189,6 @@ function renderCuotasDetailTable() {
   const p1 = S.config.nombre_persona1 || 'JD';
   const p2 = S.config.nombre_persona2 || 'Pinki';
 
-  // Resolver nombre de tarjeta por ID → "Banco – Nombre"
-  const labelTarjeta = id => {
-    const t = S.tarjetas.find(t => t.id === id);
-    if (!t) return id || '—';
-    return t.banco ? t.banco + ' – ' + t.nombre : t.nombre;
-  };
-
   const total = sum(rows, 'monto_total');
 
   inner.innerHTML = `
@@ -3158,7 +3207,7 @@ function renderCuotasDetailTable() {
             <td class="td-muted">${r.fecha || '—'}</td>
             <td>${r.descripcion || '—'}</td>
             <td class="td-muted">${cuotaLabel(r)}</td>
-            <td class="td-muted">${labelTarjeta(r.tarjeta)}</td>
+            <td class="td-muted">${getTarjetaLabel(r.tarjeta)}</td>
             <td class="td-amount">${fmt(monto * pct1 / 100)}</td>
             <td class="td-amount">${fmt(monto * pct2 / 100)}</td>
             <td class="td-amount td-accent">${fmt(monto)}</td>
@@ -3191,7 +3240,32 @@ function renderCreditoCard(gastosRows) {
   const cuotasCredito = applyPersonaFiltro(filterCuotasComprometidas(S.period.from, S.period.to))
     .filter(r => r.medio_pago === 'Crédito');
 
-  const allRows = [...gastosCredito, ...cuotasCredito];
+  // Capa 3: gastos fijos con medio_pago='Crédito', filtrados por persona
+  const _filtro = S.gastosPersonaFiltro || 'comun';
+  const _p1 = S.config.nombre_persona1 || 'JD';
+  const _p2 = S.config.nombre_persona2 || 'Pinki';
+  const fijosCredito = (S.fixed?.data || [])
+    .filter(item => {
+      if (item.medio_pago !== 'Crédito') return false;
+      const { pct1, pct2 } = getRowPct(item, _p1, _p2);
+      if (_filtro === 'comun')        return pct1 > 0 && pct2 > 0;
+      if (_filtro === 'jd_comun')    return pct1 > 0;
+      if (_filtro === 'jd')          return pct1 === 100;
+      if (_filtro === 'pinki_comun') return pct2 > 0;
+      if (_filtro === 'pinki')       return pct2 === 100;
+      return true;
+    })
+    .map(item => ({
+      ...item,
+      monto_total:  item.monto_mensual,
+      cuota_nro:    1,
+      cuotas_total: 1,
+      fecha:        '',
+      pago:         item.responsable || 'Común',
+      _esFijo:      true,
+    }));
+
+  const allRows = [...gastosCredito, ...cuotasCredito, ...fijosCredito];
   const total   = sum(allRows, 'monto_total');
 
   setText('g-credito', fmt(total));
@@ -3210,7 +3284,18 @@ function toggleCreditoDetail() {
     const gastosRows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to });
     const gastosCredito = gastosRows.filter(r => r.medio_pago === 'Crédito' && (parseInt(r.cuota_nro) || 1) === 1);
     const cuotasCredito = filterCuotasComprometidas(S.period.from, S.period.to).filter(r => r.medio_pago === 'Crédito');
-    renderCreditoDetailPanel([...gastosCredito, ...cuotasCredito]);
+    const fijosCredito  = (S.fixed?.data || [])
+      .filter(item => item.medio_pago === 'Crédito')
+      .map(item => ({
+        ...item,
+        monto_total:  item.monto_mensual,
+        cuota_nro:    1,
+        cuotas_total: 1,
+        fecha:        '',
+        pago:         item.responsable || 'Común',
+        _esFijo:      true,
+      }));
+    renderCreditoDetailPanel([...gastosCredito, ...cuotasCredito, ...fijosCredito]);
   }
 }
 
@@ -3224,13 +3309,6 @@ function renderCreditoDetailPanel(rows) {
 
   // Agrupar por ID de tarjeta
   const grupos = groupBy(rows, 'tarjeta');
-
-  // Helper para resolver label de tarjeta: "Banco – Nombre" o el ID si no se encuentra
-  const labelTarjeta = id => {
-    const t = S.tarjetas.find(t => t.id === id);
-    if (!t) return id || 'Sin tarjeta';
-    return t.banco ? t.banco + ' – ' + t.nombre : t.nombre;
-  };
 
   const p1 = S.config.nombre_persona1 || 'JD';
   const p2 = S.config.nombre_persona2 || 'Pinki';
@@ -3254,7 +3332,7 @@ function renderCreditoDetailPanel(rows) {
     }).join('');
 
     return `
-      <div class="credito-tarjeta-header">${labelTarjeta(id)}</div>
+      <div class="credito-tarjeta-header">${getTarjetaLabel(id)}</div>
       <table>
         <thead><tr>
           <th>Fecha</th><th>Descripción</th><th>Categoría</th>
