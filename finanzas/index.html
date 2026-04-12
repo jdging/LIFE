@@ -2308,6 +2308,11 @@ function setGastosPersonaFiltro(val) {
   });
   // Re-renderizar toda la vista Gastos (cards + composición + torta)
   renderGastos();
+  // Si el panel de fijos está abierto, re-renderizarlo con el nuevo filtro
+  const fijosPanel = document.getElementById('fijos-detail');
+  if (fijosPanel && fijosPanel.style.display !== 'none') {
+    renderFijosDetailTable();
+  }
 }
 
 function renderGastosBar() {
@@ -3110,7 +3115,7 @@ function renderFijosDetailTable() {
   const p2 = S.config.nombre_persona2 || 'Pinki';
 
   // Filtrar según persona activa
-  const filtro = S.gastosPersonaFiltro || 'comun';
+  const filtro = _gastosPersonaFiltro || 'comun';
   const fijosParaMostrar = data.filter(item => {
     const { pct1, pct2 } = getRowPct(item, p1, p2);
     if (filtro === 'comun')        return pct1 > 0 && pct2 > 0;
@@ -3241,7 +3246,7 @@ function renderCreditoCard(gastosRows) {
     .filter(r => r.medio_pago === 'Crédito');
 
   // Capa 3: gastos fijos con medio_pago='Crédito', filtrados por persona
-  const _filtro = S.gastosPersonaFiltro || 'comun';
+  const _filtro = _gastosPersonaFiltro || 'comun';
   const _p1 = S.config.nombre_persona1 || 'JD';
   const _p2 = S.config.nombre_persona2 || 'Pinki';
   const fijosCredito = (S.fixed?.data || [])
