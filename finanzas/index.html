@@ -1213,22 +1213,6 @@
       <span class="nav-tooltip">Presupuesto</span>
     </button>
 
-    <!-- Compras (link externo, sale del SPA) -->
-    <a href="../compras/index.html" class="nav-item">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
-        <path d="M1 1h4l2.68 13.39a2 2 0 001.99 1.61H19a2 2 0 001.96-1.64l1.54-8H5"/>
-      </svg>
-      <span class="nav-tooltip">Compras</span>
-    </a>
-
-    <!-- Recetario (link externo, sale del SPA) -->
-    <a href="../recetario/index.html" class="nav-item">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <path d="M3 2h18v4H3zM3 6v16M21 6v16M8 10h8M8 14h5"/>
-      </svg>
-      <span class="nav-tooltip">Recetario</span>
-    </a>
   </div>
 
   <div class="sidebar-bottom">
@@ -1720,7 +1704,7 @@
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 
-const API_URL = 'https://script.google.com/macros/s/AKfycby2AClPXU3Zbof0YwWsZXAgJkJibvYShVxLHCKVWnlrlhd92C_RiCS2DRg0NQ-yujUJ4w/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxqUXqFLLEzwpm1BM8TodtQsqDhDuJVKDdUA4klN1a6DaUKqz-tDHuzhfd3NmYra2rhKg/exec';
 const APPSHEET_URL = 'https://www.appsheet.com/start/01dde697-d530-4d07-89d9-34f4ec40b45e'; // ← Pegá acá la URL pública de tu app AppSheet
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
@@ -2057,7 +2041,13 @@ function toggleDeudaDetail() {
     const p1 = S.config.nombre_persona1 || 'JD';
     const p2 = S.config.nombre_persona2 || 'Pinki';
     const rows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })
-      .filter(r => r.pago === p1 || r.pago === p2);
+      .filter(r => {
+        if (r.pago !== p1 && r.pago !== p2) return false;
+        const { pct1, pct2 } = getRowPct(r, p1, p2);
+        if (r.pago === p1 && pct2 === 0) return false;
+        if (r.pago === p2 && pct1 === 0) return false;
+        return true;
+      });
     renderDeudaDetailPanel(rows, p1, p2);
   }
 }
