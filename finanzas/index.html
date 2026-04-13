@@ -2361,8 +2361,10 @@ function drillDownToSubcat(cat) {
 
 function renderSubcatChart(cat) {
   destroyChart('gastos-subcat');
-  const rows    = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })
-    .filter(r => r.categoria === cat);
+  const rows    = applyPersonaFiltro(
+    filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })
+      .filter(r => r.categoria === cat)
+  );
   const grouped = groupBy(rows, 'subcategoria');
   const keys    = Object.keys(grouped).filter(Boolean);
 
