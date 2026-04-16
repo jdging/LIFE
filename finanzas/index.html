@@ -1265,11 +1265,15 @@
         <span class="section-label">Gastos</span>
         <!-- Filtro persona (3B): afecta cards totales, barra de composición y torta -->
         <div id="gastos-persona-filter" style="display:flex;gap:0.2rem;margin-left:0.75rem">
-          <button class="persona-btn active" id="gastos-filter-comun"       onclick="setGastosPersonaFiltro('comun')">Comunes</button>
-          <button class="persona-btn"        id="gastos-filter-jd-comun"    onclick="setGastosPersonaFiltro('jd_comun')">—+Común</button>
-          <button class="persona-btn"        id="gastos-filter-jd"          onclick="setGastosPersonaFiltro('jd')">—</button>
-          <button class="persona-btn"        id="gastos-filter-pinki-comun" onclick="setGastosPersonaFiltro('pinki_comun')">—+Común</button>
-          <button class="persona-btn"        id="gastos-filter-pinki"       onclick="setGastosPersonaFiltro('pinki')">—</button>
+          <button class="persona-btn persona-filter-btn active" data-filter="comun"
+            onclick="setGastosPersonaFiltro('comun')">Comunes</button>
+          <button class="persona-btn persona-filter-btn" data-filter="jd_comun"
+            onclick="setGastosPersonaFiltro('jd_comun')">—+Común</button>
+          <button class="persona-btn persona-filter-btn" data-filter="jd" onclick="setGastosPersonaFiltro('jd')">—</button>
+          <button class="persona-btn persona-filter-btn" data-filter="pinki_comun"
+            onclick="setGastosPersonaFiltro('pinki_comun')">—+Común</button>
+          <button class="persona-btn persona-filter-btn" data-filter="pinki"
+            onclick="setGastosPersonaFiltro('pinki')">—</button>
         </div>
         <div class="section-line"></div>
       </div>
@@ -1377,8 +1381,19 @@
 
       <!-- Tabla -->
       <div class="table-box">
-        <div class="table-header">
+        <div class="table-header" style="align-items:center">
           <span class="section-label">Detalle</span>
+          <div id="gastos-persona-filter-bottom" style="display:flex;gap:0.2rem;margin-left:auto">
+            <button class="persona-btn persona-filter-btn active" data-filter="comun"
+              onclick="setGastosPersonaFiltro('comun')">Comunes</button>
+            <button class="persona-btn persona-filter-btn" data-filter="jd_comun"
+              onclick="setGastosPersonaFiltro('jd_comun')">—+Común</button>
+            <button class="persona-btn persona-filter-btn" data-filter="jd" onclick="setGastosPersonaFiltro('jd')">—</button>
+            <button class="persona-btn persona-filter-btn" data-filter="pinki_comun"
+              onclick="setGastosPersonaFiltro('pinki_comun')">—+Común</button>
+            <button class="persona-btn persona-filter-btn" data-filter="pinki"
+              onclick="setGastosPersonaFiltro('pinki')">—</button>
+          </div>
         </div>
         <div id="gastos-table-wrap">
           <div class="empty-state">Cargando…</div>
@@ -1954,8 +1969,8 @@ function renderGastos() {
   renderGastosPie(rows);
   renderGastosBar();
 
-  // Tabla — en modo JD/Pinki, muestra monto proporcional a esa persona
-  renderGastosTable(applyPersonaMonto(rows, _gastosPersonaFiltro, p1, p2));
+  // Tabla — en modo JD/Pinki, muestra monto proporcional a esa persona (AHORA TAMBIÉN FILTRADA)
+  renderGastosTable(applyPersonaMonto(applyPersonaFiltro(rows), _gastosPersonaFiltro, p1, p2));
 }
 
 // === HELPER: proporción por fila (F-04) ===
@@ -2165,12 +2180,13 @@ function renderGastosPie(rows) {
   // Guardar rows originales (sin filtro persona) para re-render en toggle y cambio de filtro
   _gastosCategRows = rows;
 
-  // Actualizar etiquetas de los 4 botones de persona con los nombres reales del config
-  const _setBtn = (id, txt) => { const b = document.getElementById(id); if (b) b.textContent = txt; };
-  _setBtn('gastos-filter-jd-comun',    p1 + '+Común');
-  _setBtn('gastos-filter-jd',          p1);
-  _setBtn('gastos-filter-pinki-comun', p2 + '+Común');
-  _setBtn('gastos-filter-pinki',       p2);
+  // Actualizar etiquetas de los botones de persona con los nombres reales del config
+  document.querySelectorAll('.persona-filter-btn').forEach(btn => {
+    if (btn.dataset.filter === 'jd_comun')    btn.textContent = p1 + '+Común';
+    if (btn.dataset.filter === 'jd')          btn.textContent = p1;
+    if (btn.dataset.filter === 'pinki_comun') btn.textContent = p2 + '+Común';
+    if (btn.dataset.filter === 'pinki')       btn.textContent = p2;
+  });
 
   // === Aplicar filtro persona — reutiliza applyPersonaFiltro (3B) ===
   const filteredRows = applyPersonaFiltro(rows);
@@ -2292,13 +2308,12 @@ function toggleGastosCategType() {
 // Valores: 'comun' | 'jd_comun' | 'jd' | 'pinki_comun' | 'pinki'
 function setGastosPersonaFiltro(val) {
   _gastosPersonaFiltro = val;
-  ['comun','jd_comun','jd','pinki_comun','pinki'].forEach(v => {
-    const btn = document.getElementById('gastos-filter-' + v.replace('_', '-'));
-    if (btn) btn.classList.toggle('active', v === val);
+  // Sincroniza arriba y abajo
+  document.querySelectorAll('.persona-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === val);
   });
-  // Re-renderizar toda la vista Gastos (cards + composición + torta)
+  // Re-renderizar toda la vista Gastos
   renderGastos();
-  // Si el panel de fijos está abierto, re-renderizarlo con el nuevo filtro
   const fijosPanel = document.getElementById('fijos-detail');
   if (fijosPanel && fijosPanel.style.display !== 'none') {
     renderFijosDetailTable();
@@ -2435,23 +2450,93 @@ function resetGastosDrilldown() {
   document.getElementById('gastos-drilldown-box').style.display = 'none';
 }
 
+let _gastosTableBaseRows = [];
+let _tableSortCol = 'fecha';
+let _tableSortDir = -1; // -1 = desc, 1 = asc
+let _tableFilterCat = '';
+let _tableFilterPago = '';
+
+function sortGastosTable(col) {
+  if (_tableSortCol === col) {
+    _tableSortDir *= -1;
+  } else {
+    _tableSortCol = col;
+    _tableSortDir = (col === 'fecha' || col === 'monto_total') ? -1 : 1;
+  }
+  renderGastosTable(); // re-render sin pisar base rows
+}
+
 function renderGastosTable(rows) {
-  if (!rows.length) {
-    document.getElementById('gastos-table-wrap').innerHTML = '<div class="empty-state">Sin gastos en este período.</div>';
+  if (rows) _gastosTableBaseRows = rows;
+  let data = [..._gastosTableBaseRows];
+
+  // 1. Filtros locales del select
+  if (_tableFilterCat) data = data.filter(r => r.categoria === _tableFilterCat);
+  if (_tableFilterPago) data = data.filter(r => (r.pago||'comun').toLowerCase() === _tableFilterPago.toLowerCase());
+
+  // 2. Ordenamiento
+  data.sort((a, b) => {
+    let valA = a[_tableSortCol] || '';
+    let valB = b[_tableSortCol] || '';
+    
+    if (_tableSortCol === 'monto_total') {
+      valA = parseFloat(valA) || 0;
+      valB = parseFloat(valB) || 0;
+    } else {
+      valA = String(valA).toLowerCase();
+      valB = String(valB).toLowerCase();
+    }
+
+    if (valA < valB) return -1 * _tableSortDir;
+    if (valA > valB) return 1 * _tableSortDir;
+    return 0;
+  });
+
+  const wrap = document.getElementById('gastos-table-wrap');
+  if (!data.length) {
+    wrap.innerHTML = '<div class="empty-state">Sin gastos en este período con los filtros actuales.</div>';
     return;
   }
 
-  const sorted = [...rows].sort((a, b) => b.fecha?.localeCompare(a.fecha));
-  // colspan=10 coincide con la cantidad de columnas de esta tabla (para toggleRowDetail)
-  document.getElementById('gastos-table-wrap').innerHTML = `
+  // Opciones para selects basados en la data completa, no en la filtrada
+  const catOptions = [...new Set(_gastosTableBaseRows.map(r => r.categoria).filter(Boolean))].sort();
+  const pagoOptions = [...new Set(_gastosTableBaseRows.map(r => (r.pago||'comun').toLowerCase()))].sort();
+  
+  const sortIcon = (col) => _tableSortCol === col ? (_tableSortDir === 1 ? ' ↑' : ' ↓') : '';
+  const thStyle = "cursor:pointer; user-select:none; transition:color 0.15s;";
+
+  wrap.innerHTML = `
     <table>
       <thead><tr>
-        <th>Fecha</th><th>Categoría</th><th>Descripción</th>
-        <th>Medio</th><th>Pagó</th><th>Proporción</th><th>Corresponde a</th>
-        <th style="text-align:right">Monto</th><th>Cuota</th><th></th>
+        <th style="${thStyle}" onclick="sortGastosTable('fecha')">Fecha${sortIcon('fecha')}</th>
+        <th>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="${thStyle}" onclick="sortGastosTable('categoria')">Categoría${sortIcon('categoria')}</span>
+            <select onchange="_tableFilterCat=this.value; renderGastosTable()" style="background:transparent;color:var(--muted);border:none;outline:none;font-size:10px;cursor:pointer">
+              <option value="">Todas</option>
+              ${catOptions.map(c => `<option value="${c}" ${_tableFilterCat===c?'selected':''}>${c}</option>`).join('')}
+            </select>
+          </div>
+        </th>
+        <th style="${thStyle}" onclick="sortGastosTable('descripcion')">Descripción${sortIcon('descripcion')}</th>
+        <th style="${thStyle}" onclick="sortGastosTable('medio_pago')">Medio${sortIcon('medio_pago')}</th>
+        <th>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="${thStyle}" onclick="sortGastosTable('pago')">Pagó${sortIcon('pago')}</span>
+            <select onchange="_tableFilterPago=this.value; renderGastosTable()" style="background:transparent;color:var(--muted);border:none;outline:none;font-size:10px;cursor:pointer">
+              <option value="">Todos</option>
+              ${pagoOptions.map(p => `<option value="${p}" ${_tableFilterPago.toLowerCase()===p?'selected':''}>${p}</option>`).join('')}
+            </select>
+          </div>
+        </th>
+        <th>Proporción</th>
+        <th>Corresponde a</th>
+        <th style="text-align:right;${thStyle}" onclick="sortGastosTable('monto_total')">Monto${sortIcon('monto_total')}</th>
+        <th>Cuota</th>
+        <th></th>
       </tr></thead>
       <tbody>
-        ${sorted.map(r => `
+        ${data.map(r => `
           <tr style="cursor:pointer" onclick="toggleRowDetail(this, '${r.id}', 10)">
             <td class="td-muted">${r.fecha || '—'}</td>
             <td>${r.categoria || '—'} <span class="td-muted">${r.subcategoria ? '/ ' + r.subcategoria : ''}</span></td>
