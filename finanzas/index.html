@@ -1979,7 +1979,10 @@ function renderGastos() {
 // siempre la proporción dinámica del mes.
 function getRowPct(row, p1, p2) {
   const tipo = (row.tipo_proporcion || '').toLowerCase().trim();
+  if (tipo === '100% jd') return { pct1: 100, pct2: 0 };
+  if (tipo === '100% pinki') return { pct1: 0, pct2: 100 };
   if (tipo === '50/50') return { pct1: 50, pct2: 50 };
+  
   if (tipo === 'custom') {
     const raw = row.proporcion_jd;
     const pjd = (raw !== undefined && raw !== null && raw !== '') ? parseFloat(raw) : 50;
