@@ -2137,7 +2137,15 @@ function renderDeudaDetailPanel(debtRows, p1, p2) {
       ? p2 + ' debe ' + fmt(net) + ' a ' + p1
       : p1 + ' debe ' + fmt(Math.abs(net)) + ' a ' + p2;
 
-  document.getElementById('deuda-detail-inner').innerHTML = debtRows.length ? `
+  // Header del panel: botón "Saldar todo" — solo si hay activas (Sesión 29)
+  const activasCount = rowsData.filter(({ r }) => !r.saldado).length;
+  const headerHtml = activasCount > 0 ? `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0.5rem 0.75rem;gap:0.75rem;flex-wrap:wrap">
+      <div style="font-size:0.72rem;color:var(--muted)">${activasCount} ítem${activasCount !== 1 ? 's' : ''} activo${activasCount !== 1 ? 's' : ''} · neto ${saldoText}</div>
+      <button class="btn-saldar" onclick="saldarTodoVisible()" style="padding:0.4rem 0.8rem">Saldar todo</button>
+    </div>` : '';
+
+  document.getElementById('deuda-detail-inner').innerHTML = debtRows.length ? headerHtml + `
     <table class="deuda-table">
       <thead><tr>
         <th>Mes</th>
@@ -2935,6 +2943,55 @@ async function deleteEntry(id) {
 }
 
 // ── SALDAR ────────────────────────────────────────────────────────────────────
+
+// === Saldar todo lo activo del período (Sesión 29) ===
+// Qué hace: salda en serie todas las filas de deuda activa que muestra getDebtRowsAll.
+// Por qué serie y no Promise.all: el endpoint usa LockService — paralelo se serializa
+//   igual y agrega ruido de timeouts si hay muchos ítems.
+// Cutoff temporal: getDebtRowsAll ya respeta el período activo (mes histórico → solo
+//   filas hasta fin de mes). En 'all', 'range', etc. salda toda la deuda histórica.
+async function saldarTodoVisible() {
+  const p1 = S.config.nombre_persona1 || 'JD';
+  const p2 = S.config.nombre_persona2 || 'Pinki';
+  const activas = getDebtRowsAll(p1, p2).filter(r => !r.saldado);
+
+  if (!activas.length) { showToast('No hay deuda activa para saldar'); return; }
+
+  // Calcular neto para mostrar en el confirm
+  let net = 0;
+  activas.forEach(r => {
+    const monto = parseFloat(r.monto_total) || 0;
+    const { pct1, pct2 } = getRowPct(r, p1, p2);
+    if (r.pago === p1) net += monto * (pct2 / 100);
+    if (r.pago === p2) net -= monto * (pct1 / 100);
+  });
+  const netoText = Math.abs(net) < 1
+    ? 'sin saldo neto'
+    : net > 0 ? p2 + ' debe ' + fmt(net) + ' a ' + p1
+              : p1 + ' debe ' + fmt(Math.abs(net)) + ' a ' + p2;
+
+  const periodoText = S.period?.type === 'month' ? ' del período activo' : ' (todo el histórico)';
+  if (!confirm(`¿Saldar ${activas.length} ítem${activas.length !== 1 ? 's' : ''}${periodoText}?\n\n${netoText}\n\nEsta acción no se puede deshacer.`)) return;
+
+  showLoading();
+  let okCount = 0, errCount = 0;
+  for (const r of activas) {
+    try {
+      const res = await apiFetch('saldar', { id: r.id });
+      if (!res.ok) throw new Error(res.error);
+      const fechaSaldado = res.saldado || new Date().toISOString().substring(0, 10);
+      S.log = S.log.map(x => x.id === r.id ? { ...x, saldado: fechaSaldado } : x);
+      okCount++;
+    } catch (e) {
+      errCount++;
+    }
+  }
+  hideLoading();
+
+  if (errCount === 0) showToast(`${okCount} ítem${okCount !== 1 ? 's' : ''} saldado${okCount !== 1 ? 's' : ''}`);
+  else showToast(`${okCount} saldados, ${errCount} con error`);
+  renderView(S.view);
+}
 
 async function saldarRow(id) {
   if (!confirm('¿Marcar como saldada la entrada ' + id + '? Dejará de computar en la deuda neta.')) return;
