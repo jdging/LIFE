@@ -1996,19 +1996,31 @@ function getRowPct(row, p1, p2) {
   };
 }
 
-function renderDeuda(rows) {
-  const p1 = S.config.nombre_persona1 || 'JD';
-  const p2 = S.config.nombre_persona2 || 'Pinki';
-
-  // Solo filas donde una persona pagó (pago=JD o Pinki), son candidatas a generar deuda.
-  // Excluir filas donde la contraparte tiene pct=0 → gasto 100% personal, no genera deuda.
-  const debtRows = rows.filter(r => {
+// === DEUDA: helper compartido (Sesión 29) ===
+// Qué hace: filtra TODO el log (S.log) — no respeta el período activo.
+// Por qué: la deuda neta es acumulada y vive hasta que se saldea explícitamente.
+//   Una deuda generada en abril sigue contando en mayo si no fue saldada.
+// Cómo: mismos filtros que antes (tipo=Gasto, pago de una persona, contraparte con pct>0),
+//   pero sobre el log completo en lugar de las rows del período.
+function getDebtRowsAll(p1, p2) {
+  return (S.log || []).filter(r => {
+    if (r.tipo !== 'Gasto') return false;
     if (r.pago !== p1 && r.pago !== p2) return false;
     const { pct1, pct2 } = getRowPct(r, p1, p2);
     if (r.pago === p1 && pct2 === 0) return false;
     if (r.pago === p2 && pct1 === 0) return false;
     return true;
   });
+}
+
+function renderDeuda(rows) {
+  const p1 = S.config.nombre_persona1 || 'JD';
+  const p2 = S.config.nombre_persona2 || 'Pinki';
+
+  // Atemporal: ignorar el `rows` del período y usar el log completo (Sesión 29).
+  // Caveat: para filas viejas con tipo_proporcion='dinamic', getRowPct usa S.proportions
+  //   del mes activo. Aproximación aceptada — guardar la proporción por mes excede el alcance.
+  const debtRows = getDebtRowsAll(p1, p2);
 
   // Para el balance del card, excluimos las saldadas (ya se resolvieron)
   const activeDebtRows = debtRows.filter(r => !r.saldado);
@@ -2058,20 +2070,24 @@ function toggleDeudaDetail() {
   if (!isOpen) {
     const p1 = S.config.nombre_persona1 || 'JD';
     const p2 = S.config.nombre_persona2 || 'Pinki';
-    const rows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })
-      .filter(r => {
-        if (r.pago !== p1 && r.pago !== p2) return false;
-        const { pct1, pct2 } = getRowPct(r, p1, p2);
-        if (r.pago === p1 && pct2 === 0) return false;
-        if (r.pago === p2 && pct1 === 0) return false;
-        return true;
-      });
-    renderDeudaDetailPanel(rows, p1, p2);
+    // Misma fuente que renderDeuda — log completo, atemporal (Sesión 29).
+    renderDeudaDetailPanel(getDebtRowsAll(p1, p2), p1, p2);
   }
 }
 
 function renderDeudaDetailPanel(debtRows, p1, p2) {
-  const sorted = [...debtRows].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+  // === Filtro de visibilidad para saldadas (Sesión 29) ===
+  // Las activas se muestran TODAS (aunque sean viejas — siguen vigentes).
+  // Las saldadas se acotan a las últimas 8 semanas para no inflar el panel con histórico.
+  const SALDADAS_VENTANA_DIAS = 56;
+  const cutoff = new Date(Date.now() - SALDADAS_VENTANA_DIAS * 86400000)
+    .toISOString().substring(0, 10);
+  const visibles = debtRows.filter(r => {
+    if (!r.saldado) return true;
+    return (r.fecha || '') >= cutoff;
+  });
+
+  const sorted = [...visibles].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
 
   // === Calcular deuda solo en filas NO saldadas ===
   // Las saldadas aparecen en el panel pero no suman al balance
@@ -2098,6 +2114,7 @@ function renderDeudaDetailPanel(debtRows, p1, p2) {
   document.getElementById('deuda-detail-inner').innerHTML = debtRows.length ? `
     <table class="deuda-table">
       <thead><tr>
+        <th>Mes</th>
         <th>Fecha</th><th>Descripción</th>
         <th style="text-align:right">Monto</th>
         <th style="text-align:right">% ${p1}</th>
@@ -2113,8 +2130,10 @@ function renderDeudaDetailPanel(debtRows, p1, p2) {
           const accion    = isSaldado
             ? '<span style="font-size:0.65rem;color:var(--muted)">saldado</span>'
             : `<button class="btn-saldar" onclick="saldarRow('${r.id}')">Saldar</button>`;
+          const mes = r.fecha ? String(r.fecha).substring(0, 7) : '—';
           return `
           <tr style="${rowStyle}">
+            <td class="td-muted" style="font-size:0.7rem">${mes}</td>
             <td class="td-muted">${r.fecha || '—'}</td>
             <td>${r.descripcion || r.subcategoria || '—'}
               <br><span class="td-muted" style="font-size:0.65rem">pagó: ${r.pago}</span>
@@ -2130,19 +2149,19 @@ function renderDeudaDetailPanel(debtRows, p1, p2) {
       </tbody>
       <tfoot>
         <tr>
-          <td colspan="5" style="text-align:right;color:var(--muted);font-size:0.7rem">Subtotales deuda activa</td>
+          <td colspan="6" style="text-align:right;color:var(--muted);font-size:0.7rem">Subtotales deuda activa</td>
           <td style="text-align:right;color:var(--accent)">${fmt(debeP1)}</td>
           <td style="text-align:right;color:var(--accent)">${fmt(debeP2)}</td>
           <td></td>
         </tr>
         <tr>
-          <td colspan="8" style="text-align:right;font-size:0.72rem;padding-top:0.5rem">
+          <td colspan="9" style="text-align:right;font-size:0.72rem;padding-top:0.5rem">
             Saldo neto: <strong style="color:var(--danger)">${saldoText}</strong>
           </td>
         </tr>
       </tfoot>
     </table>`
-    : '<div class="empty-state" style="padding:1rem">Sin gastos individuales este mes.</div>';
+    : '<div class="empty-state" style="padding:1rem">Sin deudas pendientes ni saldadas recientes.</div>';
 }
 
 function renderTarjetasAlert() {
