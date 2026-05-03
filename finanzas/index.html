@@ -1770,6 +1770,7 @@ async function init() {
     await Promise.all([
       fetchProportions(S.month),
       fetchFixed(S.month),
+      fetchProportionsHistory(),
     ]);
 
     hideLoading();
@@ -1988,8 +1989,11 @@ function getRowPct(row, p1, p2) {
     const pjd = (raw !== undefined && raw !== null && raw !== '') ? parseFloat(raw) : 50;
     return { pct1: pjd, pct2: 100 - pjd };
   }
-  // "dinamica" o vacío: usa la proporción calculada del mes
-  const prop = S.proportions;
+  // "dinamica" o vacío: usa la proporción del MES DE LA FILA (Sesión 29 — DEUDA-06).
+  // Por qué: deudas de meses anteriores deben mantener la proporción del mes en que ocurrieron.
+  // Fallback en cadena: historial[mes_fila] → S.proportions (mes activo) → 50/50.
+  const mesFila = row.fecha ? String(row.fecha).substring(0, 7) : null;
+  const prop = (mesFila && S.proportionsHistory?.[mesFila]) || S.proportions;
   return {
     pct1: prop?.[p1]?.porcentaje ?? 50,
     pct2: prop?.[p2]?.porcentaje ?? 50,
@@ -2003,8 +2007,20 @@ function getRowPct(row, p1, p2) {
 // Cómo: mismos filtros que antes (tipo=Gasto, pago de una persona, contraparte con pct>0),
 //   pero sobre el log completo en lugar de las rows del período.
 function getDebtRowsAll(p1, p2) {
+  // === Cutoff temporal histórico (Sesión 29 — DEUDA-07) ===
+  // Si el período activo es un mes pasado, recortar la deuda a fecha <= último día del mes.
+  // Para 'all', 'range', 'quarter', 'semester', 'year' o mes corriente: sin cutoff (acumulado completo).
+  // Limitación conocida: filas saldado=true no tienen fecha_saldado, por lo que en vistas
+  //   históricas se muestran como activas si su fecha cae dentro del período. Aceptado hasta
+  //   que se implemente fecha_saldado en el schema.
+  let cutoff = null;
+  if (S.period?.type === 'month' && S.period.refMonth < thisMonth()) {
+    cutoff = S.period.to;
+  }
+
   return (S.log || []).filter(r => {
     if (r.tipo !== 'Gasto') return false;
+    if (cutoff && (r.fecha || '') > cutoff) return false;
     if (r.pago !== p1 && r.pago !== p2) return false;
     const { pct1, pct2 } = getRowPct(r, p1, p2);
     if (r.pago === p1 && pct2 === 0) return false;
@@ -2940,6 +2956,32 @@ async function fetchProportions(month) {
   } catch (e) {
     S.proportions = null;
   }
+}
+
+// === Proporciones históricas (Sesión 29 — DEUDA-06) ===
+// Qué hace: fetchea las proporciones de cada mes presente en S.log en paralelo.
+// Por qué: getRowPct() necesita la proporción del mes en que ocurrió el gasto,
+//   no la del mes activo. Sin esto, una deuda dinámica de abril se recalcula
+//   con la proporción de mayo si mayo es el mes activo.
+// Cómo: extrae meses únicos del log, fetchea todos en paralelo, indexa por YYYY-MM.
+//   Errores individuales no rompen el flow — la entrada queda undefined y getRowPct
+//   cae al fallback (S.proportions del mes activo).
+async function fetchProportionsHistory() {
+  const meses = [...new Set(
+    (S.log || [])
+      .map(r => r.fecha ? String(r.fecha).substring(0, 7) : null)
+      .filter(Boolean)
+  )].sort();
+
+  if (!meses.length) { S.proportionsHistory = {}; return; }
+
+  const results = await Promise.all(
+    meses.map(m => apiFetch('proportions', { month: m }).catch(() => null))
+  );
+
+  const history = {};
+  meses.forEach((m, i) => { if (results[i]) history[m] = results[i]; });
+  S.proportionsHistory = history;
 }
 
 function updateProportionBadge(prop) {
