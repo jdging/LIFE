@@ -1719,7 +1719,7 @@
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbxqUXqFLLEzwpm1BM8TodtQsqDhDuJVKDdUA4klN1a6DaUKqz-tDHuzhfd3NmYra2rhKg/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbz_i7zuEwy4Qbd5gfV4cwW1QlPEWZqt3QpmH2DZRl1P3sjcvnKEixRezDS9yStdZ2N4fg/exec';
 const APPSHEET_URL = 'https://www.appsheet.com/start/01dde697-d530-4d07-89d9-34f4ec40b45e'; // ← Pegá acá la URL pública de tu app AppSheet
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
@@ -2092,16 +2092,26 @@ function toggleDeudaDetail() {
 }
 
 function renderDeudaDetailPanel(debtRows, p1, p2) {
-  // === Filtro de visibilidad para saldadas (Sesión 29) ===
+  // === Filtro de visibilidad para saldadas (Sesión 29 — DEUDA-09) ===
   // Las activas se muestran TODAS (aunque sean viejas — siguen vigentes).
-  // Las saldadas se acotan a las últimas 8 semanas para no inflar el panel con histórico.
-  const SALDADAS_VENTANA_DIAS = 56;
-  const cutoff = new Date(Date.now() - SALDADAS_VENTANA_DIAS * 86400000)
-    .toISOString().substring(0, 10);
-  const visibles = debtRows.filter(r => {
-    if (!r.saldado) return true;
-    return (r.fecha || '') >= cutoff;
-  });
+  // Las saldadas se muestran solo si fueron saldadas en el período activo:
+  //   - Período mensual: mismo mes (mesSaldado === refMonth).
+  //   - Período no mensual ('all', 'range', 'quarter', etc.): últimos 56 días.
+  // Legacy: filas con saldado=true (boolean, sin fecha) se ocultan siempre — no
+  //   sabemos cuándo fueron saldadas, así que no entran en ninguna ventana.
+  const refMonth = S.period?.refMonth || thisMonth();
+  const isMensual = S.period?.type === 'month';
+  const cutoff56 = new Date(Date.now() - 56 * 86400000).toISOString().substring(0, 10);
+
+  function esSaldadaReciente(r) {
+    const val = r.saldado;
+    if (!val || val === true) return false;       // sin saldar, o legacy boolean
+    const valStr = String(val).substring(0, 10);  // YYYY-MM-DD
+    if (isMensual) return valStr.substring(0, 7) === refMonth;
+    return valStr >= cutoff56;
+  }
+
+  const visibles = debtRows.filter(r => r.saldado ? esSaldadaReciente(r) : true);
 
   const sorted = [...visibles].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
 
@@ -2932,7 +2942,9 @@ async function saldarRow(id) {
     const res = await apiFetch('saldar', { id });
     if (!res.ok) throw new Error(res.error);
     // Marcar localmente sin remover del estado — la fila sigue visible en el panel
-    S.log = S.log.map(r => r.id === id ? { ...r, saldado: true } : r);
+    // Espejo del backend: escribimos fecha YYYY-MM-DD (Sesión 29 — DEUDA-08).
+    const today = new Date().toISOString().substring(0, 10);
+    S.log = S.log.map(r => r.id === id ? { ...r, saldado: res.saldado || today } : r);
     renderView(S.view);
   } catch (err) {
     showToast('Error al saldar: ' + err.message);
