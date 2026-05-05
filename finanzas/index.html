@@ -1156,6 +1156,117 @@
     letter-spacing: 0.06em;
     color: var(--muted);
   }
+
+  /* ── PRINT OVERLAY ───────────────────────────────────── */
+  #print-overlay { display: none; }
+
+  @media print {
+    body > * { display: none !important; }
+    #print-overlay {
+      display: block !important;
+      position: static;
+      background: #fff;
+      color: #111;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 11pt;
+      margin: 0;
+      padding: 20mm;
+      width: 100%;
+    }
+    #print-overlay h1 {
+      font-size: 22pt;
+      font-weight: 300;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.2rem;
+      color: #111;
+    }
+    #print-overlay .print-subtitle {
+      font-family: 'DM Mono', monospace;
+      font-size: 8pt;
+      color: #777;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 2rem;
+    }
+    #print-overlay h2 {
+      font-size: 10pt;
+      font-family: 'DM Mono', monospace;
+      font-weight: 400;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #8fb87a;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 0.3rem;
+      margin: 1.5rem 0 0.8rem;
+    }
+    #print-overlay table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9.5pt;
+      page-break-inside: avoid;
+    }
+    #print-overlay th {
+      font-family: 'DM Mono', monospace;
+      font-size: 7pt;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #888;
+      text-align: left;
+      padding: 0.3rem 0.5rem;
+      border-bottom: 1px solid #ddd;
+    }
+    #print-overlay th.num, #print-overlay td.num { text-align: right; }
+    #print-overlay td {
+      padding: 0.3rem 0.5rem;
+      border-bottom: 1px solid #eee;
+      color: #222;
+    }
+    #print-overlay tfoot td {
+      font-weight: 600;
+      border-top: 1px solid #bbb;
+      border-bottom: none;
+      color: #111;
+    }
+    #print-overlay .print-totals {
+      display: flex;
+      gap: 2rem;
+      margin: 1.5rem 0;
+      page-break-inside: avoid;
+    }
+    #print-overlay .print-total-block {
+      flex: 1;
+      border: 1px solid #ddd;
+      padding: 0.8rem 1rem;
+    }
+    #print-overlay .print-total-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 7pt;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 0.3rem;
+    }
+    #print-overlay .print-total-value {
+      font-size: 18pt;
+      font-weight: 300;
+      color: #111;
+    }
+    #print-overlay .print-total-sub {
+      font-family: 'DM Mono', monospace;
+      font-size: 7.5pt;
+      color: #666;
+      margin-top: 0.2rem;
+    }
+    #print-overlay .print-nota {
+      font-family: 'DM Mono', monospace;
+      font-size: 7pt;
+      color: #888;
+      margin: 0.5rem 0 0.8rem;
+      letter-spacing: 0.04em;
+    }
+    #print-overlay .accent { color: #8fb87a; }
+    #print-overlay .danger { color: #c47a7a; }
+  }
 </style>
 </head>
 <body>
@@ -1276,6 +1387,7 @@
             onclick="setGastosPersonaFiltro('pinki')">—</button>
         </div>
         <div class="section-line"></div>
+        <button class="btn-chart-toggle" onclick="printResumenGastos()" title="Imprimir resumen del período" style="white-space:nowrap">⎙ Imprimir</button>
       </div>
 
       <!-- Cards -->
@@ -1943,6 +2055,9 @@ function renderGastos() {
   const cuotasAll      = rows.filter(r => (parseInt(r.cuotas_total) || 1) > 1);
   const cuotasFiltered = applyPersonaFiltro(cuotasAll);
   const cuotasAdjusted = applyPersonaMonto(cuotasFiltered, _gastosPersonaFiltro, p1, p2);
+  // TODO: remover — diagnóstico para verificar que applyPersonaFiltro funciona en cuotas
+  console.log('[CUOTAS DEBUG] cuotasAll:', cuotasAll.map(r => ({ desc: r.descripcion, tipo: r.tipo_proporcion, pjd: r.proporcion_jd, cuota: r.cuota_nro, total: r.cuotas_total })));
+  console.log('[CUOTAS DEBUG] cuotasFiltered:', cuotasFiltered.length, 'de', cuotasAll.length, '| filtro:', _gastosPersonaFiltro);
 
   // Card "Gastos fijos" — muestra datos del endpoint fixed
   const fijosCount = S.fixed?.data?.length || 0;
@@ -1986,7 +2101,7 @@ function getRowPct(row, p1, p2) {
   
   if (tipo === 'custom') {
     const raw = row.proporcion_jd;
-    const pjd = (raw !== undefined && raw !== null && raw !== '') ? parseFloat(raw) : 50;
+    const pjd = (raw !== undefined && raw !== null && raw !== '') ? parseFloat(String(raw).trim()) : 50;
     return { pct1: pjd, pct2: 100 - pjd };
   }
   // "dinamica" o vacío: usa la proporción del MES DE LA FILA (Sesión 29 — DEUDA-06).
@@ -2374,6 +2489,219 @@ function setGastosPersonaFiltro(val) {
   if (fijosPanel && fijosPanel.style.display !== 'none') {
     renderFijosDetailTable();
   }
+}
+
+// === SECCIÓN: Imprimir resumen de Gastos (T1) ===
+// Genera un HTML de resumen estructurado (fijos + deuda + totales + cuotas informativas)
+// y lo inyecta en #print-overlay antes de llamar window.print().
+// El @media print oculta todo excepto #print-overlay, que se muestra en blanco A4.
+function printResumenGastos() {
+  const p1 = S.config?.nombre_persona1 || 'JD';
+  const p2 = S.config?.nombre_persona2 || 'Pinki';
+
+  // Formatear período como "Abril 2026" o "01/04 – 30/04"
+  let periodoLabel = '';
+  if (S.period?.type === 'month' && S.period.refMonth) {
+    const d = new Date(S.period.refMonth + '-15');
+    periodoLabel = d.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+    periodoLabel = periodoLabel.charAt(0).toUpperCase() + periodoLabel.slice(1);
+  } else if (S.period?.from && S.period?.to) {
+    periodoLabel = S.period.from.substring(0, 10) + ' – ' + S.period.to.substring(0, 10);
+  } else {
+    periodoLabel = 'Período activo';
+  }
+
+  // === Sección 1 — Gastos Fijos ===
+  // Respeta _gastosPersonaFiltro: filtra con la misma lógica que computeFixedForPersona
+  const _filtro = _gastosPersonaFiltro || 'comun';
+  const fijosData = (S.fixed?.data || []).filter(item => {
+    const { pct1, pct2 } = getRowPct(item, p1, p2);
+    if (_filtro === 'comun')        return pct1 > 0 && pct2 > 0;
+    if (_filtro === 'jd_comun')    return pct1 > 0;
+    if (_filtro === 'jd')          return pct1 === 100;
+    if (_filtro === 'pinki_comun') return pct2 > 0;
+    if (_filtro === 'pinki')       return pct2 === 100;
+    return true;
+  });
+
+  let fijosTotal1 = 0, fijosTotal2 = 0, fijosTotalG = 0;
+  const fijosRows = fijosData.map(item => {
+    const { pct1, pct2 } = getRowPct(item, p1, p2);
+    const m = item.monto_mensual || 0;
+    const m1 = m * pct1 / 100;
+    const m2 = m * pct2 / 100;
+    fijosTotal1 += m1; fijosTotal2 += m2; fijosTotalG += m;
+    return `<tr>
+      <td>${item.descripcion || '—'}</td>
+      <td>${propLabel(item)}</td>
+      <td class="num">${fmt(m1)}</td>
+      <td class="num">${fmt(m2)}</td>
+      <td class="num">${fmt(m)}</td>
+    </tr>`;
+  }).join('');
+
+  const secFijos = `
+    <h2>Gastos Fijos</h2>
+    ${fijosData.length === 0
+      ? '<p style="color:#888;font-size:9pt">Sin ítems para el filtro activo.</p>'
+      : `<table>
+          <thead><tr>
+            <th>Descripción</th><th>Proporción</th>
+            <th class="num">${p1} $</th><th class="num">${p2} $</th><th class="num">Total</th>
+          </tr></thead>
+          <tbody>${fijosRows}</tbody>
+          <tfoot><tr>
+            <td colspan="2">Total fijos</td>
+            <td class="num">${fmt(fijosTotal1)}</td>
+            <td class="num">${fmt(fijosTotal2)}</td>
+            <td class="num">${fmt(fijosTotalG)}</td>
+          </tr></tfoot>
+        </table>`
+    }`;
+
+  // === Sección 2 — Deuda neta ===
+  // Misma fuente que renderDeudaDetailPanel: getDebtRowsAll, sin filtro persona
+  const debtRows = getDebtRowsAll(p1, p2);
+  const activeDebt = debtRows.filter(r => !r.saldado);
+
+  let debeP1 = 0, debeP2 = 0;
+  const deudaRows = activeDebt.map(r => {
+    const monto = parseFloat(r.monto_total) || 0;
+    const { pct1, pct2 } = getRowPct(r, p1, p2);
+    const m1 = monto * pct1 / 100;
+    const m2 = monto * pct2 / 100;
+    // quién debe a quién: si p1 pagó, p2 le debe su parte (pct2) y viceversa
+    if (r.pago === p1) debeP2 += monto * (pct2 / 100);
+    if (r.pago === p2) debeP1 += monto * (pct1 / 100);
+    return `<tr>
+      <td>${r.descripcion || '—'}</td>
+      <td>${r.fecha || '—'}</td>
+      <td>${r.pago || '—'}</td>
+      <td>${propLabel(r)}</td>
+      <td class="num">${r.pago === p2 ? fmt(m1) : '—'}</td>
+      <td class="num">${r.pago === p1 ? fmt(m2) : '—'}</td>
+      <td class="num">${fmt(monto)}</td>
+    </tr>`;
+  }).join('');
+
+  const netDeuda = debeP2 - debeP1;
+  const deudaBalance = Math.abs(netDeuda) < 1
+    ? 'Sin deuda pendiente'
+    : netDeuda > 0
+      ? p2 + ' debe ' + fmt(netDeuda) + ' a ' + p1
+      : p1 + ' debe ' + fmt(Math.abs(netDeuda)) + ' a ' + p2;
+
+  const secDeuda = `
+    <h2>Deuda Neta</h2>
+    ${activeDebt.length === 0
+      ? '<p style="color:#888;font-size:9pt">Sin deudas activas.</p>'
+      : `<table>
+          <thead><tr>
+            <th>Descripción</th><th>Fecha</th><th>Pagó</th><th>Proporción</th>
+            <th class="num">Debe ${p1}</th><th class="num">Debe ${p2}</th><th class="num">Monto</th>
+          </tr></thead>
+          <tbody>${deudaRows}</tbody>
+          <tfoot><tr>
+            <td colspan="4">${deudaBalance}</td>
+            <td class="num">${fmt(debeP1)}</td>
+            <td class="num">${fmt(debeP2)}</td>
+            <td></td>
+          </tr></tfoot>
+        </table>`
+    }`;
+
+  // === Sección 3 — Totales grandes ===
+  const totalFijos1 = fijosTotal1;
+  const totalFijos2 = fijosTotal2;
+  const totalFijosG = fijosTotalG;
+  const totalDeuda1 = debeP1;
+  const totalDeuda2 = debeP2;
+  const grandTotal1 = totalFijos1 + totalDeuda1;
+  const grandTotal2 = totalFijos2 + totalDeuda2;
+
+  const secTotales = `
+    <h2>Total</h2>
+    <div class="print-totals">
+      <div class="print-total-block">
+        <div class="print-total-label">Gastos fijos</div>
+        <div class="print-total-value">${fmt(totalFijosG)}</div>
+        <div class="print-total-sub">${p1}: ${fmt(totalFijos1)} · ${p2}: ${fmt(totalFijos2)}</div>
+      </div>
+      <div class="print-total-block">
+        <div class="print-total-label">Deuda neta</div>
+        <div class="print-total-value">${fmt(Math.abs(netDeuda))}</div>
+        <div class="print-total-sub">${deudaBalance}</div>
+      </div>
+      <div class="print-total-block">
+        <div class="print-total-label">Total general</div>
+        <div class="print-total-value">${fmt(grandTotal1 + grandTotal2)}</div>
+        <div class="print-total-sub">${p1}: ${fmt(grandTotal1)} · ${p2}: ${fmt(grandTotal2)}</div>
+      </div>
+    </div>`;
+
+  // === Nota al pie — Cuotas activas en común (informativo, no sumado) ===
+  // Solo cuotas donde ambas personas participan (modo "comun")
+  const cuotasComun = filterCuotasComprometidas(S.period.from, S.period.to)
+    .filter(r => {
+      const { pct1, pct2 } = getRowPct(r, p1, p2);
+      return pct1 > 0 && pct2 > 0;
+    });
+
+  let cuotasT1 = 0, cuotasT2 = 0, cuotasTG = 0;
+  const cuotasRowsHtml = cuotasComun.map(r => {
+    const monto = parseFloat(r.monto_total) || 0;
+    const { pct1, pct2 } = getRowPct(r, p1, p2);
+    const m1 = monto * pct1 / 100;
+    const m2 = monto * pct2 / 100;
+    cuotasT1 += m1; cuotasT2 += m2; cuotasTG += monto;
+    return `<tr>
+      <td>${r.descripcion || '—'}</td>
+      <td>${cuotaLabel(r)}</td>
+      <td>${getTarjetaLabel(r.tarjeta)}</td>
+      <td class="num">${fmt(m1)}</td>
+      <td class="num">${fmt(m2)}</td>
+      <td class="num">${fmt(monto)}</td>
+    </tr>`;
+  }).join('');
+
+  const secCuotas = `
+    <h2>Cuotas Activas en Común <span style="font-weight:300;color:#888;font-size:8pt">(informativo · no incluido en el total)</span></h2>
+    <p class="print-nota">Estas cuotas ya fueron registradas al momento de la compra. Se muestran para tener visibilidad de los compromisos del período.</p>
+    ${cuotasComun.length === 0
+      ? '<p style="color:#888;font-size:9pt">Sin cuotas activas en común para este período.</p>'
+      : `<table>
+          <thead><tr>
+            <th>Descripción</th><th>Cuota</th><th>Tarjeta</th>
+            <th class="num">${p1} $</th><th class="num">${p2} $</th><th class="num">Total</th>
+          </tr></thead>
+          <tbody>${cuotasRowsHtml}</tbody>
+          <tfoot><tr>
+            <td colspan="3">Total cuotas</td>
+            <td class="num">${fmt(cuotasT1)}</td>
+            <td class="num">${fmt(cuotasT2)}</td>
+            <td class="num">${fmt(cuotasTG)}</td>
+          </tr></tfoot>
+        </table>`
+    }`;
+
+  // Ensamblar y mostrar
+  const filtroLabel = { comun: 'Comunes', jd_comun: p1 + ' + Común', jd: p1, pinki_comun: p2 + ' + Común', pinki: p2 }[_filtro] || _filtro;
+  const html = `
+    <h1>Resumen · Finanzas</h1>
+    <div class="print-subtitle">${periodoLabel} · ${p1} &amp; ${p2} · filtro: ${filtroLabel}</div>
+    ${secFijos}
+    ${secDeuda}
+    ${secTotales}
+    ${secCuotas}`;
+
+  let overlay = document.getElementById('print-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'print-overlay';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = html;
+  window.print();
 }
 
 function renderGastosBar() {
@@ -3393,7 +3721,7 @@ function toggleCuotasDetail() {
 
 function renderCuotasDetailTable() {
   const inner = document.getElementById('cuotas-detail-inner');
-  const rows  = filterCuotasComprometidas(S.period.from, S.period.to)
+  const rows  = applyPersonaFiltro(filterCuotasComprometidas(S.period.from, S.period.to))
     .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
 
   if (!rows.length) {
@@ -3496,11 +3824,27 @@ function toggleCreditoDetail() {
   const isHidden = panel.style.display === 'none';
   panel.style.display = isHidden ? 'block' : 'none';
   if (isHidden) {
-    const gastosRows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to });
-    const gastosCredito = gastosRows.filter(r => r.medio_pago === 'Crédito' && (parseInt(r.cuota_nro) || 1) === 1);
-    const cuotasCredito = filterCuotasComprometidas(S.period.from, S.period.to).filter(r => r.medio_pago === 'Crédito');
+    // Reusar la misma lógica de renderCreditoCard para consistencia (T3)
+    const _filtro = _gastosPersonaFiltro || 'comun';
+    const _p1 = S.config.nombre_persona1 || 'JD';
+    const _p2 = S.config.nombre_persona2 || 'Pinki';
+
+    const gastosRows    = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to });
+    const gastosCredito = applyPersonaFiltro(gastosRows)
+      .filter(r => r.medio_pago === 'Crédito' && (parseInt(r.cuota_nro) || 1) === 1);
+    const cuotasCredito = applyPersonaFiltro(filterCuotasComprometidas(S.period.from, S.period.to))
+      .filter(r => r.medio_pago === 'Crédito');
     const fijosCredito  = (S.fixed?.data || [])
-      .filter(item => item.medio_pago === 'Crédito')
+      .filter(item => {
+        if (item.medio_pago !== 'Crédito') return false;
+        const { pct1, pct2 } = getRowPct(item, _p1, _p2);
+        if (_filtro === 'comun')        return pct1 > 0 && pct2 > 0;
+        if (_filtro === 'jd_comun')    return pct1 > 0;
+        if (_filtro === 'jd')          return pct1 === 100;
+        if (_filtro === 'pinki_comun') return pct2 > 0;
+        if (_filtro === 'pinki')       return pct2 === 100;
+        return true;
+      })
       .map(item => ({
         ...item,
         monto_total:  item.monto_mensual,
