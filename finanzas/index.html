@@ -1802,7 +1802,7 @@
       <div class="table-box" style="margin-top:2rem">
         <div class="table-header">
           <span class="section-label">Gastos personales</span>
-          <span class="hint-text">Solo gastos exclusivos (tipo_proporcion=custom, 100% o 0%)</span>
+          <span class="hint-text">Gastos propios y deuda pendiente segun la proporcion cargada</span>
         </div>
         <div id="gastos-personales-container">
           <div class="empty-state">Cargando…</div>
@@ -3520,17 +3520,13 @@ function getTarjetaLabel(id) {
   return t.banco ? t.banco + ' – ' + t.nombre : t.nombre;
 }
 
-// correspondeLabel: a quién pertenece el gasto según tipo_proporcion.
-//   custom + proporcion_jd=100 → nombre persona 1
-//   custom + proporcion_jd=0   → nombre persona 2
-//   cualquier otro caso        → "Común"
+// correspondeLabel: a quien pertenece el gasto segun getRowPct().
 function correspondeLabel(row) {
-  const tipo = (row.tipo_proporcion || '').toLowerCase().trim();
-  if (tipo === 'custom') {
-    const pjd = parseFloat(row.proporcion_jd) ?? 50;
-    if (pjd === 100) return S.config.nombre_persona1 || 'JD';
-    if (pjd === 0)   return S.config.nombre_persona2 || 'Pinki';
-  }
+  const p1 = S.config.nombre_persona1 || 'JD';
+  const p2 = S.config.nombre_persona2 || 'Pinki';
+  const { pct1, pct2 } = getRowPct(row, p1, p2);
+  if (pct1 === 100) return p1;
+  if (pct2 === 100) return p2;
   return 'Común';
 }
 
@@ -4432,6 +4428,7 @@ function showFixedHistory(descripcion) {
 // El campo Proporción tiene tres opciones:
 //   - "dinamica": usa la proporción calculada del mes (igual que un gasto común)
 //   - "50/50": divide exactamente a la mitad
+//   - "100% JD" / "100% Pinki": asigna todo a una persona
 //   - "custom": muestra un input numérico para ingresar el % de JD (0–100)
 // Esto alimenta renderDistribucion (F15) para calcular el impacto individual.
 function addSimRow() {
@@ -4451,6 +4448,8 @@ function addSimRow() {
       <select class="sim-select" id="sim-sel-${id}" onchange="updateSimProp(${id}, this.value)">
         <option value="dinamica">dinámica</option>
         <option value="50/50">50/50</option>
+        <option value="100% JD">100% JD</option>
+        <option value="100% Pinki">100% Pinki</option>
         <option value="custom">custom</option>
       </select>
       <input class="sim-input sim-input-pct" type="number" id="sim-pct-${id}"
@@ -4681,15 +4680,10 @@ function renderDistribucion() {
   renderGastosPersonales(p1, p2);
 }
 
-// === SECCIÓN: Gastos personales (F17) ===
-// Qué hace: muestra ingresos, gastos propios, deudas y saldo personal para cada persona.
-// Por qué: permite ver cuánto queda a cada uno considerando solo los gastos que les
-//   corresponden 100% (tipo_proporcion=custom, proporcion_jd=100 para JD o =0 para Pinki).
-// Cómo funciona:
-//   - "Gastos propios": tipo_proporcion=custom + proporcion_jd=100(JD)/0(Pinki) + pagó=esa persona
-//   - "Deuda a cobrar": esta persona pagó algo que 100% corresponde al otro → puede cobrar
-//   - "Deuda propia": el otro pagó algo que 100% le corresponde a esta persona → debe pagar
-//   - Saldo = ingresos propios − gastos propios + deuda_cobrar − deuda_propia
+// === SECCION: Gastos personales (F17) ===
+// Muestra disponible, gastos 100% propios pagados por cada persona y deuda pendiente.
+// Usa getRowPct() como fuente unica para respetar 50/50, 100% JD, 100% Pinki y custom.
+// El saldo parte del disponible economico y lo ajusta por deuda aun no saldada.
 function renderGastosPersonales(p1, p2) {
   const container = document.getElementById('gastos-personales-container');
   if (!container) return;
@@ -4703,41 +4697,40 @@ function renderGastosPersonales(p1, p2) {
   const ingProp1 = S.disponible1 ?? sum(allIngresos.filter(r => r.pago === p1), 'monto_total');
   const ingProp2 = S.disponible2 ?? sum(allIngresos.filter(r => r.pago === p2), 'monto_total');
 
-  // Gastos propios: gasto pagado por esta persona y que 100% le corresponde a ella
-  const prop1 = sum(allGastos.filter(r =>
-    (r.tipo_proporcion || '').toLowerCase() === 'custom' &&
-    parseFloat(r.proporcion_jd) === 100 && r.pago === p1
-  ), 'monto_total');
-  const prop2 = sum(allGastos.filter(r =>
-    (r.tipo_proporcion || '').toLowerCase() === 'custom' &&
-    parseFloat(r.proporcion_jd) === 0 && r.pago === p2
-  ), 'monto_total');
+  let prop1 = 0, prop2 = 0;
+  let deudaCobrar1 = 0, deudaCobrar2 = 0;
+  let deudaPropia1 = 0, deudaPropia2 = 0;
 
-  // Deuda a cobrar: esta persona pagó algo que 100% corresponde al otro
-  // JD pagó pero era 100% Pinki → JD puede cobrar a Pinki
-  const deudaCobrar1 = sum(allGastos.filter(r =>
-    (r.tipo_proporcion || '').toLowerCase() === 'custom' &&
-    parseFloat(r.proporcion_jd) === 0 && r.pago === p1
-  ), 'monto_total');
-  // Pinki pagó pero era 100% JD → Pinki puede cobrar a JD
-  const deudaCobrar2 = sum(allGastos.filter(r =>
-    (r.tipo_proporcion || '').toLowerCase() === 'custom' &&
-    parseFloat(r.proporcion_jd) === 100 && r.pago === p2
-  ), 'monto_total');
+  allGastos.forEach(r => {
+    const monto = parseFloat(r.monto_total) || 0;
+    if (!monto) return;
 
-  // Deuda propia: el otro pagó algo que 100% le corresponde a esta persona
-  // Pinki pagó algo que era 100% de JD → JD le debe a Pinki
-  const deudaPropia1 = deudaCobrar2;  // simétrico: lo que Pinki puede cobrar = lo que JD debe
-  // JD pagó algo que era 100% de Pinki → Pinki le debe a JD
-  const deudaPropia2 = deudaCobrar1;  // simétrico
+    const { pct1, pct2 } = getRowPct(r, p1, p2);
+    const parte1 = monto * (pct1 / 100);
+    const parte2 = monto * (pct2 / 100);
 
-  const saldo1 = ingProp1 - prop1 + deudaCobrar1 - deudaPropia1;
-  const saldo2 = ingProp2 - prop2 + deudaCobrar2 - deudaPropia2;
+    // Gasto 100% propio pagado por la misma persona.
+    if (r.pago === p1 && pct1 === 100) prop1 += monto;
+    if (r.pago === p2 && pct2 === 100) prop2 += monto;
+
+    // Deuda pendiente: quien pago puede cobrar la parte que corresponde al otro.
+    if (r.pago === p1 && parte2 > 0) {
+      deudaCobrar1 += parte2;
+      deudaPropia2 += parte2;
+    }
+    if (r.pago === p2 && parte1 > 0) {
+      deudaCobrar2 += parte1;
+      deudaPropia1 += parte1;
+    }
+  });
+
+  const saldo1 = ingProp1 - deudaCobrar1 + deudaPropia1;
+  const saldo2 = ingProp2 - deudaCobrar2 + deudaPropia2;
 
   const noData = ingProp1 === 0 && prop1 === 0 && deudaCobrar1 === 0 &&
                  ingProp2 === 0 && prop2 === 0 && deudaCobrar2 === 0;
   if (noData) {
-    container.innerHTML = '<div class="empty-state">Sin gastos personales identificados en este período.<br>Requiere gastos con tipo_proporcion = custom y proporcion_jd = 100 o 0.</div>';
+    container.innerHTML = '<div class="empty-state">Sin gastos personales identificados en este periodo.</div>';
     return;
   }
 
@@ -4751,19 +4744,19 @@ function renderGastosPersonales(p1, p2) {
         <span class="gp-row-val">${fmtR(ingP)}</span>
       </div>
       <div class="gp-row">
-        <span class="gp-row-label">− Gastos propios</span>
+        <span class="gp-row-label">Gastos propios pagados</span>
         <span class="gp-row-val">${fmtR(prop)}</span>
       </div>
       <div class="gp-row">
-        <span class="gp-row-label">+ Deuda a cobrar</span>
+        <span class="gp-row-label">Deuda a cobrar</span>
         <span class="gp-row-val">${fmtR(cobrar)}</span>
       </div>
       <div class="gp-row">
-        <span class="gp-row-label">− Deuda propia</span>
+        <span class="gp-row-label">Deuda propia</span>
         <span class="gp-row-val">${fmtR(propia)}</span>
       </div>
       <div class="gp-saldo">
-        <span class="gp-saldo-label">= Saldo personal</span>
+        <span class="gp-saldo-label">= Caja sin saldar</span>
         <span class="${saldo >= 0 ? 'gp-saldo-pos' : 'gp-saldo-neg'}">${fmt(Math.abs(saldo))}${saldo < 0 ? ' ⚠' : ''}</span>
       </div>
     </div>`;
