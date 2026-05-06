@@ -1906,8 +1906,8 @@
       <!-- Gastos personales JD | Pinki (F17) -->
       <div class="table-box" style="margin-top:2rem">
         <div class="table-header">
-          <span class="section-label">Gastos personales</span>
-          <span class="hint-text">Gastos propios y deuda pendiente segun la proporcion cargada</span>
+          <span class="section-label">Caja y deuda personal</span>
+          <span class="hint-text">Disponible economico, pagos reales y deuda pendiente entre ambos</span>
         </div>
         <div id="gastos-personales-container">
           <div class="empty-state">Cargando…</div>
@@ -4807,30 +4807,34 @@ function buildDistributionDetail(section, personKey, p1, p2) {
 function buildPersonalDetail(section, personKey, p1, p2) {
   const personName = personKey === 'p1' ? p1 : p2;
   const otherName = personKey === 'p1' ? p2 : p1;
-  const allGastos = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to }).filter(r => !r.saldado);
+  const periodGastos = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to });
+  const debtGastos = periodGastos.filter(r => !r.saldado);
 
   let rows = [];
   if (section === 'disponible') {
     rows = buildDistributionDetail('disponible', personKey, p1, p2).rows;
-  } else if (section === 'propios') {
-    rows = allGastos.filter(r => {
-      const { pct1, pct2 } = getRowPct(r, p1, p2);
-      return r.pago === personName && (personKey === 'p1' ? pct1 === 100 : pct2 === 100);
-    }).map(r => budgetLogDetailRow(r, p1, p2, 'Propio', 1, parseFloat(r.monto_total) || 0));
+  } else if (section === 'pagado') {
+    rows = periodGastos.filter(r => r.pago === personName)
+      .map(r => budgetLogDetailRow(r, p1, p2, 'Pagado por mi', 1, parseFloat(r.monto_total) || 0))
+      .filter(r => r.overrideAmount > 0);
   } else if (section === 'cobrar') {
-    rows = allGastos.filter(r => r.pago === personName).map(r => {
+    rows = debtGastos.filter(r => r.pago === personName).map(r => {
       const { pct1, pct2 } = getRowPct(r, p1, p2);
       const monto = parseFloat(r.monto_total) || 0;
       const cobrar = personKey === 'p1' ? monto * pct2 / 100 : monto * pct1 / 100;
       return budgetLogDetailRow(r, p1, p2, 'Deuda a cobrar', 1, cobrar);
     }).filter(r => r.overrideAmount > 0);
   } else if (section === 'propia') {
-    rows = allGastos.filter(r => r.pago === otherName).map(r => {
+    rows = debtGastos.filter(r => r.pago === otherName).map(r => {
       const { pct1, pct2 } = getRowPct(r, p1, p2);
       const monto = parseFloat(r.monto_total) || 0;
       const propia = personKey === 'p1' ? monto * pct1 / 100 : monto * pct2 / 100;
       return budgetLogDetailRow(r, p1, p2, 'Deuda propia', 1, propia);
     }).filter(r => r.overrideAmount > 0);
+  } else if (section === 'neto') {
+    const cobrar = buildPersonalDetail('cobrar', personKey, p1, p2).rows;
+    const propia = buildPersonalDetail('propia', personKey, p1, p2).rows.map(r => ({ ...r, sign: -1 }));
+    rows = [...cobrar, ...propia];
   } else if (section === 'caja') {
     const disponible = buildDistributionDetail('disponible', personKey, p1, p2).rows;
     const cobrar = buildPersonalDetail('cobrar', personKey, p1, p2).rows.map(r => ({ ...r, sign: -1 }));
@@ -4839,15 +4843,16 @@ function buildPersonalDetail(section, personKey, p1, p2) {
   }
 
   const titles = {
-    disponible: 'Disponible del mes',
-    propios: 'Gastos propios pagados',
+    disponible: 'Disponible economico',
+    pagado: 'Pagado por mi',
     cobrar: 'Deuda a cobrar',
     propia: 'Deuda propia',
+    neto: 'Neto deuda',
     caja: 'Caja sin saldar',
   };
   return {
     title: `${titles[section] || 'Detalle'} · ${personName}`,
-    subtitle: 'Gastos personales',
+    subtitle: 'Caja y deuda personal',
     rows: rows.filter(r => Math.abs(impactForPerson(r, personKey)) > 0.0001),
   };
 }
@@ -5032,16 +5037,16 @@ function renderDistribucion() {
   renderGastosPersonales(p1, p2);
 }
 
-// === SECCION: Gastos personales (F17) ===
-// Muestra disponible, gastos 100% propios pagados por cada persona y deuda pendiente.
-// Usa getRowPct() como fuente unica para respetar 50/50, 100% JD, 100% Pinki y custom.
-// El saldo parte del disponible economico y lo ajusta por deuda aun no saldada.
+// === SECCION: Caja y deuda personal (F17) ===
+// Complementa la lectura economica de "Distribucion individual" con flujo de caja.
+// Parte del disponible economico y muestra cuanto pago realmente cada persona,
+// cuanto tiene para cobrar, cuanto debe, y como eso afecta la caja antes de saldar.
 function renderGastosPersonales(p1, p2) {
   const container = document.getElementById('gastos-personales-container');
   if (!container) return;
 
-  // Excluir saldado=true: deudas ya saldadas no cuentan como pendientes
-  const allGastos   = filterLog({ tipo: 'Gasto',   from: S.period.from, to: S.period.to }).filter(r => !r.saldado);
+  const periodGastos = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to });
+  const debtGastos   = periodGastos.filter(r => !r.saldado);
   const allIngresos = filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to });
 
   // Disponible del mes: calculado en renderDistribucion() y expuesto en S.disponible1/2.
@@ -5049,21 +5054,19 @@ function renderGastosPersonales(p1, p2) {
   const ingProp1 = S.disponible1 ?? sum(allIngresos.filter(r => r.pago === p1), 'monto_total');
   const ingProp2 = S.disponible2 ?? sum(allIngresos.filter(r => r.pago === p2), 'monto_total');
 
-  let prop1 = 0, prop2 = 0;
+  const pagado1 = sum(periodGastos.filter(r => r.pago === p1), 'monto_total');
+  const pagado2 = sum(periodGastos.filter(r => r.pago === p2), 'monto_total');
+
   let deudaCobrar1 = 0, deudaCobrar2 = 0;
   let deudaPropia1 = 0, deudaPropia2 = 0;
 
-  allGastos.forEach(r => {
+  debtGastos.forEach(r => {
     const monto = parseFloat(r.monto_total) || 0;
     if (!monto) return;
 
     const { pct1, pct2 } = getRowPct(r, p1, p2);
     const parte1 = monto * (pct1 / 100);
     const parte2 = monto * (pct2 / 100);
-
-    // Gasto 100% propio pagado por la misma persona.
-    if (r.pago === p1 && pct1 === 100) prop1 += monto;
-    if (r.pago === p2 && pct2 === 100) prop2 += monto;
 
     // Deuda pendiente: quien pago puede cobrar la parte que corresponde al otro.
     if (r.pago === p1 && parte2 > 0) {
@@ -5076,13 +5079,15 @@ function renderGastosPersonales(p1, p2) {
     }
   });
 
+  const neto1 = deudaCobrar1 - deudaPropia1;
+  const neto2 = deudaCobrar2 - deudaPropia2;
   const saldo1 = ingProp1 - deudaCobrar1 + deudaPropia1;
   const saldo2 = ingProp2 - deudaCobrar2 + deudaPropia2;
 
-  const noData = ingProp1 === 0 && prop1 === 0 && deudaCobrar1 === 0 &&
-                 ingProp2 === 0 && prop2 === 0 && deudaCobrar2 === 0;
+  const noData = ingProp1 === 0 && pagado1 === 0 && deudaCobrar1 === 0 &&
+                 ingProp2 === 0 && pagado2 === 0 && deudaCobrar2 === 0;
   if (noData) {
-    container.innerHTML = '<div class="empty-state">Sin gastos personales identificados en este periodo.</div>';
+    container.innerHTML = '<div class="empty-state">Sin movimientos personales en este periodo.</div>';
     return;
   }
 
@@ -5091,16 +5096,18 @@ function renderGastosPersonales(p1, p2) {
   const rowAttrs = (section, personKey) =>
     `class="gp-row gp-row-detail" role="button" tabindex="0" onclick="showBudgetDetail('personal','${section}','${personKey}')" onkeydown="budgetDetailKeydown(event,'personal','${section}','${personKey}')"`;
 
-  const colHtml = (name, personKey, ingP, prop, cobrar, propia, saldo) => `
+  const netoClass = v => v >= 0 ? 'gp-saldo-pos' : 'gp-saldo-neg';
+
+  const colHtml = (name, personKey, ingP, pagado, cobrar, propia, neto, saldo) => `
     <div class="gp-col">
       <div class="gp-col-header">${name}</div>
       <div ${rowAttrs('disponible', personKey)}>
-        <span class="gp-row-label">Disponible del mes</span>
+        <span class="gp-row-label">Disponible economico</span>
         <span class="gp-row-val">${fmtR(ingP)}</span>
       </div>
-      <div ${rowAttrs('propios', personKey)}>
-        <span class="gp-row-label">Gastos propios pagados</span>
-        <span class="gp-row-val">${fmtR(prop)}</span>
+      <div ${rowAttrs('pagado', personKey)}>
+        <span class="gp-row-label">Pagado por mi</span>
+        <span class="gp-row-val">${fmtR(pagado)}</span>
       </div>
       <div ${rowAttrs('cobrar', personKey)}>
         <span class="gp-row-label">Deuda a cobrar</span>
@@ -5110,6 +5117,10 @@ function renderGastosPersonales(p1, p2) {
         <span class="gp-row-label">Deuda propia</span>
         <span class="gp-row-val">${fmtR(propia)}</span>
       </div>
+      <div ${rowAttrs('neto', personKey)}>
+        <span class="gp-row-label">Neto deuda</span>
+        <span class="gp-row-val ${netoClass(neto)}">${fmtR(Math.abs(neto))}${neto < 0 ? ' ⚠' : ''}</span>
+      </div>
       <div class="gp-saldo gp-row-detail" role="button" tabindex="0" onclick="showBudgetDetail('personal','caja','${personKey}')" onkeydown="budgetDetailKeydown(event,'personal','caja','${personKey}')">
         <span class="gp-saldo-label">= Caja sin saldar</span>
         <span class="${saldo >= 0 ? 'gp-saldo-pos' : 'gp-saldo-neg'}">${fmt(Math.abs(saldo))}${saldo < 0 ? ' ⚠' : ''}</span>
@@ -5118,8 +5129,8 @@ function renderGastosPersonales(p1, p2) {
 
   container.innerHTML = `
     <div class="gastos-personales-grid">
-      ${colHtml(p1, 'p1', ingProp1, prop1, deudaCobrar1, deudaPropia1, saldo1)}
-      ${colHtml(p2, 'p2', ingProp2, prop2, deudaCobrar2, deudaPropia2, saldo2)}
+      ${colHtml(p1, 'p1', ingProp1, pagado1, deudaCobrar1, deudaPropia1, neto1, saldo1)}
+      ${colHtml(p2, 'p2', ingProp2, pagado2, deudaCobrar2, deudaPropia2, neto2, saldo2)}
     </div>`;
 }
 
