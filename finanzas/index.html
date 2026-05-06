@@ -620,6 +620,24 @@
   }
   .gp-row-label { color: var(--muted); }
   .gp-row-val { font-variant-numeric: tabular-nums; }
+  .gp-row-detail {
+    cursor: pointer;
+    margin: 0 -0.35rem;
+    padding: 0.34rem 0.35rem;
+    border-radius: 6px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .gp-row-detail:hover,
+  .gp-row-detail:focus-visible {
+    background: rgba(143,184,122,0.08);
+    outline: none;
+  }
+  .gp-row-detail:hover .gp-row-label,
+  .gp-row-detail:focus-visible .gp-row-label,
+  .gp-row-detail:hover .gp-saldo-label,
+  .gp-row-detail:focus-visible .gp-saldo-label {
+    color: var(--text);
+  }
   .gp-saldo {
     display: flex;
     justify-content: space-between;
@@ -633,6 +651,93 @@
   .gp-saldo-label { color: var(--text); }
   .gp-saldo-pos { color: var(--accent); font-variant-numeric: tabular-nums; }
   .gp-saldo-neg { color: var(--danger); font-variant-numeric: tabular-nums; }
+
+  .detail-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,10,8,0.68);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    z-index: 260;
+  }
+  .detail-modal-backdrop.hidden { display: none; }
+  .detail-modal {
+    width: min(920px, 100%);
+    max-height: min(760px, calc(100vh - 2.5rem));
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+    display: flex;
+    flex-direction: column;
+  }
+  .detail-modal-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-modal-title {
+    font-size: 0.78rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+  .detail-modal-sub {
+    margin-top: 0.28rem;
+    color: var(--muted);
+    font-size: 0.68rem;
+  }
+  .detail-modal-close {
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    width: 2rem;
+    height: 2rem;
+    cursor: pointer;
+    font-size: 1rem;
+  }
+  .detail-modal-close:hover { color: var(--text); border-color: var(--muted); }
+  .detail-modal-body {
+    overflow: auto;
+    padding: 0.8rem 1.1rem 1rem;
+  }
+  .detail-modal table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.72rem;
+  }
+  .detail-modal th {
+    color: var(--muted);
+    font-weight: 400;
+    padding: 0.5rem 0.45rem;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    white-space: nowrap;
+  }
+  .detail-modal td {
+    padding: 0.55rem 0.45rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .detail-modal .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .detail-modal .detail-desc { color: var(--text); }
+  .detail-modal .detail-meta { color: var(--muted); font-size: 0.65rem; margin-top: 0.15rem; }
+  .detail-modal-total {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding-top: 0.75rem;
+    color: var(--muted);
+    font-size: 0.72rem;
+  }
+  .detail-modal-total strong { color: var(--accent); font-weight: 500; }
 
   /* ── EMPTY STATE ─────────────────────────────────────── */
   .empty-state {
@@ -1823,6 +1928,19 @@
     <button class="drawer-close" onclick="toggleDrawer()" title="Cerrar">&times;</button>
   </div>
   <div class="drawer-body" id="drawer-body"></div>
+</div>
+
+<div class="detail-modal-backdrop hidden" id="budget-detail-modal" onclick="closeBudgetDetailModal()">
+  <div class="detail-modal" role="dialog" aria-modal="true" aria-labelledby="budget-detail-title" onclick="event.stopPropagation()">
+    <div class="detail-modal-header">
+      <div>
+        <div class="detail-modal-title" id="budget-detail-title">Detalle</div>
+        <div class="detail-modal-sub" id="budget-detail-sub"></div>
+      </div>
+      <button class="detail-modal-close" onclick="closeBudgetDetailModal()" title="Cerrar">&times;</button>
+    </div>
+    <div class="detail-modal-body" id="budget-detail-body"></div>
+  </div>
 </div>
 
 <!-- FAB: abrir AppSheet -->
@@ -3530,6 +3648,21 @@ function correspondeLabel(row) {
   return 'Común';
 }
 
+function escHtml(value) {
+  return String(value ?? '—')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function budgetDetailKeydown(event, scope, section, personKey) {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  event.preventDefault();
+  showBudgetDetail(scope, section, personKey);
+}
+
 // toggleRowDetail: inserta/quita una fila inline debajo de la fila clickeada.
 //   Muestra el monto en pesos que le corresponde a cada persona según getRowPct().
 //   El parámetro `colspan` se pasa desde el template para ajustarse a la tabla.
@@ -4556,6 +4689,222 @@ function updateSimTotals() {
 //   - Simulados: iterar S.simRows × getRowPct(row) por fila (usa tipo_proporcion del sim)
 //   - Propios: gastos donde pagó=persona (no "Común") — fila condicional
 //   - Disponible: salario − todos los egresos
+function getFixedBudgetDetailRows(p1, p2) {
+  const fixedData  = S.fixed?.data || [];
+  const fixHistory = S.fixed?.history || {};
+  const fixMonths  = getMonthsInPeriod(S.period.from, S.period.to);
+
+  return fixedData.map(item => {
+    let itemTotal = 0;
+    if (fixMonths.length <= 1 || !fixHistory[item.descripcion]) {
+      itemTotal = (item.monto_mensual || 0) * fixMonths.length;
+    } else {
+      const sorted = [...fixHistory[item.descripcion]]
+        .sort((a, b) => a.vigente_desde.localeCompare(b.vigente_desde));
+      for (const month of fixMonths) {
+        let monto = 0;
+        for (const h of sorted) {
+          if (h.vigente_desde <= month) monto = h.monto;
+          else break;
+        }
+        itemTotal += monto;
+      }
+    }
+    const { pct1, pct2 } = getRowPct(item, p1, p2);
+    return {
+      fecha: item.vigente_desde || '',
+      categoria: item.categoria || 'Fijo',
+      descripcion: item.descripcion || item.concepto || 'Gasto fijo',
+      pago: item.pago || '—',
+      pct1,
+      pct2,
+      montoTotal: itemTotal,
+      source: 'Fijo',
+    };
+  });
+}
+
+function budgetLogDetailRow(r, p1, p2, source, sign = 1, overrideAmount = null) {
+  const montoTotal = parseFloat(r.monto_total ?? r.monto ?? 0) || 0;
+  const { pct1, pct2 } = getRowPct(r, p1, p2);
+  return {
+    fecha: r.fecha || '',
+    categoria: r.categoria || r.subcategoria || source,
+    descripcion: r.descripcion || r.concepto || source,
+    pago: r.pago || '—',
+    pct1,
+    pct2,
+    montoTotal,
+    source,
+    sign,
+    overrideAmount,
+  };
+}
+
+function budgetSimDetailRow(r, p1, p2, sign = 1) {
+  const montoTotal = parseFloat(r.monto) || 0;
+  const { pct1, pct2 } = getRowPct(r, p1, p2);
+  return {
+    fecha: '',
+    categoria: 'Simulado',
+    descripcion: r.concepto || 'Gasto simulado',
+    pago: '—',
+    pct1,
+    pct2,
+    montoTotal,
+    source: 'Simulado',
+    sign,
+  };
+}
+
+function impactForPerson(row, personKey) {
+  const pct = personKey === 'p1' ? row.pct1 : row.pct2;
+  const amount = row.overrideAmount != null ? row.overrideAmount : row.montoTotal * pct / 100;
+  return amount * (row.sign ?? 1);
+}
+
+function buildDistributionDetail(section, personKey, p1, p2) {
+  const personName = personKey === 'p1' ? p1 : p2;
+  const salRows = filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to })
+    .filter(r => (r.subcategoria || '').toLowerCase() === 'salario')
+    .filter(r => r.pago === personName)
+    .map(r => ({
+      ...budgetLogDetailRow(r, p1, p2, 'Salario', 1, parseFloat(r.monto_total) || 0),
+      pct1: personKey === 'p1' ? 100 : 0,
+      pct2: personKey === 'p2' ? 100 : 0,
+    }));
+  const fijoRows = getFixedBudgetDetailRows(p1, p2).map(r => ({ ...r, sign: -1, source: 'Fijo' }));
+  const varRows = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to })
+    .filter(r => !r.es_fijo && (parseInt(r.cuota_nro) || 1) === 1)
+    .map(r => budgetLogDetailRow(r, p1, p2, 'Variable', -1));
+  const cuotaRows = filterCuotasComprometidas(S.period.from, S.period.to)
+    .map(r => budgetLogDetailRow(r, p1, p2, 'Cuota', -1));
+  const simRows = S.simRows.map(r => budgetSimDetailRow(r, p1, p2, -1));
+
+  const bySection = {
+    salario: salRows,
+    fijos: fijoRows,
+    variables: varRows,
+    cuotas: cuotaRows,
+    simulados: simRows,
+    disponible: [...salRows, ...fijoRows, ...varRows, ...cuotaRows, ...simRows],
+  };
+  const titles = {
+    salario: 'Salario',
+    fijos: 'Fijos',
+    variables: 'Variables',
+    cuotas: 'Cuotas',
+    simulados: 'Simulados',
+    disponible: 'Disponible',
+  };
+  return {
+    title: `${titles[section] || 'Detalle'} · ${personName}`,
+    subtitle: 'Distribucion individual',
+    rows: (bySection[section] || []).filter(r => Math.abs(impactForPerson(r, personKey)) > 0.0001),
+  };
+}
+
+function buildPersonalDetail(section, personKey, p1, p2) {
+  const personName = personKey === 'p1' ? p1 : p2;
+  const otherName = personKey === 'p1' ? p2 : p1;
+  const allGastos = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to }).filter(r => !r.saldado);
+
+  let rows = [];
+  if (section === 'disponible') {
+    rows = buildDistributionDetail('disponible', personKey, p1, p2).rows;
+  } else if (section === 'propios') {
+    rows = allGastos.filter(r => {
+      const { pct1, pct2 } = getRowPct(r, p1, p2);
+      return r.pago === personName && (personKey === 'p1' ? pct1 === 100 : pct2 === 100);
+    }).map(r => budgetLogDetailRow(r, p1, p2, 'Propio', 1, parseFloat(r.monto_total) || 0));
+  } else if (section === 'cobrar') {
+    rows = allGastos.filter(r => r.pago === personName).map(r => {
+      const { pct1, pct2 } = getRowPct(r, p1, p2);
+      const monto = parseFloat(r.monto_total) || 0;
+      const cobrar = personKey === 'p1' ? monto * pct2 / 100 : monto * pct1 / 100;
+      return budgetLogDetailRow(r, p1, p2, 'Deuda a cobrar', 1, cobrar);
+    }).filter(r => r.overrideAmount > 0);
+  } else if (section === 'propia') {
+    rows = allGastos.filter(r => r.pago === otherName).map(r => {
+      const { pct1, pct2 } = getRowPct(r, p1, p2);
+      const monto = parseFloat(r.monto_total) || 0;
+      const propia = personKey === 'p1' ? monto * pct1 / 100 : monto * pct2 / 100;
+      return budgetLogDetailRow(r, p1, p2, 'Deuda propia', 1, propia);
+    }).filter(r => r.overrideAmount > 0);
+  } else if (section === 'caja') {
+    const disponible = buildDistributionDetail('disponible', personKey, p1, p2).rows;
+    const cobrar = buildPersonalDetail('cobrar', personKey, p1, p2).rows.map(r => ({ ...r, sign: -1 }));
+    const propia = buildPersonalDetail('propia', personKey, p1, p2).rows.map(r => ({ ...r, sign: 1 }));
+    rows = [...disponible, ...cobrar, ...propia];
+  }
+
+  const titles = {
+    disponible: 'Disponible del mes',
+    propios: 'Gastos propios pagados',
+    cobrar: 'Deuda a cobrar',
+    propia: 'Deuda propia',
+    caja: 'Caja sin saldar',
+  };
+  return {
+    title: `${titles[section] || 'Detalle'} · ${personName}`,
+    subtitle: 'Gastos personales',
+    rows: rows.filter(r => Math.abs(impactForPerson(r, personKey)) > 0.0001),
+  };
+}
+
+function showBudgetDetail(scope, section, personKey) {
+  const p1 = S.config.nombre_persona1 || 'JD';
+  const p2 = S.config.nombre_persona2 || 'Pinki';
+  const detail = scope === 'personal'
+    ? buildPersonalDetail(section, personKey, p1, p2)
+    : buildDistributionDetail(section, personKey, p1, p2);
+  const rows = detail.rows;
+  const total = rows.reduce((acc, r) => acc + impactForPerson(r, personKey), 0);
+
+  setText('budget-detail-title', detail.title);
+  setText('budget-detail-sub', `${detail.subtitle} · ${rows.length} item${rows.length !== 1 ? 's' : ''}`);
+  const body = document.getElementById('budget-detail-body');
+  if (!rows.length) {
+    body.innerHTML = '<div class="empty-state" style="padding:2rem 1rem">Sin movimientos para este renglon.</div>';
+  } else {
+    body.innerHTML = `
+      <table>
+        <thead><tr>
+          <th>Fecha</th><th>Detalle</th><th>Pago</th>
+          <th class="num">% ${escHtml(p1)}</th><th class="num">% ${escHtml(p2)}</th>
+          <th class="num">Monto</th><th class="num">Impacto</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(r => {
+            const impact = impactForPerson(r, personKey);
+            return `<tr>
+              <td class="td-muted">${escHtml(r.fecha || '—')}</td>
+              <td>
+                <div class="detail-desc">${escHtml(r.descripcion)}</div>
+                <div class="detail-meta">${escHtml(r.source)} · ${escHtml(r.categoria)} · ${r.pct1}% / ${r.pct2}%</div>
+              </td>
+              <td>${escHtml(r.pago)}</td>
+              <td class="num">${r.pct1}%</td>
+              <td class="num">${r.pct2}%</td>
+              <td class="num">${fmt(r.montoTotal)}</td>
+              <td class="num ${impact < 0 ? 'danger' : 'accent'}">${impact < 0 ? '-' : ''}${fmt(Math.abs(impact))}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      <div class="detail-modal-total"><span>Total impacto</span><strong>${total < 0 ? '-' : ''}${fmt(Math.abs(total))}</strong></div>`;
+  }
+  document.getElementById('budget-detail-modal').classList.remove('hidden');
+}
+
+function closeBudgetDetailModal() {
+  document.getElementById('budget-detail-modal')?.classList.add('hidden');
+}
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') closeBudgetDetailModal();
+});
+
 function renderDistribucion() {
   const container = document.getElementById('dist-container');
   if (!container) return;
@@ -4641,30 +4990,33 @@ function renderDistribucion() {
 
   const fmtC = v => v === 0 ? '—' : fmt(v);
 
-  const colHtml = (name, sal, fijos, vars, cuotas, sim, disp) => `
+  const rowAttrs = (section, personKey) =>
+    `class="gp-row gp-row-detail" role="button" tabindex="0" onclick="showBudgetDetail('dist','${section}','${personKey}')" onkeydown="budgetDetailKeydown(event,'dist','${section}','${personKey}')"`;
+
+  const colHtml = (name, personKey, sal, fijos, vars, cuotas, sim, disp) => `
     <div class="gp-col">
       <div class="gp-col-header">${name}</div>
-      <div class="gp-row">
+      <div ${rowAttrs('salario', personKey)}>
         <span class="gp-row-label" style="color: var(--text);">Salario</span>
         <span class="gp-row-val">${fmtC(sal)}</span>
       </div>
-      <div class="gp-row">
+      <div ${rowAttrs('fijos', personKey)}>
         <span class="gp-row-label">− Fijos</span>
         <span class="gp-row-val" style="color: var(--muted);">${fmtC(fijos)}</span>
       </div>
-      <div class="gp-row">
+      <div ${rowAttrs('variables', personKey)}>
         <span class="gp-row-label">− Variables</span>
         <span class="gp-row-val" style="color: var(--muted);">${fmtC(vars)}</span>
       </div>
-      <div class="gp-row">
+      <div ${rowAttrs('cuotas', personKey)}>
         <span class="gp-row-label">− Cuotas</span>
         <span class="gp-row-val" style="color: var(--muted);">${fmtC(cuotas)}</span>
       </div>
-      <div class="gp-row">
+      <div ${rowAttrs('simulados', personKey)}>
         <span class="gp-row-label">− Simulados</span>
         <span class="gp-row-val" style="color: var(--muted);">${fmtC(sim)}</span>
       </div>
-      <div class="gp-saldo">
+      <div class="gp-saldo gp-row-detail" role="button" tabindex="0" onclick="showBudgetDetail('dist','disponible','${personKey}')" onkeydown="budgetDetailKeydown(event,'dist','disponible','${personKey}')">
         <span class="gp-saldo-label">= Disponible</span>
         <span class="${disp >= 0 ? 'gp-saldo-pos' : 'gp-saldo-neg'}">${fmt(Math.abs(disp))}${disp < 0 ? ' ⚠' : ''}</span>
       </div>
@@ -4673,8 +5025,8 @@ function renderDistribucion() {
   // F15: columnas en formato grilla igual que Gastos Personales (F17)
   container.innerHTML = `
     <div class="gastos-personales-grid">
-      ${colHtml(p1, sal1, fijos1, var1, cuotas1, sim1, disp1)}
-      ${colHtml(p2, sal2, fijos2, var2, cuotas2, sim2, disp2)}
+      ${colHtml(p1, 'p1', sal1, fijos1, var1, cuotas1, sim1, disp1)}
+      ${colHtml(p2, 'p2', sal2, fijos2, var2, cuotas2, sim2, disp2)}
     </div>`;
 
   renderGastosPersonales(p1, p2);
@@ -4736,26 +5088,29 @@ function renderGastosPersonales(p1, p2) {
 
   const fmtR = v => v === 0 ? '—' : fmt(v);
 
-  const colHtml = (name, ingP, prop, cobrar, propia, saldo) => `
+  const rowAttrs = (section, personKey) =>
+    `class="gp-row gp-row-detail" role="button" tabindex="0" onclick="showBudgetDetail('personal','${section}','${personKey}')" onkeydown="budgetDetailKeydown(event,'personal','${section}','${personKey}')"`;
+
+  const colHtml = (name, personKey, ingP, prop, cobrar, propia, saldo) => `
     <div class="gp-col">
       <div class="gp-col-header">${name}</div>
-      <div class="gp-row">
+      <div ${rowAttrs('disponible', personKey)}>
         <span class="gp-row-label">Disponible del mes</span>
         <span class="gp-row-val">${fmtR(ingP)}</span>
       </div>
-      <div class="gp-row">
+      <div ${rowAttrs('propios', personKey)}>
         <span class="gp-row-label">Gastos propios pagados</span>
         <span class="gp-row-val">${fmtR(prop)}</span>
       </div>
-      <div class="gp-row">
+      <div ${rowAttrs('cobrar', personKey)}>
         <span class="gp-row-label">Deuda a cobrar</span>
         <span class="gp-row-val">${fmtR(cobrar)}</span>
       </div>
-      <div class="gp-row">
+      <div ${rowAttrs('propia', personKey)}>
         <span class="gp-row-label">Deuda propia</span>
         <span class="gp-row-val">${fmtR(propia)}</span>
       </div>
-      <div class="gp-saldo">
+      <div class="gp-saldo gp-row-detail" role="button" tabindex="0" onclick="showBudgetDetail('personal','caja','${personKey}')" onkeydown="budgetDetailKeydown(event,'personal','caja','${personKey}')">
         <span class="gp-saldo-label">= Caja sin saldar</span>
         <span class="${saldo >= 0 ? 'gp-saldo-pos' : 'gp-saldo-neg'}">${fmt(Math.abs(saldo))}${saldo < 0 ? ' ⚠' : ''}</span>
       </div>
@@ -4763,8 +5118,8 @@ function renderGastosPersonales(p1, p2) {
 
   container.innerHTML = `
     <div class="gastos-personales-grid">
-      ${colHtml(p1, ingProp1, prop1, deudaCobrar1, deudaPropia1, saldo1)}
-      ${colHtml(p2, ingProp2, prop2, deudaCobrar2, deudaPropia2, saldo2)}
+      ${colHtml(p1, 'p1', ingProp1, prop1, deudaCobrar1, deudaPropia1, saldo1)}
+      ${colHtml(p2, 'p2', ingProp2, prop2, deudaCobrar2, deudaPropia2, saldo2)}
     </div>`;
 }
 
