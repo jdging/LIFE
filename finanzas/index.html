@@ -4763,6 +4763,13 @@ function impactForPerson(row, personKey) {
   return amount * (row.sign ?? 1);
 }
 
+function paidSourceLabel(row, personKey, p1, p2) {
+  const { pct1, pct2 } = getRowPct(row, p1, p2);
+  if (pct1 > 0 && pct2 > 0) return 'Pago compartido';
+  if (personKey === 'p1') return pct1 === 100 ? 'Pago propio' : `Adelanto a ${p2}`;
+  return pct2 === 100 ? 'Pago propio' : `Adelanto a ${p1}`;
+}
+
 function buildDistributionDetail(section, personKey, p1, p2) {
   const personName = personKey === 'p1' ? p1 : p2;
   const salRows = filterLog({ tipo: 'Ingreso', from: S.period.from, to: S.period.to })
@@ -4815,7 +4822,7 @@ function buildPersonalDetail(section, personKey, p1, p2) {
     rows = buildDistributionDetail('disponible', personKey, p1, p2).rows;
   } else if (section === 'pagado') {
     rows = periodGastos.filter(r => r.pago === personName)
-      .map(r => budgetLogDetailRow(r, p1, p2, 'Pagado por mi', 1, parseFloat(r.monto_total) || 0))
+      .map(r => budgetLogDetailRow(r, p1, p2, paidSourceLabel(r, personKey, p1, p2), 1, parseFloat(r.monto_total) || 0))
       .filter(r => r.overrideAmount > 0);
   } else if (section === 'cobrar') {
     rows = debtGastos.filter(r => r.pago === personName).map(r => {
@@ -4844,7 +4851,7 @@ function buildPersonalDetail(section, personKey, p1, p2) {
 
   const titles = {
     disponible: 'Disponible economico',
-    pagado: 'Pagado por mi',
+    pagado: 'Pagos realizados',
     cobrar: 'Deuda a cobrar',
     propia: 'Deuda propia',
     neto: 'Neto deuda',
@@ -5106,7 +5113,7 @@ function renderGastosPersonales(p1, p2) {
         <span class="gp-row-val">${fmtR(ingP)}</span>
       </div>
       <div ${rowAttrs('pagado', personKey)}>
-        <span class="gp-row-label">Pagado por mi</span>
+        <span class="gp-row-label">Pagos realizados</span>
         <span class="gp-row-val">${fmtR(pagado)}</span>
       </div>
       <div ${rowAttrs('cobrar', personKey)}>
