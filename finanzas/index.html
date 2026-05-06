@@ -4642,49 +4642,41 @@ function renderDistribucion() {
 
   const fmtC = v => v === 0 ? '—' : fmt(v);
 
-  // F15: columnas muestran solo nombre (sin %) — la proporción ya no es uniforme por ítem
+  const colHtml = (name, sal, fijos, vars, cuotas, sim, disp) => `
+    <div class="gp-col">
+      <div class="gp-col-header">${name}</div>
+      <div class="gp-row">
+        <span class="gp-row-label" style="color: var(--text);">Salario</span>
+        <span class="gp-row-val">${fmtC(sal)}</span>
+      </div>
+      <div class="gp-row">
+        <span class="gp-row-label">− Fijos</span>
+        <span class="gp-row-val" style="color: var(--muted);">${fmtC(fijos)}</span>
+      </div>
+      <div class="gp-row">
+        <span class="gp-row-label">− Variables</span>
+        <span class="gp-row-val" style="color: var(--muted);">${fmtC(vars)}</span>
+      </div>
+      <div class="gp-row">
+        <span class="gp-row-label">− Cuotas</span>
+        <span class="gp-row-val" style="color: var(--muted);">${fmtC(cuotas)}</span>
+      </div>
+      <div class="gp-row">
+        <span class="gp-row-label">− Simulados</span>
+        <span class="gp-row-val" style="color: var(--muted);">${fmtC(sim)}</span>
+      </div>
+      <div class="gp-saldo">
+        <span class="gp-saldo-label">= Disponible</span>
+        <span class="${disp >= 0 ? 'gp-saldo-pos' : 'gp-saldo-neg'}">${fmt(Math.abs(disp))}${disp < 0 ? ' ⚠' : ''}</span>
+      </div>
+    </div>`;
+
+  // F15: columnas en formato grilla igual que Gastos Personales (F17)
   container.innerHTML = `
-    <table class="dist-table">
-      <thead>
-        <tr>
-          <th></th>
-          <th>${p1}</th>
-          <th>${p2}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Salario</td>
-          <td>${fmtC(sal1)}</td>
-          <td>${fmtC(sal2)}</td>
-        </tr>
-        <tr class="dist-row-negative">
-          <td>− Fijos</td>
-          <td>${fmtC(fijos1)}</td>
-          <td>${fmtC(fijos2)}</td>
-        </tr>
-        <tr class="dist-row-negative">
-          <td>− Variables</td>
-          <td>${fmtC(var1)}</td>
-          <td>${fmtC(var2)}</td>
-        </tr>
-        <tr class="dist-row-negative">
-          <td>− Cuotas</td>
-          <td>${fmtC(cuotas1)}</td>
-          <td>${fmtC(cuotas2)}</td>
-        </tr>
-        <tr class="dist-row-negative">
-          <td>− Simulados</td>
-          <td>${fmtC(sim1)}</td>
-          <td>${fmtC(sim2)}</td>
-        </tr>
-        <tr class="dist-row-disponible">
-          <td>= Disponible</td>
-          <td class="${disp1 >= 0 ? 'dist-disponible-pos' : 'dist-disponible-neg'}">${fmt(Math.abs(disp1))}${disp1 < 0 ? ' ⚠' : ''}</td>
-          <td class="${disp2 >= 0 ? 'dist-disponible-pos' : 'dist-disponible-neg'}">${fmt(Math.abs(disp2))}${disp2 < 0 ? ' ⚠' : ''}</td>
-        </tr>
-      </tbody>
-    </table>`;
+    <div class="gastos-personales-grid">
+      ${colHtml(p1, sal1, fijos1, var1, cuotas1, sim1, disp1)}
+      ${colHtml(p2, sal2, fijos2, var2, cuotas2, sim2, disp2)}
+    </div>`;
 
   renderGastosPersonales(p1, p2);
 }
