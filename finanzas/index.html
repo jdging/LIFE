@@ -2641,9 +2641,12 @@ function printResumenGastos() {
     if (_filtro === 'pinki')       return pct2 === 100;
     return true;
   });
+  // Separar fijos de crédito: se excluyen del total y van al apartado informativo
+  const fijosNoCred = fijosData.filter(item => item.medio_pago !== 'Crédito');
+  const fijosCred   = fijosData.filter(item => item.medio_pago === 'Crédito');
 
   let fijosTotal1 = 0, fijosTotal2 = 0, fijosTotalG = 0;
-  const fijosRows = fijosData.map(item => {
+  const fijosRows = fijosNoCred.map(item => {
     const { pct1, pct2 } = getRowPct(item, p1, p2);
     const m = item.monto_mensual || 0;
     const m1 = m * pct1 / 100;
@@ -2660,7 +2663,7 @@ function printResumenGastos() {
 
   const secFijos = `
     <h2>Gastos Fijos</h2>
-    ${fijosData.length === 0
+    ${fijosNoCred.length === 0
       ? '<p style="color:#888;font-size:9pt">Sin ítems para el filtro activo.</p>'
       : `<table>
           <thead><tr>
@@ -2757,8 +2760,8 @@ function printResumenGastos() {
       </div>
     </div>`;
 
-  // === Nota al pie — Cuotas activas en común (informativo, no sumado) ===
-  // Solo cuotas donde ambas personas participan (modo "comun")
+  // === Nota al pie — Carga en Crédito en Común (informativo, no sumado) ===
+  // Incluye: (1) cuotas comprometidas donde ambos participan, (2) gastos fijos con crédito
   const cuotasComun = filterCuotasComprometidas(S.period.from, S.period.to)
     .filter(r => {
       const { pct1, pct2 } = getRowPct(r, p1, p2);
@@ -2782,22 +2785,45 @@ function printResumenGastos() {
     </tr>`;
   }).join('');
 
+  // Filas de gastos fijos con crédito (excluidos del total de fijos)
+  let fijosCT1 = 0, fijosCT2 = 0, fijosCTG = 0;
+  const fijosCreditoRowsHtml = fijosCred.map(item => {
+    const { pct1, pct2 } = getRowPct(item, p1, p2);
+    const m = item.monto_mensual || 0;
+    const m1 = m * pct1 / 100;
+    const m2 = m * pct2 / 100;
+    fijosCT1 += m1; fijosCT2 += m2; fijosCTG += m;
+    return `<tr>
+      <td>${item.descripcion || '—'}</td>
+      <td>Fijo mensual</td>
+      <td>${getTarjetaLabel(item.tarjeta)}</td>
+      <td class="num">${fmt(m1)}</td>
+      <td class="num">${fmt(m2)}</td>
+      <td class="num">${fmt(m)}</td>
+    </tr>`;
+  }).join('');
+
+  const totalCreditRows = cuotasComun.length + fijosCred.length;
+  const totalCred1 = cuotasT1 + fijosCT1;
+  const totalCred2 = cuotasT2 + fijosCT2;
+  const totalCredG  = cuotasTG + fijosCTG;
+
   const secCuotas = `
-    <h2>Cuotas Activas en Común <span style="font-weight:300;color:#888;font-size:8pt">(informativo · no incluido en el total)</span></h2>
-    <p class="print-nota">Estas cuotas ya fueron registradas al momento de la compra. Se muestran para tener visibilidad de los compromisos del período.</p>
-    ${cuotasComun.length === 0
-      ? '<p style="color:#888;font-size:9pt">Sin cuotas activas en común para este período.</p>'
+    <h2>Carga en Crédito en Común <span style="font-weight:300;color:#888;font-size:8pt">(informativo · no incluido en el total)</span></h2>
+    <p class="print-nota">Compromisos en tarjeta de crédito del período: cuotas activas y gastos fijos recurrentes en crédito.</p>
+    ${totalCreditRows === 0
+      ? '<p style="color:#888;font-size:9pt">Sin compromisos en crédito en común para este período.</p>'
       : `<table>
           <thead><tr>
-            <th>Descripción</th><th>Cuota</th><th>Tarjeta</th>
+            <th>Descripción</th><th>Cuota / Tipo</th><th>Tarjeta</th>
             <th class="num">${p1} $</th><th class="num">${p2} $</th><th class="num">Total</th>
           </tr></thead>
-          <tbody>${cuotasRowsHtml}</tbody>
+          <tbody>${cuotasRowsHtml}${fijosCreditoRowsHtml}</tbody>
           <tfoot><tr>
-            <td colspan="3">Total cuotas</td>
-            <td class="num">${fmt(cuotasT1)}</td>
-            <td class="num">${fmt(cuotasT2)}</td>
-            <td class="num">${fmt(cuotasTG)}</td>
+            <td colspan="3">Total crédito</td>
+            <td class="num">${fmt(totalCred1)}</td>
+            <td class="num">${fmt(totalCred2)}</td>
+            <td class="num">${fmt(totalCredG)}</td>
           </tr></tfoot>
         </table>`
     }`;
