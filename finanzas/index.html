@@ -2735,10 +2735,21 @@ function printResumenGastos() {
   const totalFijos1 = fijosTotal1;
   const totalFijos2 = fijosTotal2;
   const totalFijosG = fijosTotalG;
-  const totalDeuda1 = debeP1;
-  const totalDeuda2 = debeP2;
-  const grandTotal1 = totalFijos1 + totalDeuda1;
-  const grandTotal2 = totalFijos2 + totalDeuda2;
+  
+  // Calcular a quién le corresponde sumar la deuda neta (solo al que debe)
+  let netoDebeP1 = 0;
+  let netoDebeP2 = 0;
+
+  if (netDeuda > 0) {
+    // p2 le debe a p1 (Pinki le debe a JD, por ejemplo)
+    netoDebeP2 = netDeuda;
+  } else if (netDeuda < 0) {
+    // p1 le debe a p2 (JD le debe a Pinki)
+    netoDebeP1 = Math.abs(netDeuda);
+  }
+
+  const grandTotal1 = totalFijos1 + netoDebeP1;
+  const grandTotal2 = totalFijos2 + netoDebeP2;
 
   const secTotales = `
     <h2>Total</h2>
