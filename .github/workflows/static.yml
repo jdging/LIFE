@@ -20,15 +20,18 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      name: Checkout
+      - name: Checkout
         uses: actions/checkout@v4
-      name: Setup Pages
+
+      - name: Setup Pages
         uses: actions/configure-pages@v4
-      name: Upload artifact
+
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # ¡Acá está la magia! Le decimos que solo suba la carpeta src
+          # Aquí le indicamos que solo suba el contenido de la carpeta src
           path: './src'
-      name: Deploy to GitHub Pages
+
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
