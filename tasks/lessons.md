@@ -270,3 +270,27 @@
 - **Fecha:** 2026-04-12
 - **Que paso:** Cuando Pinki carga un gasto con `tipo_proporcion=custom` en AppSheet pero no toca el campo `proporcion_jd`, AppSheet envía la celda vacía. El frontend (`getRowPct`) cae al fallback de 50 para `proporcion_jd` vacío, interpretando el gasto como 50/50 en lugar de 0% JD.
 - **Regla:** Para campos donde el vacío tiene semántica incorrecta (no equivale a "sin dato"), el trigger de Apps Script debe corregir el valor default explícitamente. El frontend no debería ser responsable de inferir intenciones de campos vacíos que AppSheet omitió. Patrón: `if (condicion && campo_vacio) sheet.getRange(...).setValue(default_correcto)`.
+
+---
+
+### LEC-032: La visibilidad/clasificación de un gasto recurrente es una propiedad del gasto, no un cálculo dinámico
+- **Fecha:** 2026-06-02
+- **Que paso:** En Finanzas, los gastos fijos desaparecían de la vista Común en meses con proporción 100/0 (un solo salario cargado). La causa: la visibilidad usaba `pct1>0 && pct2>0`, y para un fijo `dinamica`, `getRowPct()` devolvía la proporción del mes activo → pct de una persona = 0 → el filtro lo descartaba.
+- **Solucion:** Helper `getFixedKind(item)` que clasifica shared/personal_p1/personal_p2 por `tipo_proporcion`/`proporcion_jd` (regla propia del gasto), independiente del mes. Un fijo compartido (dinámico) es SIEMPRE shared, aunque el mes sea 100/0.
+- **Regla:** Si un dato es conceptualmente estable (un fijo compartido es compartido siempre), su visibilidad/clasificación debe derivarse de una propiedad estable, NO de un cálculo dinámico que puede tomar valores de borde (0, 100, fallback). Acoplar visibilidad a un cálculo volátil hace desaparecer datos en los bordes.
+
+---
+
+### LEC-033: Lógica duplicada en N lugares — al cambiar la regla, propagar a TODAS las copias
+- **Fecha:** 2026-06-02
+- **Que paso:** La regla shared/personal y el patrón `monto_mensual × meses` viven en 4+ lugares (`renderFijosDetailTable`, `computeFixedForPersona`, `renderCreditoCard`, `toggleCreditoDetail`, + totales en `computeFixedTotalForPeriod`/`computePresupuestoParts`). El fix F-A se aplicó en 2 lugares; la card de Crédito quedó con el criterio viejo y el Bug A reaparecía ahí. Misma clase que LEC-030 (asimetría render/toggle).
+- **Solucion:** Auditar todos los sitios que comparten la regla y propagar el cambio a cada uno. Anotado como deuda técnica (H8): unificar en un helper único.
+- **Regla:** Antes de cerrar un fix sobre lógica que sospechás duplicada, `grep` el patrón completo en el archivo y verificá cada ocurrencia. El bug recurrente "arreglé una copia y olvidé las otras" se previene buscando antes de cerrar, no después.
+
+---
+
+### LEC-034: Total = suma de N capas → toda vista derivada debe usar el mismo set y multiplicador (universal)
+- **Fecha:** 2026-06-02
+- **Que paso:** Tras filtrar el card de fijos a solo `shared`, la sub-línea "JD · Pinki" seguía sumando TODOS los fijos → sub1+sub2 ≠ total. Y los bimestrales se mensualizaban (/2) en mes único pero se contaban completos en multi-mes → card multi-mes ≠ suma real.
+- **Solucion:** Cada vista derivada (sub-línea, detalle, panel, composición) debe iterar el MISMO conjunto de filas y aplicar el MISMO multiplicador (×meses) y normalización (bimestral /2) que el total que pretende desglosar.
+- **Regla (universal):** Cuando un número visible es la suma de N capas con transformaciones (filtro, ×meses, /2), cualquier desglose o vista alternativa de ese número debe replicar exactamente las mismas capas y transformaciones. Verificar el invariante: "la suma de las partes mostradas == el total mostrado", en todas las combinaciones de filtros y períodos.

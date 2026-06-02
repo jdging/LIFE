@@ -308,3 +308,21 @@
 - **Decisión:** Implementar variables de estado locales (`_tableSortCol`, `_tableFilterCat`, etc.) y re-renderizar solo la tabla al cambiar un filtro de encabezado, manteniendo el set de datos base intacto.
 - **Razón:** Separa el "filtro global" (que afecta a todo el dashboard) del "filtro local" (que solo afecta la vista de tabla para buscar un dato puntual).
 - **Consecuencias:** La función `renderGastosTable()` ahora maneja su propia lógica de ordenamiento y filtrado pre-renderizado.
+
+---
+
+### DEC-029: Ingreso con pago='Común' — no se modela, se divide por fuera
+- **Fecha:** 2026-06-02
+- **Contexto:** La vista Ingresos splittea el total por `pago === p1` / `pago === p2`. Un ingreso marcado `pago='Común'` no cae en ninguna pila → el total no coincide con la suma JD + Pinki.
+- **Decisión:** No agregar lógica para repartir ingresos comunes. JD confirmó que en la práctica no se cargan ingresos como "Común" (la plata que entra siempre es de alguien). Si llegara a pasar, dividen el monto por fuera y cargan lo de cada uno por separado.
+- **Alternativas descartadas:** Repartir 50/50 (arbitrario); repartir por la proporción del mes (suma supuestos sobre un caso que no ocurre).
+- **Razón:** No introducir lógica para un caso que no se da. La data se mantiene limpia cargando ingresos siempre a una persona.
+- **Consecuencias:** Si alguien carga un ingreso "Común", el desglose JD/Pinki no cerrará con el total. Es un error de carga conocido, no un bug del sistema.
+
+### DEC-030: Gasto variable en mes con proporción 100/0 — se mantiene el comportamiento dinámico
+- **Fecha:** 2026-06-02
+- **Contexto:** A diferencia de los fijos (donde se desacopló la visibilidad de la proporción del mes, ver LEC-032), un gasto variable común cargado en un mes donde una persona no tuvo ingresos (proporción 100/0) se reparte 100% a quien ganó, y sale de la vista Común.
+- **Decisión:** Dejarlo como está. No alinear `applyPersonaFiltro('comun')` con la lógica `getFixedKind`.
+- **Alternativas descartadas:** Clasificar variables como shared/personal por `tipo_proporcion` (radio de impacto grande: lista principal de Gastos, elegibilidad de deuda, composición) para un caso de borde.
+- **Razón:** Para un gasto variable, que lo banque 100% quien tuvo ingresos ese mes es el propósito mismo de la proporción dinámica — no es un error. El riesgo de tocar la lista principal supera el beneficio.
+- **Consecuencias:** En meses 100/0, los gastos variables comunes de ESE mes se atribuyen 100% al que ganó. Comportamiento esperado y aceptado.

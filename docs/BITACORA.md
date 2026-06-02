@@ -38,3 +38,23 @@
 - Se agregaron `<select>` integrados en los encabezados de "Categoría" y "Pagó" para filtrar subconjuntos de datos dentro de la tabla sin afectar el resto del dashboard.
 **Pendientes:** Sin pendientes críticos.
 **Notas:** El uso de `querySelectorAll` en lugar de `getElementById` fue clave para mantener la sincronía visual de los botones de filtro al estar duplicados en la UI.
+
+### [2026-06-02] - Sesión 30
+**Objetivo:** Auditoría completa del módulo Finanzas usando el loop Claude(spec)→Codex(impl)→Claude(review). Punto de entrada: bug reportado por JD — "en Gastos Fijos no aparece ninguno este mes; el mes pasado aparecen pero la suma no da el total".
+**Logros:**
+- **Fase 0 (diagnóstico estático):** Causa raíz del síntoma = la visibilidad y el total de los fijos estaban acoplados a la proporción dinámica del mes vía `getRowPct()`. En un mes con proporción 100/0 (un solo salario cargado), el filtro `pct1>0 && pct2>0` descartaba TODOS los fijos compartidos. Además, card vs detalle usaban sets distintos.
+- **F-A:** Nuevo helper `getFixedKind(item)` → 'shared' | 'personal_p1' | 'personal_p2', clasificando por `tipo_proporcion`/`proporcion_jd` (propiedad del gasto), NO por la proporción del mes. `renderFijosDetailTable()` y `computeFixedForPersona('comun')` ahora incluyen solo fijos `shared`. Card común === footer del detalle.
+- **F-A.1:** Sub-línea "JD · Pinki" del card Total ahora suma solo fijos `shared` × meses del período (para que sub1+sub2 === total, incluso con un fijo personal presente). `computeFixedForPersona('comun')` = suma shared × `getMonthsInPeriod().length || 1`. Limpieza de comentario huérfano.
+- **F-B:** Bimestrales `/2` en ramas multi-mes de `computeFixedTotalForPeriod()` y `computePresupuestoParts()`. El `history` del API guarda monto crudo sin `es_bimestral`; el front mapea el flag desde `S.fixed.data`. Sin tocar Apps Script (decisión: fix en front).
+- **F-C:** Propagado `getFixedKind` + `× meses` a `renderCreditoCard()` y `toggleCreditoDetail()` (el fix F-A no se había propagado a la card de Crédito — Bug A reaparecía ahí).
+- **F-D:** Sorts de fecha null-safe en `renderInversiones()` y `renderIngresos()`. Eliminado el `console.log('[CUOTAS DEBUG]…')` de `renderGastos()`.
+- **Resto del módulo auditado y confirmado sano:** Deuda (card↔panel↔saldar coherentes), carga inicial con manejo de errores, Inversiones (patrimonial, sin proporción).
+- Todos los cambios SOLO en `src/finanzas/index.html`. Cada fix verificado con `node --check` sobre el JS inline extraído.
+**Decisiones:**
+- **D1 (DEC-029) — ingreso con pago='Común':** No se usa en la práctica. Si llegara a pasar, JD y Pinki dividen por fuera y cargan lo de cada uno por separado. Sin cambios de código.
+- **D2 (DEC-030) — gasto variable en mes con proporción 100/0:** Se deja como está. Que un gasto compartido lo banque 100% quien ganó ese mes es el comportamiento esperado de la proporción dinámica. Sin cambios de código.
+**Pendientes:**
+- Estas correcciones son SOLO frontend — NO requieren re-deploy de Apps Script.
+- ⚠ MANUAL (heredados de sesiones previas, siguen abiertos): NEW deployment de `finanzas-api.js`; ejecutar `setupTriggers()`; eliminar cols `id_appsheet_log` (Log) e `id_appsheet` (GastosFijos).
+- Aceptados sin urgencia: H1 (API pública — uso solo de la pareja), H8 (lógica de fijos triplicada/cuadruplicada — candidata a unificar en helper).
+**Notas:** El loop por fases atrapó dos regresiones que un QA de un solo paso se hubiera comido: la sub-línea del card Total en F-A.1 (quedó sumando todos los fijos mientras el total ya contaba solo shared) y la card de Crédito en F-C (no propagaba el nuevo criterio). El patrón recurrente del módulo: lógica duplicada en varios lugares; arreglar una copia y olvidar las otras.

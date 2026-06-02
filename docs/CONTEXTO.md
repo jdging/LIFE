@@ -1,6 +1,6 @@
 # Contexto Actual - LIFE
 
-> Ultima actualizacion: 2026-04-09 (Sesion 25)
+> Ultima actualizacion: 2026-06-02 (Sesion 30)
 
 ## Que es LIFE
 Sistema de gestion personal multi-modulo alojado en GitHub Pages. Cada modulo es un subdirectorio con su propio index.html, conectado desde un hub central.
@@ -340,3 +340,14 @@ API confirmada correcta — devuelve 6 ítems correctos para abril 2026. Código
 - **Dashboard:** 4 vistas principales (Dashboard, Gastos, Ingresos, Inversiones) con Chart.js.
 - **Módulos Satélite:** Inventario, Compras y Recetario operativos con sus propias APIs y formularios de carga.
 - **UX/UI:** Sidebar de 72px, modo dark persistente, drawer para AppSheet y cards con sub-labels de distribución de gastos.
+### Completado (Sesion 30 — Auditoria completa modulo Finanzas)
+Loop de auditoria por fases (Claude spec -> Codex impl -> Claude review). Todos los cambios SOLO en `src/finanzas/index.html`, verificados con `node --check`. NO requieren re-deploy de Apps Script.
+- **Bug raiz resuelto:** la visibilidad y el total de los gastos fijos estaban acoplados a la proporcion dinamica del mes; en meses con proporcion 100/0 desaparecian todos los fijos compartidos.
+- **F-A:** helper `getFixedKind()` clasifica fijos shared/personal por `tipo_proporcion` (no por la proporcion del mes). Card comun === detalle.
+- **F-A.1:** sub-linea del card Total = fijos shared x meses; `computeFixedForPersona('comun')` multi-mes con `getMonthsInPeriod().length`.
+- **F-B:** bimestrales /2 en multi-mes (`computeFixedTotalForPeriod`, `computePresupuestoParts`); flag `es_bimestral` mapeado desde `S.fixed.data`.
+- **F-C:** mismo criterio propagado a la card/panel de Credito.
+- **F-D:** sorts de fecha null-safe (Inversiones/Ingresos); eliminado `console.log('[CUOTAS DEBUG]')`.
+- **Auditado sano sin tocar:** Deuda (card/panel/saldar coherentes), carga inicial con manejo de errores, Inversiones.
+- **Decisiones (sin cambios de codigo):** DEC-029 (ingreso pago='Comun' no se modela, se divide por fuera), DEC-030 (gasto variable en mes 100/0 se mantiene dinamico).
+- **Deuda tecnica aceptada:** H1 (API publica, uso de la pareja), H8 (logica shared/personal duplicada en 4+ lugares — candidata a unificar en helper).

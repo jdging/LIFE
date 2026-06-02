@@ -50,3 +50,13 @@
 ---
 
 ## Historial resumido
+
+### Sesión 30 (2026-06-02) — Auditoría completa módulo Finanzas
+- ✅ Fase 0: diagnóstico estático del módulo.
+- ✅ F-A: getFixedKind() + visibilidad fijos shared/personal (card común === detalle).
+- ✅ F-A.1: sub-línea card Total (shared × meses) + computeFixedForPersona('comun') multi-mes + limpieza.
+- ✅ F-B: bimestrales /2 en multi-mes (computeFixedTotalForPeriod + computePresupuestoParts).
+- ✅ F-C: getFixedKind + ×meses propagados a renderCreditoCard + toggleCreditoDetail.
+- ✅ F-D: sorts null-safe (Inversiones/Ingresos) + eliminado console.log [CUOTAS DEBUG].
+- ✅ Decisiones cerradas: D1 (ingreso Común → sin cambios, DEC-029), D2 (variable 100/0 → sin cambios, DEC-030).
+- ℹ Aceptados sin urgencia: H1 (API pública), H8 (lógica de fijos duplicada en 4+ lugares — candidata a unificar en helper).
