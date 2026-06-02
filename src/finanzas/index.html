@@ -4138,8 +4138,11 @@ function computeFixedTotalForPeriod() {
     return (S.fixed.total || 0) * months.length;
   }
 
+  const bimestralByDesc = Object.fromEntries((S.fixed.data || [])
+    .map(item => [item.descripcion, item.es_bimestral === true || String(item.es_bimestral).toUpperCase() === 'TRUE']));
+
   let total = 0;
-  for (const [, hist] of Object.entries(history)) {
+  for (const [desc, hist] of Object.entries(history)) {
     // Ordenar historial por vigente_desde para poder hacer búsqueda secuencial
     const sorted = [...hist].sort((a, b) => a.vigente_desde.localeCompare(b.vigente_desde));
     for (const month of months) {
@@ -4149,7 +4152,7 @@ function computeFixedTotalForPeriod() {
         if (h.vigente_desde <= month) monto = h.monto;
         else break;
       }
-      total += monto;
+      total += bimestralByDesc[desc] ? monto / 2 : monto;
     }
   }
   return total;
@@ -4261,6 +4264,8 @@ function computePresupuestoParts() {
   const fixedData  = S.fixed?.data || [];
   const fixHistory = S.fixed?.history || {};
   const fixMonths  = getMonthsInPeriod(S.period.from, S.period.to);
+  const bimestralByDesc = Object.fromEntries(fixedData
+    .map(item => [item.descripcion, item.es_bimestral === true || String(item.es_bimestral).toUpperCase() === 'TRUE']));
   let fijos1 = 0, fijos2 = 0;
   fixedData.forEach(item => {
     let itemTotal = 0;
@@ -4275,7 +4280,7 @@ function computePresupuestoParts() {
           if (h.vigente_desde <= month) monto = h.monto;
           else break;
         }
-        itemTotal += monto;
+        itemTotal += bimestralByDesc[item.descripcion] ? monto / 2 : monto;
       }
     }
     const { pct1: rp1, pct2: rp2 } = getRowPct(item, p1, p2);
