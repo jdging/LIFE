@@ -1,6 +1,6 @@
 # Tareas del Proyecto LIFE
 
-> Actualizado: 2026-04-12. Sesión 27.
+> Actualizado: 2026-04-12. Sesión 27..
 
 ---
 
