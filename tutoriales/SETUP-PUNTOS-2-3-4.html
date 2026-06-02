@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Setup: Puntos 2, 3 y 4 — LIFE Finanzas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:       #111110;
+      --surface:  #1a1a18;
+      --surface2: #222220;
+      --border:   #2e2e2b;
+      --text:     #e8e6e0;
+      --muted:    #7a7870;
+      --accent:   #8fb87a;
+      --accent2:  #c4a96b;
+      --danger:   #c47a7a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 14px;
+      line-height: 1.7;
+      padding: 2.5rem 1.5rem;
+      max-width: 820px;
+      margin: 0 auto;
+    }
+
+    /* ── HEADER ── */
+    .doc-header { border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; margin-bottom: 2.5rem; }
+    .doc-header h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2.2rem;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: 0.01em;
+      margin-bottom: 0.4rem;
+    }
+    .doc-header .subtitle { color: var(--muted); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; }
+    .doc-header .meta { margin-top: 0.8rem; font-size: 0.7rem; color: var(--muted); }
+
+    /* ── ÍNDICE ── */
+    .toc {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+    .toc-title { font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.75rem; }
+    .toc ol { padding-left: 1.2rem; }
+    .toc li { margin: 0.3rem 0; }
+    .toc a { color: var(--accent); text-decoration: none; font-size: 0.8rem; }
+    .toc a:hover { color: var(--text); }
+
+    /* ── SECCIONES ── */
+    .section { margin-bottom: 3.5rem; }
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      gap: 1rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    .section-number {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 3rem;
+      font-weight: 600;
+      color: var(--border);
+      line-height: 1;
+      min-width: 2.5rem;
+    }
+    .section-title-block h2 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .section-title-block .section-sub {
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* ── PASOS ── */
+    .step {
+      margin-bottom: 1.25rem;
+      padding-left: 1rem;
+      border-left: 2px solid var(--border);
+    }
+    .step.done { border-left-color: var(--accent); }
+    .step-label {
+      font-size: 0.6rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.2rem;
+    }
+    .step p { font-size: 0.82rem; color: var(--text); margin-bottom: 0.4rem; }
+    .step p:last-child { margin-bottom: 0; }
+
+    /* ── CÓDIGO INLINE ── */
+    code {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0.1rem 0.4rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.8em;
+      color: var(--accent2);
+    }
+
+    /* ── BLOQUE DE CÓDIGO ── */
+    .code-block {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin: 0.75rem 0;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--accent2);
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    /* ── NOTA / ALERTA ── */
+    .note {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent2);
+      border-radius: 4px;
+      padding: 0.75rem 1rem;
+      margin: 0.75rem 0;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .note.danger { border-left-color: var(--danger); }
+    .note.ok { border-left-color: var(--accent); }
+    .note strong { color: var(--text); }
+
+    /* ── TABLA ── */
+    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.78rem; }
+    th {
+      text-align: left;
+      font-size: 0.6rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); color: var(--text); }
+    tr:last-child td { border-bottom: none; }
+    td.muted { color: var(--muted); }
+    td.accent { color: var(--accent); }
+    td.accent2 { color: var(--accent2); }
+    td.danger { color: var(--danger); }
+
+    /* ── CHECKLIST FINAL ── */
+    .checklist { list-style: none; padding: 0; }
+    .checklist li {
+      padding: 0.4rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .checklist li:last-child { border-bottom: none; }
+    .check-box {
+      width: 14px; height: 14px;
+      border: 1px solid var(--muted);
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    /* ── BADGE ESTADO ── */
+    .badge {
+      display: inline-block;
+      font-size: 0.55rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.15rem 0.5rem;
+      border-radius: 3px;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+    }
+    .badge-appsheet { background: #1e2e1e; color: var(--accent); border: 1px solid var(--accent); }
+    .badge-sheets   { background: #1e2a1e; color: #7ab87a; border: 1px solid #3a5a3a; }
+    .badge-manual   { background: #2a2a1e; color: var(--accent2); border: 1px solid var(--accent2); }
+
+    hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="doc-header">
+    <p class="subtitle">LIFE · Módulo Finanzas · Tutorial</p>
+    <h1>Setup: Puntos 2, 3 y 4</h1>
+    <p class="meta">Última actualización: 2026-04-04 &nbsp;·&nbsp; Sin código — todo es configuración manual</p>
+  </div>
+
+  <!-- ÍNDICE -->
+  <div class="toc">
+    <div class="toc-title">Contenido</div>
+    <ol>
+      <li><a href="#punto2">Punto 2 — Vista GastosFijos en AppSheet con acciones</a></li>
+      <li><a href="#punto3">Punto 3 — Columna virtual Banco–Nombre en hoja Tarjetas</a></li>
+      <li><a href="#punto4">Punto 4 — Columnas tipo_proporcion y proporcion_jd en hoja Log</a></li>
+      <li><a href="#checklist">Checklist final</a></li>
+    </ol>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- PUNTO 2                                                -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div class="section" id="punto2">
+    <div class="section-header">
+      <div class="section-number">2</div>
+      <div class="section-title-block">
+        <div class="section-sub">AppSheet <span class="badge badge-appsheet">AppSheet</span></div>
+        <h2>Vista GastosFijos con acciones</h2>
+      </div>
+    </div>
+
+    <p style="font-size:0.82rem; color:var(--muted); margin-bottom:1.5rem">
+      Objetivo: crear una vista dedicada en AppSheet para la hoja <code>GastosFijos</code> con tres acciones: ver historial de un gasto, registrar un nuevo monto (sin borrar el anterior), y desactivar un gasto. Todo sin tocar código.
+    </p>
+
+    <hr>
+
+    <p style="font-size:0.7rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:1rem">PARTE A — Crear la vista</p>
+
+    <div class="step">
+      <div class="step-label">Paso 1</div>
+      <p>Abrí AppSheet → tu app de Finanzas → menú lateral izquierdo → <strong>Views</strong>.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 2</div>
+      <p>Clic en <strong>+ New View</strong>. Configurá:</p>
+      <table>
+        <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>View name</td><td class="accent2">Gastos Fijos</td></tr>
+          <tr><td>For this data</td><td class="accent2">GastosFijos</td></tr>
+          <tr><td>View type</td><td class="accent2">Table</td></tr>
+          <tr><td>Position</td><td class="accent2">menu (aparece en el menú principal de la app)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 3 — Columnas visibles</div>
+      <p>Dentro de la vista, buscá la sección <strong>Column order</strong>. Mostrá solo las columnas útiles para el usuario. Sugerencia:</p>
+      <table>
+        <thead><tr><th>Columna</th><th>Mostrar</th><th>Nota</th></tr></thead>
+        <tbody>
+          <tr><td>descripcion</td><td class="accent">Sí</td><td class="muted">nombre del gasto</td></tr>
+          <tr><td>monto</td><td class="accent">Sí</td><td class="muted">monto vigente</td></tr>
+          <tr><td>vigente_desde</td><td class="accent">Sí</td><td class="muted">desde cuándo aplica</td></tr>
+          <tr><td>activo</td><td class="accent">Sí</td><td class="muted">para saber si está activo</td></tr>
+          <tr><td>categoria / subcategoria</td><td class="accent">Sí</td><td class="muted">contexto</td></tr>
+          <tr><td>id</td><td class="danger">No</td><td class="muted">técnico, no necesario</td></tr>
+          <tr><td>medio_pago / tarjeta</td><td class="accent2">Opcional</td><td class="muted">incluir si lo usás</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 4 — Filtro: solo activos por defecto</div>
+      <p>En la vista, buscá <strong>Slice</strong> o <strong>Row filter condition</strong> y escribí:</p>
+      <div class="code-block">[activo] = TRUE</div>
+      <p>Así la vista muestra solo los gastos activos. Los desactivados quedan en la Sheet como historial.</p>
+    </div>
+
+    <hr>
+
+    <p style="font-size:0.7rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin: 1.5rem 0 1rem">PARTE B — Acción 1: Actualizar monto</p>
+
+    <p style="font-size:0.82rem; color:var(--muted); margin-bottom:1rem">
+      Esta acción no edita la fila existente. Agrega una fila nueva con el nuevo monto y una nueva fecha <code>vigente_desde</code>, preservando el historial. La lógica ya está en Apps Script (<code>actualizarMontoFijo()</code>), pero AppSheet no puede llamarla directamente. La solución es crear una nueva fila manualmente con el mismo ID de descripción.
+    </p>
+
+    <div class="step">
+      <div class="step-label">Paso 5</div>
+      <p>En AppSheet → <strong>Behavior</strong> → <strong>Actions</strong> → <strong>+ New Action</strong>.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 6 — Configurar la acción "Nuevo monto"</div>
+      <table>
+        <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Action name</td><td class="accent2">Nuevo monto</td></tr>
+          <tr><td>For a record of this table</td><td class="accent2">GastosFijos</td></tr>
+          <tr><td>Do this</td><td class="accent2">App: go to another view within this app</td></tr>
+          <tr><td colspan="2" class="muted" style="font-style:italic; font-size:0.72rem">Alternativa más simple — ver nota abajo</td></tr>
+        </tbody>
+      </table>
+
+      <div class="note">
+        <strong>Alternativa más simple (recomendada):</strong> En lugar de una acción compleja, usá <strong>Do this: Add a new row to another table using values from this row</strong>. Configurá que cree una nueva fila en <code>GastosFijos</code> copiando los campos <code>descripcion</code>, <code>categoria</code>, <code>subcategoria</code>, <code>responsable</code>, <code>medio_pago</code> — y dejando <code>monto</code> y <code>vigente_desde</code> en blanco para que el usuario los complete. Así se abre el formulario pre-llenado.
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 7 — Configuración completa de la acción "Nuevo monto"</div>
+      <table>
+        <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Action name</td><td class="accent2">Nuevo monto</td></tr>
+          <tr><td>For a record of this table</td><td class="accent2">GastosFijos</td></tr>
+          <tr><td>Do this</td><td class="accent2">Data: add a new row to another table using values from this row</td></tr>
+          <tr><td>Table to add row to</td><td class="accent2">GastosFijos</td></tr>
+          <tr><td>Preset fields</td><td class="accent2">Ver tabla abajo</td></tr>
+          <tr><td>Prominence</td><td class="accent2">Display overlay (aparece como botón flotante)</td></tr>
+        </tbody>
+      </table>
+
+      <p style="margin-top:0.75rem; font-size:0.78rem; color:var(--muted)">Campos preset (se copian de la fila original):</p>
+      <table>
+        <thead><tr><th>Campo destino</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>descripcion</td><td class="accent2">[descripcion]</td></tr>
+          <tr><td>categoria</td><td class="accent2">[categoria]</td></tr>
+          <tr><td>subcategoria</td><td class="accent2">[subcategoria]</td></tr>
+          <tr><td>responsable</td><td class="accent2">[responsable]</td></tr>
+          <tr><td>medio_pago</td><td class="accent2">[medio_pago]</td></tr>
+          <tr><td>es_bimestral</td><td class="accent2">[es_bimestral]</td></tr>
+          <tr><td>activo</td><td class="accent2">TRUE</td></tr>
+          <tr><td>monto</td><td class="muted">dejar vacío — el usuario lo completa</td></tr>
+          <tr><td>vigente_desde</td><td class="muted">dejar vacío — el usuario lo completa</td></tr>
+        </tbody>
+      </table>
+
+      <div class="note ok">
+        <strong>Resultado:</strong> Al tocar "Nuevo monto" en una fila, se abre el formulario de GastosFijos pre-llenado con todos los datos copiados. El usuario solo escribe el nuevo monto y la fecha desde cuándo aplica, y guarda. Se crea una nueva fila — la original queda como historial.
+      </div>
+    </div>
+
+    <hr>
+
+    <p style="font-size:0.7rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin: 1.5rem 0 1rem">PARTE C — Acción 2: Desactivar gasto</p>
+
+    <div class="step">
+      <div class="step-label">Paso 8 — Nueva acción "Desactivar"</div>
+      <table>
+        <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Action name</td><td class="accent2">Desactivar</td></tr>
+          <tr><td>For a record of this table</td><td class="accent2">GastosFijos</td></tr>
+          <tr><td>Do this</td><td class="accent2">Data: set the values of some columns in this row</td></tr>
+          <tr><td>Column: activo</td><td class="accent2">FALSE</td></tr>
+          <tr><td>Confirmation message</td><td class="accent2">¿Desactivar este gasto fijo?</td></tr>
+          <tr><td>Prominence</td><td class="accent2">Display inline (aparece en la fila como ícono)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="note danger">
+        <strong>Importante:</strong> Esta acción no borra la fila. Solo setea <code>activo = FALSE</code>. El gasto sigue en la Sheet como historial y no aparecerá en el dashboard porque el endpoint <code>?action=fixed</code> filtra por <code>activo = TRUE</code>.
+      </div>
+    </div>
+
+    <hr>
+
+    <p style="font-size:0.7rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin: 1.5rem 0 1rem">PARTE D — Acción 3: Agregar gasto nuevo</p>
+
+    <div class="step">
+      <div class="step-label">Paso 9</div>
+      <p>AppSheet agrega automáticamente el botón <strong>+</strong> para crear nuevas filas cuando la vista tiene el tipo <strong>Table</strong> con permisos de escritura. No necesita configuración extra.</p>
+      <p>Si querés un ícono personalizado o un label distinto: en la vista, buscá <strong>View Options → Add button</strong> y personalizá el label (sugerencia: <code>+ Agregar gasto fijo</code>).</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 10 — Guardar y probar</div>
+      <p>Clic en <strong>Save</strong> en AppSheet. En el preview de la app, navegá a la vista "Gastos Fijos" y verificá:</p>
+      <p>— Las filas activas se ven correctamente.</p>
+      <p>— En cada fila aparece el botón/ícono "Nuevo monto" y "Desactivar".</p>
+      <p>— El botón + agrega una nueva fila en blanco.</p>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- PUNTO 3                                                -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div class="section" id="punto3">
+    <div class="section-header">
+      <div class="section-number">3</div>
+      <div class="section-title-block">
+        <div class="section-sub">Google Sheets <span class="badge badge-sheets">Sheets</span> <span class="badge badge-manual">Manual</span></div>
+        <h2>Columna virtual Banco–Nombre en hoja Tarjetas</h2>
+      </div>
+    </div>
+
+    <p style="font-size:0.82rem; color:var(--muted); margin-bottom:1.5rem">
+      Objetivo: agregar una columna calculada en la hoja <code>Tarjetas</code> que combine banco y nombre de la tarjeta (ej: <em>"Galicia – Visa"</em>). Esta columna la usa AppSheet como label en el formulario de carga. El Log sigue guardando el ID (<code>TC1</code>, <code>TD1</code>, etc.) — nada existente se rompe.
+    </p>
+
+    <div class="note">
+      <strong>Estructura actual de la hoja Tarjetas:</strong><br>
+      Col A: ID &nbsp;·&nbsp; Col B: Nombre &nbsp;·&nbsp; Col C: Tipo &nbsp;·&nbsp; Col D: Banco &nbsp;·&nbsp; Col E: Titular &nbsp;·&nbsp; Col F: Día cierre &nbsp;·&nbsp; Col G: Día vencimiento
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 1</div>
+      <p>Abrí la Google Sheet de Finanzas → pestaña <strong>Tarjetas</strong>.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 2 — Agregar encabezado</div>
+      <p>Hacé clic en la celda <strong>H1</strong> y escribí:</p>
+      <div class="code-block">label</div>
+      <p>Este es el nombre de la columna nueva. En minúsculas para consistencia con el resto.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 3 — Escribir la fórmula en H2</div>
+      <p>Hacé clic en la celda <strong>H2</strong> y escribí la siguiente fórmula:</p>
+      <div class="code-block">=D2&" – "&B2</div>
+      <p>Esto concatena <strong>Banco</strong> (col D) + <strong>" – "</strong> + <strong>Nombre</strong> (col B).<br>
+      Resultado para una fila típica: <code>Galicia – Visa</code> o <code>Santander – Mastercard</code>.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 4 — Copiar la fórmula hacia abajo</div>
+      <p>Con H2 seleccionada, copiá la celda (Ctrl+C) y pegala en <strong>H3, H4, H5…</strong> hasta cubrir todas las filas con tarjetas. O usá el truco del cuadrado azul: arrastrá desde la esquina inferior derecha de H2 hacia abajo.</p>
+      <div class="note">
+        <strong>Tip:</strong> Si las tarjetas que no tienen banco asignado muestran <code>" – Visa"</code>, podés mejorar la fórmula para manejar ese caso: <code>=IF(D2="", B2, D2&" – "&B2)</code>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 5 — Verificar el resultado</div>
+      <p>La columna H debería verse así (ejemplo):</p>
+      <table>
+        <thead><tr><th>A (ID)</th><th>B (Nombre)</th><th>D (Banco)</th><th>H (label) ← nuevo</th></tr></thead>
+        <tbody>
+          <tr><td class="muted">TC1</td><td class="muted">Visa</td><td class="muted">Galicia</td><td class="accent">Galicia – Visa</td></tr>
+          <tr><td class="muted">TC2</td><td class="muted">Mastercard</td><td class="muted">Santander</td><td class="accent">Santander – Mastercard</td></tr>
+          <tr><td class="muted">TD1</td><td class="muted">Visa Débito</td><td class="muted">Galicia</td><td class="accent">Galicia – Visa Débito</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 6 — Configurar en AppSheet (opcional pero recomendado)</div>
+      <p>Para que AppSheet use esta columna como display label al elegir tarjeta en el formulario:</p>
+      <p>AppSheet → <strong>Data</strong> → tabla <strong>Tarjetas</strong> → columna <strong>label</strong> → en la sección <strong>Column type</strong> verificá que sea <code>Text</code> y que esté marcada como <strong>Show?</strong> = sí.</p>
+      <p>Luego, en la tabla <strong>Log</strong>, columna <strong>tarjeta</strong>: buscá el campo <strong>Label column</strong> o <strong>Description</strong> dentro del tipo <code>Ref</code>. Seleccioná <strong>label</strong> como columna de display. Así en el formulario de carga el usuario ve <em>"Galicia – Visa"</em> en lugar de <em>"TC1"</em>.</p>
+      <div class="note ok">
+        <strong>Sin impacto en datos:</strong> El valor que se guarda en el Log sigue siendo el ID (<code>TC1</code>). El label es solo visual en el formulario.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- PUNTO 4                                                -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div class="section" id="punto4">
+    <div class="section-header">
+      <div class="section-number">4</div>
+      <div class="section-title-block">
+        <div class="section-sub">Google Sheets <span class="badge badge-sheets">Sheets</span> <span class="badge badge-manual">Manual</span></div>
+        <h2>Columnas tipo_proporcion y proporcion_jd en hoja Log</h2>
+      </div>
+    </div>
+
+    <p style="font-size:0.82rem; color:var(--muted); margin-bottom:1.5rem">
+      Objetivo: agregar dos columnas nuevas al final de la hoja <code>Log</code> para habilitar la feature F-04 (proporción personalizada por gasto). La lógica del dashboard que las consume se implementa después — por ahora solo se agregan las columnas y su validación.
+    </p>
+
+    <div class="note danger">
+      <strong>⚠ No re-ejecutar <code>setupFinanzasSheet()</code>.</strong> Eso borraría todos los datos existentes. Estas columnas se agregan manualmente a la sheet que ya está en producción.
+    </div>
+
+    <div class="note">
+      <strong>Estructura actual del Log (16 columnas):</strong><br>
+      id · fecha · tipo · categoría · subcategoría · descripción · monto_total · cuotas_total · cuota_nro · cuota_ref · medio_pago · tarjeta · pagó · es_fijo · notas · borrado
+      <br><br>
+      Las dos columnas nuevas van en las posiciones <strong>Q (17)</strong> y <strong>R (18)</strong>.
+    </div>
+
+    <hr>
+
+    <p style="font-size:0.7rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin: 1.5rem 0 1rem">COLUMNA Q — tipo_proporcion</p>
+
+    <div class="step">
+      <div class="step-label">Paso 1 — Agregar encabezado</div>
+      <p>Hacé clic en la celda <strong>Q1</strong> y escribí:</p>
+      <div class="code-block">tipo_proporcion</div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 2 — Aplicar validación de datos (dropdown)</div>
+      <p>Seleccioná el rango <strong>Q2:Q5000</strong> (o hasta donde lleguen tus datos más un margen).</p>
+      <p>Menú <strong>Datos → Validación de datos → + Agregar regla</strong>. Configurá:</p>
+      <table>
+        <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Criterios</td><td class="accent2">El menú desplegable (lista de ítems)</td></tr>
+          <tr><td>Valor 1</td><td class="accent2">dinamica</td></tr>
+          <tr><td>Valor 2</td><td class="accent2">50/50</td></tr>
+          <tr><td>Valor 3</td><td class="accent2">custom</td></tr>
+          <tr><td>Mostrar advertencia / Rechazar</td><td class="accent2">Mostrar advertencia (no bloquear)</td></tr>
+        </tbody>
+      </table>
+      <div class="note">
+        <strong>Por qué "Mostrar advertencia" y no "Rechazar entrada":</strong> Las filas nuevas creadas por el trigger de Apps Script (auto-ID, expansión de cuotas) no pasan la validación si está en modo estricto. Con advertencia, las filas se crean igual y el campo queda vacío — el dashboard interpreta vacío como <code>"dinamica"</code>.
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 3 — Valor por defecto (opcional)</div>
+      <p>No es posible setear un valor por defecto en Google Sheets para filas nuevas a través de la validación. El valor por defecto <code>"dinamica"</code> lo maneja el dashboard (trata vacío como dinámico) y AppSheet (configurar default allá en el Paso siguiente).</p>
+    </div>
+
+    <hr>
+
+    <p style="font-size:0.7rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin: 1.5rem 0 1rem">COLUMNA R — proporcion_jd</p>
+
+    <div class="step">
+      <div class="step-label">Paso 4 — Agregar encabezado</div>
+      <p>Hacé clic en la celda <strong>R1</strong> y escribí:</p>
+      <div class="code-block">proporcion_jd</div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 5 — Validación de datos (número entre 0 y 100)</div>
+      <p>Seleccioná el rango <strong>R2:R5000</strong>.</p>
+      <p>Menú <strong>Datos → Validación de datos → + Agregar regla</strong>:</p>
+      <table>
+        <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Criterios</td><td class="accent2">El número es</td></tr>
+          <tr><td>Condición</td><td class="accent2">entre</td></tr>
+          <tr><td>Mínimo</td><td class="accent2">0</td></tr>
+          <tr><td>Máximo</td><td class="accent2">100</td></tr>
+          <tr><td>Mostrar advertencia / Rechazar</td><td class="accent2">Mostrar advertencia</td></tr>
+        </tbody>
+      </table>
+      <p>Esta columna solo tiene sentido cuando <code>tipo_proporcion = "custom"</code>. En todos los demás casos queda vacía y el dashboard la ignora.</p>
+    </div>
+
+    <hr>
+
+    <p style="font-size:0.7rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin: 1.5rem 0 1rem">FORMATO OPCIONAL</p>
+
+    <div class="step">
+      <div class="step-label">Paso 6 — Dar formato visual a los encabezados nuevos</div>
+      <p>Para que Q1 y R1 tengan el mismo estilo que los demás encabezados del Log:</p>
+      <p>1. Seleccioná P1 (la columna <code>notas</code>, última antes de las nuevas) → copiá el formato (Ctrl+Alt+C en Windows).</p>
+      <p>2. Seleccioná Q1:R1 → pegá el formato (Ctrl+Alt+V).</p>
+      <p>Así los dos encabezados nuevos quedan con el mismo fondo y color de texto que el resto.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 7 — Congelar columnas (si está configurado)</div>
+      <p>Si el Log tiene columnas congeladas (para que el encabezado quede fijo al hacer scroll), verificá que las nuevas columnas Q y R queden fuera de la zona congelada. Menú <strong>Ver → Inmovilizar → Hasta la columna actual</strong> — revisá que no se hayan agregado accidentalmente a la zona fija.</p>
+    </div>
+
+    <hr>
+
+    <p style="font-size:0.7rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin: 1.5rem 0 1rem">CONFIGURACIÓN EN APPSHEET</p>
+
+    <div class="step">
+      <div class="step-label">Paso 8 — Sincronizar AppSheet con la Sheet actualizada</div>
+      <p>AppSheet detecta automáticamente columnas nuevas en la próxima sincronización. Para forzarla:</p>
+      <p>AppSheet → <strong>Data</strong> → tabla <strong>Log</strong> → clic en <strong>Regenerate structure</strong> (o el ícono de sincronización).</p>
+      <p>Las columnas <code>tipo_proporcion</code> y <code>proporcion_jd</code> deberían aparecer.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 9 — Configurar tipo_proporcion en AppSheet</div>
+      <table>
+        <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Column type</td><td class="accent2">Enum</td></tr>
+          <tr><td>Values</td><td class="accent2">dinamica · 50/50 · custom</td></tr>
+          <tr><td>Default value</td><td class="accent2">dinamica</td></tr>
+          <tr><td>Show?</td><td class="accent2">Sí (siempre visible en el formulario)</td></tr>
+          <tr><td>Label en el formulario</td><td class="accent2">Proporción</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 10 — Configurar proporcion_jd en AppSheet</div>
+      <table>
+        <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Column type</td><td class="accent2">Number</td></tr>
+          <tr><td>Show?</td><td class="accent2">Show_If: [tipo_proporcion] = "custom"</td></tr>
+          <tr><td>Label en el formulario</td><td class="accent2">% JD</td></tr>
+          <tr><td>Min / Max</td><td class="accent2">0 / 100</td></tr>
+          <tr><td>Descripción</td><td class="accent2">Porcentaje que le corresponde a JD. El de Pinki se calcula como 100 menos este valor.</td></tr>
+        </tbody>
+      </table>
+      <div class="note ok">
+        <strong>Resultado:</strong> En el formulario de carga, el campo "% JD" solo aparece cuando el usuario elige "custom" en Proporción. Para los casos comunes (dinámico o 50/50) el formulario queda limpio.
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Paso 11 — Guardar y probar</div>
+      <p>Guardá en AppSheet. Cargá un gasto de prueba:</p>
+      <p>— Con <code>tipo_proporcion = "dinamica"</code>: el campo % JD no debe aparecer.</p>
+      <p>— Con <code>tipo_proporcion = "custom"</code>: el campo % JD debe aparecer y aceptar un número entre 0 y 100.</p>
+      <p>— Verificá en la Sheet que la fila tenga los valores correctos en las columnas Q y R.</p>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- CHECKLIST FINAL                                        -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div class="section" id="checklist">
+    <div class="section-header">
+      <div class="section-number" style="color:var(--accent); font-size:2rem">✓</div>
+      <div class="section-title-block">
+        <div class="section-sub">Verificación</div>
+        <h2>Checklist final</h2>
+      </div>
+    </div>
+
+    <ul class="checklist">
+      <li><span class="check-box"></span>Vista "Gastos Fijos" creada en AppSheet y visible en el menú</li>
+      <li><span class="check-box"></span>Vista GastosFijos filtra por <code>activo = TRUE</code></li>
+      <li><span class="check-box"></span>Acción "Nuevo monto" crea fila nueva pre-llenada (no edita la existente)</li>
+      <li><span class="check-box"></span>Acción "Desactivar" setea <code>activo = FALSE</code> con confirmación</li>
+      <li><span class="check-box"></span>Columna H <code>label</code> agregada en hoja Tarjetas con fórmula <code>=D2&" – "&B2</code></li>
+      <li><span class="check-box"></span>Todas las filas de Tarjetas tienen valor en la columna <code>label</code></li>
+      <li><span class="check-box"></span>AppSheet muestra el label (ej: "Galicia – Visa") en el campo tarjeta del formulario Log</li>
+      <li><span class="check-box"></span>Columna Q (<code>tipo_proporcion</code>) agregada en Log con validación dropdown</li>
+      <li><span class="check-box"></span>Columna R (<code>proporcion_jd</code>) agregada en Log con validación 0–100</li>
+      <li><span class="check-box"></span>AppSheet sincronizado — columnas Q y R detectadas en tabla Log</li>
+      <li><span class="check-box"></span>Campo "Proporción" con default "dinamica" funciona en el formulario</li>
+      <li><span class="check-box"></span>Campo "% JD" solo aparece cuando Proporción = "custom"</li>
+    </ul>
+  </div>
+
+</body>
+</html>

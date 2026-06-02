@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setup Presupuestos · LIFE</title>
+<style>
+  :root {
+    --bg:       #0e0e0c;
+    --surface:  #161614;
+    --surface2: #1e1e1b;
+    --border:   #2a2a26;
+    --text:     #e8e4da;
+    --muted:    #6b6860;
+    --accent:   #8fb87a;
+    --accent2:  #c4a96b;
+    --danger:   #c47a7a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Georgia', serif;
+    font-size: 15px;
+    line-height: 1.75;
+    padding: 3rem 1rem;
+  }
+
+  .page {
+    max-width: 740px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--accent);
+    letter-spacing: 0.03em;
+    margin-bottom: 0.25rem;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 3rem;
+  }
+
+  h2 {
+    font-size: 1.2rem;
+    font-weight: 400;
+    color: var(--text);
+    margin: 2.5rem 0 0.75rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 0.8rem;
+    font-weight: bold;
+    font-family: monospace;
+    margin-right: 0.6rem;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+
+  p { margin-bottom: 0.75rem; color: var(--text); }
+
+  .note {
+    background: var(--surface);
+    border-left: 3px solid var(--accent2);
+    padding: 0.75rem 1.25rem;
+    margin: 1rem 0;
+    font-size: 0.88rem;
+    color: var(--muted);
+    border-radius: 0 4px 4px 0;
+  }
+  .note strong { color: var(--accent2); }
+
+  .warn {
+    background: var(--surface);
+    border-left: 3px solid var(--danger);
+    padding: 0.75rem 1.25rem;
+    margin: 1rem 0;
+    font-size: 0.88rem;
+    color: var(--muted);
+    border-radius: 0 4px 4px 0;
+  }
+  .warn strong { color: var(--danger); }
+
+  code {
+    font-family: 'Courier New', monospace;
+    font-size: 0.82rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    color: var(--accent2);
+  }
+
+  pre {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 1rem 1.25rem;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.82rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+    color: var(--accent2);
+    line-height: 1.6;
+  }
+
+  ol, ul {
+    padding-left: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+  li { margin-bottom: 0.4rem; }
+
+  .checklist { list-style: none; padding-left: 0; }
+  .checklist li {
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist li::before {
+    content: '☐';
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.4;
+    flex-shrink: 0;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 3rem 0;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .tag {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-family: monospace;
+    letter-spacing: 0.05em;
+    vertical-align: middle;
+  }
+  .tag-green  { background: rgba(143,184,122,0.12); color: var(--accent); }
+  .tag-yellow { background: rgba(196,169,107,0.12); color: var(--accent2); }
+  .tag-red    { background: rgba(196,122,122,0.12); color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Setup · Módulo Presupuestos</h1>
+  <div class="subtitle">LIFE · Finanzas en Pareja · Guía de configuración</div>
+
+  <p>
+    Este tutorial te lleva paso a paso por la activación del módulo
+    <strong>Presupuestos</strong>: la hoja <code>GastosFijos</code> en Google Sheets,
+    el endpoint <code>?action=fixed</code> en Apps Script, y las vistas del dashboard.
+  </p>
+
+  <div class="note">
+    <strong>Qué vas a lograr:</strong> una 4ª vista en el dashboard que muestra tus gastos
+    fijos mensuales vigentes, un simulador de gastos variables, una barra de progreso que
+    te dice cuánto margen te queda del ingreso, y un gráfico de evolución histórica por
+    cada gasto fijo.
+  </div>
+
+  <!-- ── PASO 1 ── -->
+  <h2><span class="step-number">1</span> Crear la hoja GastosFijos en Google Sheets</h2>
+
+  <p>
+    Abrí la Google Sheet del proyecto y entrá a
+    <strong>Extensions &gt; Apps Script</strong>.
+  </p>
+  <p>
+    Creá un archivo nuevo (botón <strong>+</strong> → New script file) y nombralo
+    <code>setup-gastosfijos</code>. Pegá el contenido completo del archivo
+    <code>apps-script/finanzas-setup-gastosfijos.js</code>.
+  </p>
+  <p>
+    Ejecutá la función <code>setupGastosFijos()</code> desde el selector de funciones
+    (arriba, al lado del botón ▶). Si la hoja ya existe, te va a pedir confirmación
+    antes de reemplazarla.
+  </p>
+
+  <div class="note">
+    <strong>Qué hace el script:</strong> crea la hoja <code>GastosFijos</code> con 11
+    columnas (id, categoria, subcategoria, descripcion, monto, responsable, medio_pago,
+    tarjeta, es_bimestral, vigente_desde, activo) y 6 filas iniciales con montos en $0.
+    Gas y Electricidad están marcados como <code>es_bimestral=TRUE</code> para que el
+    cálculo mensual use la mitad.
+  </div>
+
+  <!-- ── PASO 2 ── -->
+  <h2><span class="step-number">2</span> Actualizar los montos reales en la hoja</h2>
+
+  <p>
+    Las 6 filas iniciales tienen <code>monto = 0</code>. Editá cada una con los valores
+    reales. <strong>No borres las filas existentes</strong>: editá el campo
+    <code>monto</code> directamente (por ahora, los datos iniciales son de arranque).
+  </p>
+
+  <p>
+    Para los gastos bimestrales (Gas, Electricidad), ingresá el monto
+    <strong>total de la factura</strong>. El endpoint automáticamente divide por 2
+    al calcular el monto mensual.
+  </p>
+
+  <ul>
+    <li><strong>GF-001</strong> — Alquiler (monto mensual)</li>
+    <li><strong>GF-002</strong> — Expensas ordinarias (monto mensual)</li>
+    <li><strong>GF-003</strong> — Seguro departamento (monto mensual)</li>
+    <li><strong>GF-004</strong> — Internet (monto mensual)</li>
+    <li><strong>GF-005</strong> — Gas <span class="tag tag-yellow">bimestral</span> (monto de la factura completa)</li>
+    <li><strong>GF-006</strong> — Electricidad <span class="tag tag-yellow">bimestral</span> (monto de la factura completa)</li>
+  </ul>
+
+  <div class="note">
+    <strong>Lógica de versionado:</strong> cuando en el futuro suba el alquiler (u otro
+    gasto), <em>no</em> editás la fila existente. Agregás una nueva fila con el nuevo
+    monto y una <code>vigente_desde</code> al día de inicio. Esto preserva el historial
+    completo y habilita el gráfico de evolución en el dashboard.
+  </div>
+
+  <!-- ── PASO 3 ── -->
+  <h2><span class="step-number">3</span> Nuevo deployment en Apps Script</h2>
+
+  <div class="warn">
+    <strong>Importante:</strong> los cambios al código de Apps Script
+    <em>no se activan</em> en el deployment existente. Necesitás crear un
+    <strong>NEW deployment</strong>. La URL va a cambiar — la vieja sigue
+    funcionando pero no incluye el nuevo endpoint <code>?action=fixed</code>.
+  </div>
+
+  <p>Pasos:</p>
+  <ol>
+    <li>En el editor de Apps Script, hacé clic en <strong>Deploy &gt; New deployment</strong></li>
+    <li>En <em>Select type</em> elegí <strong>Web App</strong></li>
+    <li>En <em>Execute as</em>: <strong>Me</strong></li>
+    <li>En <em>Who has access</em>: <strong>Anyone</strong></li>
+    <li>Hacé clic en <strong>Deploy</strong></li>
+    <li>Copiá la nueva URL (formato: <code>https://script.google.com/macros/s/AKfyc…/exec</code>)</li>
+  </ol>
+
+  <!-- ── PASO 4 ── -->
+  <h2><span class="step-number">4</span> Actualizar API_URL en el dashboard</h2>
+
+  <p>
+    Abrí <code>src/finanzas/index.html</code> y buscá la constante
+    <code>API_URL</code> al inicio del bloque <code>&lt;script&gt;</code>:
+  </p>
+
+  <pre>const API_URL = 'https://script.google.com/macros/s/AKfyc…/exec';</pre>
+
+  <p>
+    Reemplazá la URL vieja por la nueva que copiaste en el paso anterior.
+    Guardá el archivo y hacé push a GitHub (Pages lo va a publicar
+    automáticamente en unos segundos).
+  </p>
+
+  <!-- ── PASO 5 ── -->
+  <h2><span class="step-number">5</span> Verificar el endpoint en el browser</h2>
+
+  <p>
+    Antes de abrir el dashboard, verificá que el endpoint funciona copiando esta URL
+    en el browser (reemplazando con tu nueva URL):
+  </p>
+
+  <pre>https://script.google.com/macros/s/TU-NUEVA-URL/exec?action=fixed&amp;month=2026-04</pre>
+
+  <p>
+    Deberías ver un JSON con <code>"ok": true</code> y un array <code>data</code>
+    con los 6 gastos fijos. Si ves <code>"ok": false</code> con un error, revisá
+    que la hoja se llama exactamente <code>GastosFijos</code> (sin espacios ni
+    tildes) y que los encabezados son en minúsculas sin acentos.
+  </p>
+
+  <!-- ── PASO 6 ── -->
+  <h2><span class="step-number">6</span> Configurar AppSheet — ocultar campo es_fijo</h2>
+
+  <p>
+    El campo <code>es_fijo</code> ya no se usa en el flujo de carga (los gastos fijos
+    se manejan desde la hoja <code>GastosFijos</code>). Para ocultarlo del formulario:
+  </p>
+
+  <ol>
+    <li>Abrí tu app en AppSheet</li>
+    <li>Andá a <strong>Data &gt; Columns &gt; Log</strong></li>
+    <li>Buscá la columna <code>es_fijo</code></li>
+    <li>En la columna <em>Show?</em>, poné la condición: <code>FALSE</code></li>
+    <li>Guardá y publicá</li>
+  </ol>
+
+  <div class="note">
+    <strong>Por qué:</strong> el campo <code>es_fijo</code> se queda en la Sheet
+    para no romper datos históricos, pero no queremos que el usuario lo complete
+    manualmente en el formulario. Los gastos fijos ahora viven en su propia tabla.
+  </div>
+
+  <!-- ── PASO 7 (OPCIONAL) ── -->
+  <h2><span class="step-number">7</span> Configurar AppSheet — vista GastosFijos (opcional)</h2>
+
+  <p>
+    Podés crear una vista en AppSheet para gestionar los gastos fijos directamente
+    desde el celular (sin entrar a la Sheet). Los pasos son:
+  </p>
+
+  <p><strong>7a — Conectar la nueva tabla:</strong></p>
+  <ol>
+    <li>En AppSheet: <strong>Data &gt; Tables &gt; Add table</strong></li>
+    <li>Elegí la misma Google Sheet y seleccioná la hoja <code>GastosFijos</code></li>
+    <li>Verificá que los tipos de dato sean correctos:
+      <code>monto</code> → Number, <code>vigente_desde</code> → Date,
+      <code>activo</code> / <code>es_bimestral</code> → Yes/No</li>
+  </ol>
+
+  <p><strong>7b — Crear acciones:</strong></p>
+  <ul>
+    <li>
+      <strong>Actualizar monto:</strong> tipo <em>Data: Add a new row to another table
+      using values from this row</em>. Copia todos los campos y permite editar
+      <code>monto</code> y <code>vigente_desde</code>. Así crea una nueva versión
+      sin tocar la fila anterior.
+    </li>
+    <li>
+      <strong>Desactivar:</strong> tipo <em>Data: Set the value of some columns in
+      this row</em>. Setea <code>activo = FALSE</code>. Así el gasto desaparece
+      del cálculo sin borrarlo.
+    </li>
+    <li>
+      <strong>Agregar:</strong> acción de formulario estándar para agregar un
+      gasto nuevo desde cero.
+    </li>
+  </ul>
+
+  <div class="divider"></div>
+
+  <!-- CHECKLIST FINAL -->
+  <h2>Checklist de verificación</h2>
+
+  <ul class="checklist">
+    <li>Hoja <code>GastosFijos</code> creada con 6 filas y encabezados en minúsculas sin acentos</li>
+    <li>Montos reales cargados en la Sheet (no $0)</li>
+    <li>Nuevo deployment creado en Apps Script (no editado el existente)</li>
+    <li><code>API_URL</code> actualizada en <code>src/finanzas/index.html</code></li>
+    <li>Endpoint <code>?action=fixed</code> verificado en el browser → responde <code>"ok": true</code></li>
+    <li>Dashboard abierto → vista Presupuesto muestra los 6 gastos fijos</li>
+    <li>AppSheet: campo <code>es_fijo</code> oculto del formulario Log</li>
+  </ul>
+
+  <div class="divider"></div>
+
+  <!-- NOTAS TÉCNICAS -->
+  <h2>Notas técnicas</h2>
+
+  <p><strong>Lógica de versionado (para futuros cambios de precio):</strong></p>
+  <p>
+    Nunca editás una fila existente en <code>GastosFijos</code>. En su lugar,
+    agregás una nueva fila con el mismo <code>descripcion</code>, el nuevo
+    <code>monto</code>, y una <code>vigente_desde</code> posterior. El endpoint
+    automáticamente toma la versión más reciente aplicable a cada mes consultado.
+    Esto habilita el gráfico de evolución en el dashboard.
+  </p>
+  <p>
+    Podés hacer esto desde la Sheet directamente o usando la función helper
+    <code>actualizarMontoFijo(descripcion, nuevoMonto, desde)</code> en el
+    editor de Apps Script.
+  </p>
+
+  <p><strong>Apps Script cold start:</strong></p>
+  <p>
+    El primer request después de inactividad tarda ~1–2 segundos. Es normal.
+    El dashboard muestra el loader mientras espera.
+  </p>
+
+  <p><strong>Re-deploy siempre que cambies el código del API:</strong></p>
+  <p>
+    Cualquier cambio al archivo <code>finanzas-api.js</code> en Apps Script
+    requiere crear un <em>nuevo</em> deployment. Editar el deployment existente
+    no publica los cambios. La URL cambia cada vez.
+  </p>
+
+</div>
+</body>
+</html>

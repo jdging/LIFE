@@ -1,0 +1,25 @@
+{
+  "marca": "JDG",
+  "nombre_completo": "Juan David Guzmán",
+  "titulo": "Ingeniero Estructural",
+  "contacto": {
+    "email": "juandavidguzman96@gmail.com",
+    "telefono": "341 360 3215",
+    "ubicacion": "Rosario, Santa Fe, Argentina"
+  },
+  "fiscal": {
+    "cuit": "20-39755941-7",
+    "condicion_iva": "Responsable Monotributo",
+    "inicio_actividades": "2025-07-01"
+  },
+  "web": {
+    "sitio": "https://jdging.github.io/Portafolio/",
+    "linkedin": "https://www.linkedin.com/in/ingjdg/",
+    "github": "https://github.com/jdging"
+  },
+  "assets": {
+    "logo": "logo.svg",
+    "colores": "colores.css"
+  },
+  "_nota": "ACOTACIÓN: Completar todos los campos entre corchetes antes de generar documentos."
+}

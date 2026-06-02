@@ -1,0 +1,88 @@
+/* === MARCA JDG — Variables de color y tipografía === */
+/* ACOTACIÓN PARA R.P.: Estos valores definen la identidad visual de TODOS los documentos JDG.
+   Cambiar algo acá cambia automáticamente todos los documentos que usen este archivo.
+   Paleta basada en el estilo del presupuesto Wash Motion (marzo 2026).
+   
+   Este archivo se usa para documentos con fondo CLARO (informes, propuestas, etc.).
+   El presupuesto oscuro (presupuesto/template.html) tiene sus propios estilos inline. */
+
+/* ── Google Fonts ── */
+/* ACOTACIÓN PARA R.P.: Montserrat para títulos (peso visual fuerte, uppercase),
+   Lato para cuerpo (legibilidad). Ambas gratuitas via Google Fonts. */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;900&family=Lato:wght@300;400;700&display=swap');
+
+:root {
+  /* ── Colores principales ── */
+  /* ACOTACIÓN PARA R.P.: El navy (#2b3263) es el color insignia de JDG.
+     En documentos claros se usa para títulos, bordes y acentos. */
+  --jdg-primary: #2b3263;
+  --jdg-secondary: #1e2348;
+  --jdg-accent: #4a4f6e;
+  --jdg-highlight: #2b3263;       /* Mismo navy — cambiar si se define un acento distinto */
+
+  /* ── Neutros ── */
+  --jdg-white: #ffffff;
+  --jdg-light-gray: #f4f5f8;     /* Fondo sutil, filas alternas de tabla */
+  --jdg-mid-gray: #9098b8;       /* Texto secundario, metadata */
+  --jdg-dark-gray: #1a1d2e;      /* Texto principal sobre fondo claro */
+  --jdg-black: #1a1d2e;
+
+  /* ── Tipografía ── */
+  --jdg-font-heading: 'Montserrat', 'Segoe UI', sans-serif;
+  --jdg-font-body: 'Lato', 'Segoe UI', sans-serif;
+  --jdg-font-mono: 'JetBrains Mono', 'Consolas', monospace;
+
+  /* ── Tamaños tipográficos ── */
+  /* ACOTACIÓN PARA R.P.: Escala para documentos con fondo claro.
+     Montserrat se usa en uppercase con letter-spacing para labels y títulos. */
+  --jdg-font-size-base: 13.5px;
+  --jdg-font-size-small: 11.5px;
+  --jdg-font-size-xs: 9px;        /* Labels uppercase con letter-spacing amplio */
+  --jdg-font-size-h1: 24px;
+  --jdg-font-size-h2: 14px;       /* Títulos de sección (uppercase + letter-spacing) */
+  --jdg-font-size-h3: 12px;
+  --jdg-font-size-price: 26px;
+
+  /* ── Espaciado ── */
+  --jdg-spacing-sm: 8px;
+  --jdg-spacing-md: 16px;
+  --jdg-spacing-lg: 28px;
+  --jdg-spacing-xl: 44px;
+  --jdg-padding-page: 56px;
+
+  /* ── Subtítulo de marca ── */
+  --jdg-brand-subtitle: "Estructuras & Sistemas";
+}
+
+/* ── Estilos base para documentos claros ── */
+body {
+  font-family: var(--jdg-font-body);
+  font-size: var(--jdg-font-size-base);
+  color: var(--jdg-dark-gray);
+  line-height: 1.7;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--jdg-font-heading);
+  color: var(--jdg-primary);
+}
+
+/* ── Clase utilitaria: labels de sección estilo JDG ── */
+/* ACOTACIÓN PARA R.P.: Texto chiquito uppercase con línea al costado.
+   Usado en presupuestos y documentos formales. */
+.jdg-section-label {
+  font-family: var(--jdg-font-heading);
+  font-weight: 900;
+  font-size: var(--jdg-font-size-xs);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--jdg-mid-gray);
+}
+
+/* ── Print ── */
+@media print {
+  body { font-size: 12px; }
+  .no-print { display: none !important; }
+  a { color: var(--jdg-dark-gray); text-decoration: none; }
+  @page { margin: 2cm; }
+}

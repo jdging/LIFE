@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[HOOK] Archivo modificado. Recordar actualizar docs/CONTEXTO.md si el cambio es significativo.' >&2; exit 0"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[HOOK] Sesión terminando. Verificar que BITACORA.md y CONTEXTO.md estén actualizados.' >&2; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}

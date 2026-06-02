@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setup Compras + Recetario · LIFE</title>
+<style>
+  :root {
+    --bg:       #0e0e0c;
+    --surface:  #161614;
+    --surface2: #1e1e1b;
+    --border:   #2a2a26;
+    --text:     #e8e4da;
+    --muted:    #6b6860;
+    --accent:   #8fb87a;
+    --accent2:  #c4a96b;
+    --danger:   #c47a7a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Georgia', serif;
+    font-size: 15px;
+    line-height: 1.75;
+    padding: 3rem 1rem;
+  }
+
+  .page {
+    max-width: 740px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--accent);
+    letter-spacing: 0.03em;
+    margin-bottom: 0.25rem;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 3rem;
+  }
+
+  h2 {
+    font-size: 1.2rem;
+    font-weight: 400;
+    color: var(--text);
+    margin: 2.5rem 0 0.75rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 0.8rem;
+    font-weight: bold;
+    font-family: monospace;
+    margin-right: 0.6rem;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+
+  p { margin-bottom: 0.75rem; color: var(--text); }
+
+  .note {
+    background: var(--surface);
+    border-left: 3px solid var(--accent2);
+    padding: 0.75rem 1.25rem;
+    margin: 1rem 0;
+    font-size: 0.88rem;
+    color: var(--muted);
+    border-radius: 0 4px 4px 0;
+  }
+  .note strong { color: var(--accent2); }
+
+  .warn {
+    background: var(--surface);
+    border-left: 3px solid var(--danger);
+    padding: 0.75rem 1.25rem;
+    margin: 1rem 0;
+    font-size: 0.88rem;
+    color: var(--muted);
+    border-radius: 0 4px 4px 0;
+  }
+  .warn strong { color: var(--danger); }
+
+  code {
+    font-family: 'Courier New', monospace;
+    font-size: 0.82rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    color: var(--accent2);
+  }
+
+  pre {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 1rem 1.25rem;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.82rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+    color: var(--accent2);
+    line-height: 1.6;
+  }
+
+  ol, ul {
+    padding-left: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+  li { margin-bottom: 0.4rem; }
+
+  .checklist { list-style: none; padding-left: 0; }
+  .checklist li {
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist li::before {
+    content: '☐';
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.4;
+    flex-shrink: 0;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 3rem 0;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .tag {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-family: monospace;
+    letter-spacing: 0.05em;
+    vertical-align: middle;
+  }
+  .tag-green  { background: rgba(143,184,122,0.12); color: var(--accent); }
+  .tag-yellow { background: rgba(196,169,107,0.12); color: var(--accent2); }
+  .tag-red    { background: rgba(196,122,122,0.12); color: var(--danger); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.88rem;
+  }
+  th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    background: var(--surface2);
+    color: var(--muted);
+    font-weight: normal;
+    font-family: monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 0.45rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Setup · Compras + Recetario</h1>
+  <div class="subtitle">LIFE · Lista del Super + Catálogo de Recetas · Guía de configuración AppSheet</div>
+
+  <p>
+    Este tutorial cubre la configuración de la app <strong>AppSheet</strong> para los módulos
+    <strong>Compras</strong> y <strong>Recetario</strong>. Ambos usan la misma app y la misma
+    Google Sheet (hojas distintas), siguiendo la decisión DEC-B3.
+  </p>
+
+  <div class="note">
+    <strong>Prerequisitos:</strong> las hojas de la Sheet ya deben existir antes de configurar AppSheet.
+    Si no corriste los scripts de setup, hacelo primero:
+    <code>setupComprasSheet()</code> + <code>setupComprasTrigger()</code> (ya hecho),
+    y <code>setupRecetarioSheets()</code> + <code>setupRecetarioTriggers()</code> (C-MANUAL-1).
+  </div>
+
+  <!-- ── SECCIÓN 1 ── -->
+  <h2><span class="step-number">1</span> Configuración base de la app AppSheet</h2>
+
+  <p>
+    Si ya tenés la app creada para Compras, saltá al paso de seguridad más abajo.
+    Si empezás desde cero:
+  </p>
+
+  <ol>
+    <li>Andá a <strong>appsheet.com</strong> e iniciá sesión con tu cuenta Google.</li>
+    <li>Hacé clic en <strong>Create &gt; App &gt; Start with your own data</strong>.</li>
+    <li>Seleccioná la Google Sheet de Compras+Recetario (la que tiene las hojas
+        <code>ListaCompras</code>, <code>Recetas</code> e <code>Ingredientes</code>).</li>
+    <li>AppSheet va a detectar las hojas automáticamente. Nombrá la app
+        <strong>"LIFE Compras"</strong> o similar.</li>
+  </ol>
+
+  <p><strong>Configurar seguridad (obligatorio para el iframe):</strong></p>
+
+  <ol>
+    <li>En el panel de la app, andá a <strong>Security &gt; Require Sign-in</strong>.</li>
+    <li>Desactivarlo completamente (toggle en OFF).</li>
+    <li>Guardá y publicá (<strong>Save &gt; Deploy</strong>).</li>
+  </ol>
+
+  <div class="warn">
+    <strong>Importante:</strong> si Require Sign-in está activado, el iframe en los dashboards
+    va a mostrar un error CSP <code>frame-ancestors</code> y la app no va a cargar.
+    Desactivarlo es obligatorio para embeber AppSheet en GitHub Pages.
+  </div>
+
+  <p><strong>Pegar la URL en los dashboards:</strong></p>
+
+  <p>
+    Una vez publicada la app, copiá la URL de la forma
+    <code>https://www.appsheet.com/start/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</code>
+    y pegala en dos lugares:
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Archivo</th><th>Constante</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>src/compras/index.html</code></td>
+        <td><code>const APPSHEET_URL = 'https://www.appsheet.com/start/...';</code></td>
+      </tr>
+      <tr>
+        <td><code>src/recetario/index.html</code></td>
+        <td><code>const APPSHEET_URL = 'https://www.appsheet.com/start/...';</code> (misma URL)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ── SECCIÓN 2 ── -->
+  <h2><span class="step-number">2</span> Vista "Nueva compra" — hoja ListaCompras</h2>
+
+  <p>
+    Esta vista permite agregar ítems a la lista del super. AppSheet genera automáticamente
+    una vista de formulario para cada tabla — vamos a ajustar qué campos se muestran.
+  </p>
+
+  <p>En el panel de AppSheet, andá a <strong>Views</strong> y encontrá la vista generada para
+  <code>ListaCompras</code>. Configurala como formulario de entrada:</p>
+
+  <ol>
+    <li>Renombrala a <strong>"Nueva compra"</strong>.</li>
+    <li>Tipo de vista: <strong>Form</strong>.</li>
+  </ol>
+
+  <p><strong>Campos visibles (Show = ON):</strong></p>
+  <table>
+    <thead>
+      <tr><th>Campo</th><th>Tipo sugerido</th><th>Notas</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>nombre</code></td><td>Text</td><td>Campo principal — obligatorio</td></tr>
+      <tr><td><code>cantidad</code></td><td>Decimal</td><td>Default: 1</td></tr>
+      <tr><td><code>unidad</code></td><td>Enum</td><td>Opciones: u, kg, g, l, ml</td></tr>
+      <tr><td><code>categoria</code></td><td>Enum</td><td>Opciones: Verduras, Carnes, Lacteos, Panaderia, Almacen, Bebidas, Limpieza, Otro</td></tr>
+      <tr><td><code>urgente</code></td><td>Yes/No</td><td>Mostrar como checkbox destacado</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>Campos ocultos (Show = OFF):</strong></p>
+  <table>
+    <thead>
+      <tr><th>Campo</th><th>Valor por defecto</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>Auto-generado por trigger Apps Script (COMP-XXXXX)</td></tr>
+      <tr><td><code>estado</code></td><td><code>"pendiente"</code> (hardcodeado)</td></tr>
+      <tr><td><code>origen</code></td><td><code>"manual"</code> (hardcodeado)</td></tr>
+      <tr><td><code>notas</code></td><td>— (vacío, opcional)</td></tr>
+      <tr><td><code>borrado</code></td><td><code>FALSE</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>Tip urgente:</strong> para destacar el campo <code>urgente</code>, en AppSheet
+    podés configurarlo con el ícono de alerta (⚠) o cambiarle el label a "Urgente ⚡".
+    El dashboard lo muestra con un badge naranja cuando está en TRUE.
+  </div>
+
+  <!-- ── SECCIÓN 3 ── -->
+  <h2><span class="step-number">3</span> Vista "Nueva receta" — hoja Recetas</h2>
+
+  <p>
+    Esta vista permite cargar el encabezado de una receta. Los ingredientes se cargan
+    por separado en la Sección 4, vinculando con el ID de la receta.
+  </p>
+
+  <ol>
+    <li>En <strong>Views</strong>, creá una vista nueva para la tabla <code>Recetas</code>.</li>
+    <li>Tipo: <strong>Form</strong>. Nombre: <strong>"Nueva receta"</strong>.</li>
+  </ol>
+
+  <p><strong>Campos visibles (Show = ON):</strong></p>
+  <table>
+    <thead>
+      <tr><th>Campo</th><th>Tipo sugerido</th><th>Notas</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>nombre</code></td><td>Text</td><td>Nombre de la receta — obligatorio</td></tr>
+      <tr><td><code>porciones_base</code></td><td>Number</td><td>Default: 2. El dashboard usa este valor para ajuste proporcional.</td></tr>
+      <tr><td><code>categoria</code></td><td>Enum</td><td>Opciones: Desayuno, Almuerzo, Cena, Merienda, Postre, Otro</td></tr>
+      <tr><td><code>instrucciones</code></td><td>LongText</td><td>Opcional — texto libre de preparación</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>Campos ocultos (Show = OFF):</strong></p>
+  <table>
+    <thead>
+      <tr><th>Campo</th><th>Valor por defecto</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>Auto-generado por trigger Apps Script (RECETA-XXXXX)</td></tr>
+      <tr><td><code>borrado</code></td><td><code>FALSE</code></td></tr>
+    </tbody>
+  </table>
+
+  <!-- ── SECCIÓN 4 ── -->
+  <h2><span class="step-number">4</span> Vista "Nuevo ingrediente" — hoja Ingredientes</h2>
+
+  <p>
+    Esta vista se usa para cargar los ingredientes de una receta existente. El campo
+    <code>receta_id</code> debe ser un dropdown que liste las recetas cargadas —
+    AppSheet lo hace automáticamente si configurás la referencia correctamente.
+  </p>
+
+  <ol>
+    <li>En <strong>Views</strong>, creá una vista nueva para la tabla <code>Ingredientes</code>.</li>
+    <li>Tipo: <strong>Form</strong>. Nombre: <strong>"Nuevo ingrediente"</strong>.</li>
+  </ol>
+
+  <p><strong>Configurar receta_id como dropdown (paso clave):</strong></p>
+
+  <ol>
+    <li>Andá a <strong>Data &gt; Tables &gt; Ingredientes &gt; Columns</strong>.</li>
+    <li>Encontrá la columna <code>receta_id</code>. Cambiá su tipo a <strong>Ref</strong>.</li>
+    <li>En "Referenced table", seleccioná <strong>Recetas</strong>.</li>
+    <li>En "Label column", seleccioná <strong>nombre</strong>.</li>
+    <li>Guardá — ahora el campo muestra un dropdown con los nombres de las recetas
+        pero guarda el ID en la hoja.</li>
+  </ol>
+
+  <p><strong>Campos visibles (Show = ON):</strong></p>
+  <table>
+    <thead>
+      <tr><th>Campo</th><th>Tipo</th><th>Notas</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>receta_id</code></td><td>Ref → Recetas</td><td>Dropdown con nombres. Obligatorio.</td></tr>
+      <tr><td><code>nombre</code></td><td>Text</td><td>Nombre del ingrediente (ej: "Harina", "Tomate")</td></tr>
+      <tr><td><code>cantidad</code></td><td>Decimal</td><td>Cantidad para las porciones base de la receta</td></tr>
+      <tr><td><code>unidad</code></td><td>Enum</td><td>Opciones: u, kg, g, l, ml, cdita, cda, taza</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>Nota sobre unidades:</strong> <code>cdita</code>, <code>cda</code> y <code>taza</code>
+    son válidas en Ingredientes pero no existen en Compras. Al usar el botón "Agregar al super"
+    en el dashboard de Recetario, estas unidades se convierten automáticamente a <code>u</code>.
+  </div>
+
+  <p><strong>Campos ocultos (Show = OFF):</strong></p>
+  <table>
+    <thead>
+      <tr><th>Campo</th><th>Valor por defecto</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>Auto-generado por trigger Apps Script (ING-XXXXX)</td></tr>
+      <tr><td><code>borrado</code></td><td><code>FALSE</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="divider"></div>
+
+  <!-- ── CHECKLIST FINAL ── -->
+  <h2><span class="step-number">✓</span> Checklist final</h2>
+
+  <p>Antes de considerar el setup completo, verificá cada ítem en orden:</p>
+
+  <ul class="checklist">
+    <li>Script <code>setupComprasSheet()</code> ejecutado en Apps Script de la Sheet Compras+Recetario</li>
+    <li>Script <code>setupComprasTrigger()</code> ejecutado (trigger auto-ID COMP-XXXXX activo)</li>
+    <li>Script <code>setupRecetarioSheets()</code> ejecutado (hojas Recetas e Ingredientes creadas)</li>
+    <li>Script <code>setupRecetarioTriggers()</code> ejecutado (triggers RECETA-XXXXX e ING-XXXXX activos)</li>
+    <li><code>compras-api.js</code> deployado como Web App (Execute as: Me / Who has access: Anyone) — NEW deployment</li>
+    <li>URL de <code>compras-api.js</code> pegada en <code>const API_URL</code> de <code>src/compras/index.html</code></li>
+    <li><code>recetario-api.js</code> deployado como Web App (Execute as: Me / Who has access: Anyone) — NEW deployment</li>
+    <li>URL de <code>recetario-api.js</code> pegada en <code>const RECETARIO_API_URL</code> de <code>src/recetario/index.html</code></li>
+    <li>App AppSheet creada y conectada a la Sheet Compras+Recetario</li>
+    <li>Security → Require Sign-in desactivado en la app AppSheet</li>
+    <li>Vista "Nueva compra" configurada para hoja ListaCompras (campos ocultos con defaults)</li>
+    <li>Vista "Nueva receta" configurada para hoja Recetas (campos ocultos con defaults)</li>
+    <li>Vista "Nuevo ingrediente" configurada para hoja Ingredientes (<code>receta_id</code> como Ref → Recetas)</li>
+    <li>URL de AppSheet pegada en <code>const APPSHEET_URL</code> de <code>src/compras/index.html</code></li>
+    <li>URL de AppSheet pegada en <code>const APPSHEET_URL</code> de <code>src/recetario/index.html</code></li>
+    <li>App publicada (Deploy) con los últimos cambios</li>
+    <li>Verificar que el drawer del + cargue AppSheet en Compras sin error</li>
+    <li>Verificar que el drawer del + cargue AppSheet en Recetario sin error</li>
+    <li>Cargar una receta de prueba y verificar que aparece en el dashboard de Recetario</li>
+    <li>Probar "Agregar al super" desde Recetario y verificar que los ítems aparecen en Compras</li>
+  </ul>
+
+  <div class="note">
+    <strong>Recordatorio de re-deploy:</strong> cualquier cambio al código de un archivo
+    <code>.js</code> en Apps Script requiere crear un <strong>NEW deployment</strong> —
+    no editar el existente. La URL cambia con cada nuevo deployment.
+  </div>
+
+</div>
+</body>
+</html>

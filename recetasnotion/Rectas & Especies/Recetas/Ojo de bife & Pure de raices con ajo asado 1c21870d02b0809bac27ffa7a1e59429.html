@@ -1,0 +1,744 @@
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/><title>Ojo de bife &amp; Pure de raices con ajo asado</title><style>
+/* cspell:disable-file */
+/* webkit printing magic: print all background colors */
+html {
+	-webkit-print-color-adjust: exact;
+}
+* {
+	box-sizing: border-box;
+	-webkit-print-color-adjust: exact;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+}
+@media only screen {
+	body {
+		margin: 2em auto;
+		max-width: 900px;
+		color: rgb(55, 53, 47);
+	}
+}
+
+body {
+	line-height: 1.5;
+	white-space: pre-wrap;
+}
+
+a,
+a.visited {
+	color: inherit;
+	text-decoration: underline;
+}
+
+.pdf-relative-link-path {
+	font-size: 80%;
+	color: #444;
+}
+
+h1,
+h2,
+h3 {
+	letter-spacing: -0.01em;
+	line-height: 1.2;
+	font-weight: 600;
+	margin-bottom: 0;
+}
+
+/* Override strong tags inside headings to maintain consistent weight */
+h1 strong,
+h2 strong,
+h3 strong {
+	font-weight: 600;
+}
+
+.page-title {
+	font-size: 2.5rem;
+	font-weight: 700;
+	margin-top: 0;
+	margin-bottom: 0.75em;
+}
+
+h1 {
+	font-size: 1.875rem;
+	margin-top: 1.875rem;
+}
+
+h2 {
+	font-size: 1.5rem;
+	margin-top: 1.5rem;
+}
+
+h3 {
+	font-size: 1.25rem;
+	margin-top: 1.25rem;
+}
+
+.source {
+	border: 1px solid #ddd;
+	border-radius: 3px;
+	padding: 1.5em;
+	word-break: break-all;
+}
+
+.callout {
+	border-radius: 10px;
+	padding: 1rem;
+}
+
+figure {
+	margin: 1.25em 0;
+	page-break-inside: avoid;
+}
+
+figcaption {
+	opacity: 0.5;
+	font-size: 85%;
+	margin-top: 0.5em;
+}
+
+mark {
+	background-color: transparent;
+}
+
+.indented {
+	padding-left: 1.5em;
+}
+
+hr {
+	background: transparent;
+	display: block;
+	width: 100%;
+	height: 1px;
+	visibility: visible;
+	border: none;
+	border-bottom: 1px solid rgba(55, 53, 47, 0.09);
+}
+
+img {
+	max-width: 100%;
+}
+
+@media only print {
+	img {
+		max-height: 100vh;
+		object-fit: contain;
+	}
+
+	table.collection-content {
+		width: 100%;
+		table-layout: fixed;
+	}
+
+	table.collection-content th,
+	table.collection-content td {
+		overflow-wrap: anywhere;
+	}
+
+	table.collection-content td > .user,
+	table.collection-content td > time {
+		white-space: pre-wrap;
+	}
+}
+
+@page {
+	margin: 1in;
+}
+
+.collection-content-wrapper {
+	overflow-x: auto;
+}
+
+@media only print {
+	.collection-content-wrapper {
+		overflow-x: visible;
+	}
+}
+
+.collection-content {
+	font-size: 0.875rem;
+}
+
+.collection-content td {
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.column-list {
+	display: flex;
+	gap: 46px;
+}
+
+.column {
+	min-width: 0;
+	overflow: hidden;
+}
+
+.column > *:first-child {
+	margin-top: 0;
+}
+
+.table_of_contents-item {
+	display: block;
+	font-size: 0.875rem;
+	line-height: 1.3;
+	padding: 0.125rem;
+}
+
+.table_of_contents-indent-1 {
+	margin-left: 1.5rem;
+}
+
+.table_of_contents-indent-2 {
+	margin-left: 3rem;
+}
+
+.table_of_contents-indent-3 {
+	margin-left: 4.5rem;
+}
+
+.table_of_contents-link {
+	text-decoration: none;
+	opacity: 0.7;
+	border-bottom: 1px solid rgba(55, 53, 47, 0.18);
+}
+
+table,
+th,
+td {
+	border: 1px solid rgba(55, 53, 47, 0.09);
+	border-collapse: collapse;
+}
+
+table {
+	border-left: none;
+	border-right: none;
+}
+
+th,
+td {
+	font-weight: normal;
+	padding: 0.25em 0.5em;
+	line-height: 1.5;
+	min-height: 1.5em;
+	text-align: left;
+}
+
+th {
+	color: rgba(55, 53, 47, 0.6);
+}
+
+ol,
+ul {
+	margin: 0;
+	margin-block-start: 0.6em;
+	margin-block-end: 0.6em;
+}
+
+li > ol:first-child,
+li > ul:first-child {
+	margin-block-start: 0.6em;
+}
+
+ul > li {
+	list-style: disc;
+}
+
+ul.to-do-list {
+	padding-inline-start: 0;
+}
+
+ul.to-do-list > li {
+	list-style: none;
+}
+
+.to-do-children-checked {
+	text-decoration: line-through;
+	opacity: 0.375;
+}
+
+ul.toggle > li {
+	list-style: none;
+}
+
+ul {
+	padding-inline-start: 1.7em;
+}
+
+ul > li {
+	padding-left: 0.1em;
+}
+
+ol {
+	padding-inline-start: 1.6em;
+}
+
+ol.numbered-list.numbered-list-digits-2 {
+	padding-inline-start: 2em;
+}
+
+ol.numbered-list.numbered-list-digits-3plus {
+	padding-inline-start: 2.4em;
+}
+
+ol > li {
+	padding-left: 0.2em;
+}
+
+.mono ol {
+	padding-inline-start: 2em;
+}
+
+.mono ol > li {
+	text-indent: -0.4em;
+}
+
+.toggle {
+	padding-inline-start: 0em;
+	list-style-type: none;
+}
+
+/* Indent toggle children */
+.toggle > li > details {
+	padding-left: 1.7em;
+}
+
+.toggle > li > details > summary {
+	margin-left: -1.1em;
+}
+
+.selected-value {
+	display: inline-block;
+	padding: 0 0.5em;
+	background: rgba(206, 205, 202, 0.5);
+	border-radius: 3px;
+	margin-right: 0.5em;
+	margin-top: 0.3em;
+	margin-bottom: 0.3em;
+	white-space: nowrap;
+}
+
+.collection-title {
+	display: inline-block;
+	margin-right: 1em;
+}
+
+.page-description {
+	margin-bottom: 2em;
+}
+
+.simple-table {
+	margin-top: 1em;
+	font-size: 0.875rem;
+	empty-cells: show;
+}
+.simple-table td {
+	height: 29px;
+	min-width: 120px;
+}
+
+.simple-table th {
+	height: 29px;
+	min-width: 120px;
+}
+
+.simple-table-header-color {
+	background: rgb(247, 246, 243);
+	color: black;
+}
+.simple-table-header {
+	font-weight: 500;
+}
+
+time {
+	opacity: 0.5;
+}
+
+.icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	max-width: 1.2em;
+	max-height: 1.2em;
+	text-decoration: none;
+	vertical-align: text-bottom;
+	margin-right: 0.5em;
+}
+
+img.icon {
+	border-radius: 3px;
+}
+
+.callout img.notion-static-icon {
+	width: 1em;
+	height: 1em;
+}
+
+.callout p {
+	margin: 0;
+}
+
+.callout h1,
+.callout h2,
+.callout h3 {
+	margin: 0 0 0.6rem;
+}
+
+.user-icon {
+	width: 1.5em;
+	height: 1.5em;
+	border-radius: 100%;
+	margin-right: 0.5rem;
+}
+
+.user-icon-inner {
+	font-size: 0.8em;
+}
+
+.text-icon {
+	border: 1px solid #000;
+	text-align: center;
+}
+
+.page-cover-image {
+	display: block;
+	object-fit: cover;
+	width: 100%;
+	max-height: 30vh;
+}
+
+.page-header-icon {
+	font-size: 3rem;
+	margin-bottom: 1rem;
+}
+
+.page-header-icon-with-cover {
+	margin-top: -0.72em;
+	margin-left: 0.07em;
+}
+
+.page-header-icon img {
+	border-radius: 3px;
+}
+
+.link-to-page {
+	margin: 1em 0;
+	padding: 0;
+	border: none;
+	font-weight: 500;
+}
+
+p > .user {
+	opacity: 0.5;
+}
+
+td > .user,
+td > time {
+	white-space: nowrap;
+}
+
+input[type="checkbox"] {
+	transform: scale(1.5);
+	margin-right: 0.6em;
+	vertical-align: middle;
+}
+
+p {
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
+}
+
+.image {
+	border: none;
+	margin: 1.5em 0;
+	padding: 0;
+	border-radius: 0;
+	text-align: center;
+}
+
+.code,
+code {
+	background: rgba(135, 131, 120, 0.15);
+	border-radius: 3px;
+	padding: 0.2em 0.4em;
+	border-radius: 3px;
+	font-size: 85%;
+	tab-size: 2;
+}
+
+code {
+	color: #eb5757;
+}
+
+.code {
+	padding: 1.5em 1em;
+}
+
+.code-wrap {
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+.code > code {
+	background: none;
+	padding: 0;
+	font-size: 100%;
+	color: inherit;
+}
+
+blockquote {
+	font-size: 1em;
+	margin: 1em 0;
+	padding-left: 1em;
+	border-left: 3px solid rgb(55, 53, 47);
+}
+
+blockquote.quote-large {
+	font-size: 1.25em;
+}
+
+.bookmark {
+	text-decoration: none;
+	max-height: 8em;
+	padding: 0;
+	display: flex;
+	width: 100%;
+	align-items: stretch;
+}
+
+.bookmark-title {
+	font-size: 0.85em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	height: 1.75em;
+	white-space: nowrap;
+}
+
+.bookmark-text {
+	display: flex;
+	flex-direction: column;
+}
+
+.bookmark-info {
+	flex: 4 1 180px;
+	padding: 12px 14px 14px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+}
+
+.bookmark-image {
+	width: 33%;
+	flex: 1 1 180px;
+	display: block;
+	position: relative;
+	object-fit: cover;
+	border-radius: 1px;
+}
+
+.bookmark-description {
+	color: rgba(55, 53, 47, 0.6);
+	font-size: 0.75em;
+	overflow: hidden;
+	max-height: 4.5em;
+	word-break: break-word;
+}
+
+.bookmark-href {
+	font-size: 0.75em;
+	margin-top: 0.25em;
+}
+
+.sans { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol"; }
+.code { font-family: "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace; }
+.serif { font-family: Lyon-Text, Georgia, ui-serif, serif; }
+.mono { font-family: iawriter-mono, Nitti, Menlo, Courier, monospace; }
+.pdf .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK JP'; }
+.pdf:lang(zh-CN) .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK SC'; }
+.pdf:lang(zh-TW) .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK TC'; }
+.pdf:lang(ko-KR) .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK KR'; }
+.pdf .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK JP'; }
+.pdf:lang(zh-CN) .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK SC'; }
+.pdf:lang(zh-TW) .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK TC'; }
+.pdf:lang(ko-KR) .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK KR'; }
+.pdf .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK JP'; }
+.pdf:lang(zh-CN) .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK SC'; }
+.pdf:lang(zh-TW) .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK TC'; }
+.pdf:lang(ko-KR) .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK KR'; }
+.pdf .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK JP'; }
+.pdf:lang(zh-CN) .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK SC'; }
+.pdf:lang(zh-TW) .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK TC'; }
+.pdf:lang(ko-KR) .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK KR'; }
+.highlight-default {
+	color: rgba(44, 44, 43, 1);
+}
+.highlight-gray {
+	color: rgba(125, 122, 117, 1);
+	fill: rgba(125, 122, 117, 1);
+}
+.highlight-brown {
+	color: rgba(159, 118, 90, 1);
+	fill: rgba(159, 118, 90, 1);
+}
+.highlight-orange {
+	color: rgba(210, 123, 45, 1);
+	fill: rgba(210, 123, 45, 1);
+}
+.highlight-yellow {
+	color: rgba(203, 148, 52, 1);
+	fill: rgba(203, 148, 52, 1);
+}
+.highlight-teal {
+	color: rgba(80, 148, 110, 1);
+	fill: rgba(80, 148, 110, 1);
+}
+.highlight-blue {
+	color: rgba(56, 125, 201, 1);
+	fill: rgba(56, 125, 201, 1);
+}
+.highlight-purple {
+	color: rgba(154, 107, 180, 1);
+	fill: rgba(154, 107, 180, 1);
+}
+.highlight-pink {
+	color: rgba(193, 76, 138, 1);
+	fill: rgba(193, 76, 138, 1);
+}
+.highlight-red {
+	color: rgba(207, 81, 72, 1);
+	fill: rgba(207, 81, 72, 1);
+}
+.highlight-default_background {
+	color: rgba(44, 44, 43, 1);
+}
+.highlight-gray_background {
+	background: rgba(42, 28, 0, 0.07);
+}
+.highlight-brown_background {
+	background: rgba(139, 46, 0, 0.086);
+}
+.highlight-orange_background {
+	background: rgba(224, 101, 1, 0.129);
+}
+.highlight-yellow_background {
+	background: rgba(211, 168, 0, 0.137);
+}
+.highlight-teal_background {
+	background: rgba(0, 100, 45, 0.09);
+}
+.highlight-blue_background {
+	background: rgba(0, 124, 215, 0.094);
+}
+.highlight-purple_background {
+	background: rgba(102, 0, 178, 0.078);
+}
+.highlight-pink_background {
+	background: rgba(197, 0, 93, 0.086);
+}
+.highlight-red_background {
+	background: rgba(223, 22, 0, 0.094);
+}
+.block-color-default {
+	color: inherit;
+	fill: inherit;
+}
+.block-color-gray {
+	color: rgba(125, 122, 117, 1);
+	fill: rgba(125, 122, 117, 1);
+}
+.block-color-brown {
+	color: rgba(159, 118, 90, 1);
+	fill: rgba(159, 118, 90, 1);
+}
+.block-color-orange {
+	color: rgba(210, 123, 45, 1);
+	fill: rgba(210, 123, 45, 1);
+}
+.block-color-yellow {
+	color: rgba(203, 148, 52, 1);
+	fill: rgba(203, 148, 52, 1);
+}
+.block-color-teal {
+	color: rgba(80, 148, 110, 1);
+	fill: rgba(80, 148, 110, 1);
+}
+.block-color-blue {
+	color: rgba(56, 125, 201, 1);
+	fill: rgba(56, 125, 201, 1);
+}
+.block-color-purple {
+	color: rgba(154, 107, 180, 1);
+	fill: rgba(154, 107, 180, 1);
+}
+.block-color-pink {
+	color: rgba(193, 76, 138, 1);
+	fill: rgba(193, 76, 138, 1);
+}
+.block-color-red {
+	color: rgba(207, 81, 72, 1);
+	fill: rgba(207, 81, 72, 1);
+}
+.block-color-default_background {
+	color: inherit;
+	fill: inherit;
+}
+.block-color-gray_background {
+	background: rgba(240, 239, 237, 1);
+}
+.block-color-brown_background {
+	background: rgba(245, 237, 233, 1);
+}
+.block-color-orange_background {
+	background: rgba(251, 235, 222, 1);
+}
+.block-color-yellow_background {
+	background: rgba(249, 243, 220, 1);
+}
+.block-color-teal_background {
+	background: rgba(232, 241, 236, 1);
+}
+.block-color-blue_background {
+	background: rgba(229, 242, 252, 1);
+}
+.block-color-purple_background {
+	background: rgba(243, 235, 249, 1);
+}
+.block-color-pink_background {
+	background: rgba(250, 233, 241, 1);
+}
+.block-color-red_background {
+	background: rgba(252, 233, 231, 1);
+}
+.select-value-color-default { background-color: rgba(42, 28, 0, 0.07); }
+.select-value-color-gray { background-color: rgba(28, 19, 1, 0.11); }
+.select-value-color-brown { background-color: rgba(127, 51, 0, 0.156); }
+.select-value-color-orange { background-color: rgba(196, 88, 0, 0.203); }
+.select-value-color-yellow { background-color: rgba(209, 156, 0, 0.282); }
+.select-value-color-green { background-color: rgba(0, 96, 38, 0.156); }
+.select-value-color-blue { background-color: rgba(0, 118, 217, 0.203); }
+.select-value-color-purple { background-color: rgba(92, 0, 163, 0.141); }
+.select-value-color-pink { background-color: rgba(183, 0, 78, 0.152); }
+.select-value-color-red { background-color: rgba(206, 24, 0, 0.164); }
+
+.checkbox {
+	display: inline-flex;
+	vertical-align: text-bottom;
+	width: 16;
+	height: 16;
+	background-size: 16px;
+	margin-left: 2px;
+	margin-right: 5px;
+}
+
+.checkbox-on {
+	background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Crect%20width%3D%2216%22%20height%3D%2216%22%20fill%3D%22%2358A9D7%22%2F%3E%0A%3Cpath%20d%3D%22M6.71429%2012.2852L14%204.9995L12.7143%203.71436L6.71429%209.71378L3.28571%206.2831L2%207.57092L6.71429%2012.2852Z%22%20fill%3D%22white%22%2F%3E%0A%3C%2Fsvg%3E");
+}
+
+.checkbox-off {
+	background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Crect%20x%3D%220.75%22%20y%3D%220.75%22%20width%3D%2214.5%22%20height%3D%2214.5%22%20fill%3D%22white%22%20stroke%3D%22%2336352F%22%20stroke-width%3D%221.5%22%2F%3E%0A%3C%2Fsvg%3E");
+}
+	
+</style></head><body><article id="1c21870d-02b0-809b-ac27-ffa7a1e59429" class="page sans"><header><div class="page-header-icon undefined"><span class="icon">🫀</span></div><h1 class="page-title" dir="auto">Ojo de bife &amp; Pure de raices con ajo asado</h1><p class="page-description" dir="auto"></p><table class="properties"><tbody><tr class="property-row property-row-multi_select"><th><span class="icon property-icon"><img src="https://www.notion.so/icons/list_gray.svg" style="width:14px;height:14px;display:block"/></span>Tags</th><td><span class="selected-value select-value-color-red">Acompañante</span><span class="selected-value select-value-color-blue">ChatGPT</span><span class="selected-value select-value-color-orange">Dinner</span></td></tr></tbody></table></header><div class="page-body"><div style="display:contents" dir="auto"><h1 id="1c21870d-02b0-8067-b408-d82ee09c02cd" class="">🥔 Puré de Raíces con Ajo Asado y Toque Cremoso 🥕</h1></div><div style="display:contents" dir="auto"><p id="1c21870d-02b0-8022-896f-c37f4f782b43" class="">Una receta vibrante y llena de sabor que acompaña perfectamente el ojo de bife. Combina la dulzura de diversas raíces con el aroma del ajo asado, un toque de nuez moscada y una decoración fresca.</p></div><div style="display:contents" dir="auto"><hr id="1c21870d-02b0-809d-9e5b-c949a8880d77"/></div><div style="display:contents" dir="auto"><h2 id="1c21870d-02b0-80da-a115-da86bbf2d25b" class="">📋 Ingredientes</h2></div><div style="display:contents" dir="auto"><h3 id="1c21870d-02b0-80bc-90e4-d8e77ba211fa" class="">Vegetales</h3></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80c3-bea3-d6d0fa954875" class="bulleted-list"><li style="list-style-type:disc">🥔 <strong>1 Camote mediano</strong></li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80d1-9bb7-efdbeddaadf4" class="bulleted-list"><li style="list-style-type:disc">🍠 <strong>1 Batata mediana</strong></li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80db-8c6e-f645b8680be3" class="bulleted-list"><li style="list-style-type:disc">🥔 <strong>2 Papas medianas</strong></li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8032-890e-fa468c9f8a90" class="bulleted-list"><li style="list-style-type:disc">🥕 <strong>2 Zanahorias grandes</strong></li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80cc-9986-e68debcc9b2d" class="bulleted-list"><li style="list-style-type:disc">🍠 <strong>1 Remolacha mediana</strong> (opcional, para color y dulzura extra)</li></ul></div><div style="display:contents" dir="auto"><h3 id="1c21870d-02b0-80d5-9b56-f649e99216ce" class="">Ajo Asado (y Remolacha, opcional)</h3></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8056-8964-dd251764931b" class="bulleted-list"><li style="list-style-type:disc">🧄 <strong>1 Cabeza de Ajo</strong></li></ul></div><div style="display:contents" dir="auto"><h3 id="1c21870d-02b0-8029-9db6-c5d708902ac8" class="">Para el Puré</h3></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-808d-b2e9-c3961e8c3500" class="bulleted-list"><li style="list-style-type:disc">🧈 <strong>2 cucharadas de Mantequilla</strong></li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80e6-8d41-e96f3468597b" class="bulleted-list"><li style="list-style-type:disc">🥛 <strong>50 ml de Crema de Leche</strong></li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-800d-b417-e410e36a979b" class="bulleted-list"><li style="list-style-type:disc">🌰 <strong>Una pizca de Nuez Moscada</strong></li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-809b-9904-f0b8e928bc74" class="bulleted-list"><li style="list-style-type:disc">🧂 <strong>Sal y Pimienta</strong> al gusto</li></ul></div><div style="display:contents" dir="auto"><h3 id="1c21870d-02b0-8058-8674-f7cc281bb19c" class="">Para Decorar</h3></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-803d-8439-e892b51b5a20" class="bulleted-list"><li style="list-style-type:disc">🌿 <strong>Perejil fresco picado</strong></li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8002-beb5-ff0896015bb3" class="bulleted-list"><li style="list-style-type:disc">(Opcional) 🥜 <strong>Nueces tostadas picadas</strong> para un toque crujiente</li></ul></div><div style="display:contents" dir="auto"><h3 id="1c21870d-02b0-80de-853b-e8c2f5160e76" class="">Aceite</h3></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8048-94dd-ffb4fa19bbaf" class="bulleted-list"><li style="list-style-type:disc">🍈 <strong>Aceite de Oliva Virgen Extra</strong></li></ul></div><div style="display:contents" dir="auto"><hr id="1c21870d-02b0-80c7-b591-de16ff5618c9"/></div><div style="display:contents" dir="auto"><h2 id="1c21870d-02b0-808a-b700-d3a369829647" class="">🛠 Equipamiento</h2></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8009-aa19-c62b3b4d4041" class="bulleted-list"><li style="list-style-type:disc"><strong>Cocción de Vegetales:</strong><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8013-bb6b-d68f5387e4f8" class="bulleted-list"><li style="list-style-type:circle">Olla grande</li></ul></div></li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80db-b78f-e76c9f0f23b0" class="bulleted-list"><li style="list-style-type:disc"><strong>Ajo asado y remolacha (sin horno):</strong><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80bb-bde2-d3b43d5b302b" class="bulleted-list"><li style="list-style-type:circle">Freidora de aire</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8098-a805-d4f6c8d3a1b4" class="bulleted-list"><li style="list-style-type:circle">Papel de aluminio (¡usa con cuidado! No bloquees el flujo de aire)</li></ul></div></li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-802c-8c35-d46acd848002" class="bulleted-list"><li style="list-style-type:disc"><strong>Puré:</strong><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8059-a74d-fe3b2d7e9d4d" class="bulleted-list"><li style="list-style-type:circle">Batidora de mano o pasapurés</li></ul></div></li></ul></div><div style="display:contents" dir="auto"><hr id="1c21870d-02b0-8008-ad55-f62fcf5f7433"/></div><div style="display:contents" dir="auto"><h2 id="1c21870d-02b0-8055-874f-c2a921f820e1" class="">🔥 Instrucciones Paso a Paso</h2></div><div style="display:contents" dir="auto"><h3 id="1c21870d-02b0-80fa-9ef7-d84c6dc70d6b" class="">1. Preparación del Ajo (y Remolacha, si decides incluirla)</h3></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8019-a954-d83e56da9e8a" class="bulleted-list"><li style="list-style-type:disc"><strong>Ajo Asado:</strong><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8036-81cf-e5bfebabcf76" class="bulleted-list"><li style="list-style-type:circle">🔪 <strong>Corta</strong> la parte superior de la cabeza de ajo.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-807a-9f3d-c554eac5a19f" class="bulleted-list"><li style="list-style-type:circle">✨ <strong>Rocía</strong> ligeramente con aceite de oliva.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80f2-a628-fe17aaf19b59" class="bulleted-list"><li style="list-style-type:circle">🏷 <strong>Envuelve</strong> en papel de aluminio.</li></ul></div></li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80fb-ae1f-c1dcf42deb63" class="bulleted-list"><li style="list-style-type:disc"><strong>Remolacha (opcional):</strong><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-800a-9449-f2daa785ece1" class="bulleted-list"><li style="list-style-type:circle">Lava la remolacha y, si la usas, envuélvela también en papel de aluminio.</li></ul></div></li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80bf-bc6e-c6bf8999ace6" class="bulleted-list"><li style="list-style-type:disc"><strong>En la Freidora de Aire:</strong><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8086-8c23-f1fb7eae11a2" class="bulleted-list"><li style="list-style-type:circle">📌 Coloca el papel aluminio con el ajo (y la remolacha) en la canasta, dejando espacio para el aire.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8043-b6e6-ee37f3219c74" class="bulleted-list"><li style="list-style-type:circle">🔥 Programa la freidora a <strong>190°C (375°F)</strong> y cocina durante <strong>45-60 minutos</strong> hasta que el ajo esté suave y la remolacha tierna.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-808a-99ca-d46dc9bb7f35" class="bulleted-list"><li style="list-style-type:circle">⚠️ <strong>Atención:</strong> Asegúrate de que el papel no bloquee la circulación del aire ni toque el elemento calefactor.</li></ul></div></li></ul></div><div style="display:contents" dir="auto"><h3 id="1c21870d-02b0-80c1-96e5-f5ab4290304d" class="">2. Cocción de las Otras Verduras</h3></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80f2-a438-d35bc703bb7e" class="bulleted-list"><li style="list-style-type:disc">🔪 <strong>Pela y corta</strong> en trozos medianos el camote, batata, papas y zanahorias.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8003-a0d5-e1a4f734dd45" class="bulleted-list"><li style="list-style-type:disc">💧 Colócalos en una olla grande, cúbrelos con agua fría y añade sal.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80e3-8290-ec95624dec41" class="bulleted-list"><li style="list-style-type:disc">♨️ Lleva a ebullición y cocina durante <strong>15-20 minutos</strong> o hasta que estén tiernos.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8038-88bd-dd6055ca44ed" class="bulleted-list"><li style="list-style-type:disc">🔄 <strong>Escurre</strong> bien los vegetales.</li></ul></div><div style="display:contents" dir="auto"><h3 id="1c21870d-02b0-8024-b841-c32ac3cdf3ce" class="">3. Montaje del Puré</h3></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80a4-9d25-c3d3875ba7b7" class="bulleted-list"><li style="list-style-type:disc">⏳ Una vez asado el ajo (y la remolacha), deja enfriar un poco.<div style="display:contents" dir="auto"><ul id="1c21870d-02b0-803c-897a-e04b79eabac8" class="bulleted-list"><li style="list-style-type:circle">🧄 <strong>Extrae</strong> la pulpa del ajo presionando suavemente cada diente.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-804f-9395-f6e13d018d4f" class="bulleted-list"><li style="list-style-type:circle">🍠 <strong>Pela y corta</strong> la remolacha en trozos si decidiste usarla.</li></ul></div></li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8047-85a2-f367100b15e7" class="bulleted-list"><li style="list-style-type:disc">🥣 En un recipiente grande, combina:<div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80d0-9aac-f2cad0cca623" class="bulleted-list"><li style="list-style-type:circle">Los vegetales cocidos (camote, batata, papas y zanahorias)</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8019-b4f3-fd7532cbc890" class="bulleted-list"><li style="list-style-type:circle">La remolacha (opcional)</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8031-884e-ca5a53e4c164" class="bulleted-list"><li style="list-style-type:circle">La pulpa de ajo asado</li></ul></div></li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-800d-b118-cc9f468a5246" class="bulleted-list"><li style="list-style-type:disc">🧈 Agrega la mantequilla, crema de leche y una pizca de nuez moscada.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80d7-994b-f167dd58a73e" class="bulleted-list"><li style="list-style-type:disc">🔄 <strong>Tritura</strong> con batidora de mano o pasa por un pasapurés hasta lograr una textura suave y homogénea (puedes dejarlo rústico si prefieres algunos trozos).</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-808b-a366-db70cf8efcd3" class="bulleted-list"><li style="list-style-type:disc">🧂 Ajusta con sal y pimienta.</li></ul></div><div style="display:contents" dir="auto"><h3 id="1c21870d-02b0-8012-8d08-c8d8f94e2053" class="">4. Decoración y Toque Final</h3></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8038-b649-e4eda14f7c95" class="bulleted-list"><li style="list-style-type:disc">🍽 <strong>Sirve</strong> el puré en un plato o fuente.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8013-a209-cd3b9123ee86" class="bulleted-list"><li style="list-style-type:disc">🌿 <strong>Espolvorea</strong> perejil fresco picado para dar color y frescura.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-802e-a7a0-e2a5fc490d39" class="bulleted-list"><li style="list-style-type:disc">🥜 (Opcional) Añade nueces tostadas picadas para un toque crujiente.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8093-a8bf-fc13257f28c7" class="bulleted-list"><li style="list-style-type:disc">🍈 Finaliza con un chorrito de aceite de oliva virgen extra.</li></ul></div><div style="display:contents" dir="auto"><hr id="1c21870d-02b0-80f9-860c-f44c7ee8a4ab"/></div><div style="display:contents" dir="auto"><h2 id="1c21870d-02b0-80b8-b140-e83d8e308b0a" class="">💡 Consejos Adicionales</h2></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8005-87e0-fdea153f5a15" class="bulleted-list"><li style="list-style-type:disc"><strong>Sabor Extra:</strong> La nuez moscada se incorpora al triturar el puré para realzar el sabor sin sobrecargarlo.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-809b-a467-f202a8dadb8a" class="bulleted-list"><li style="list-style-type:disc"><strong>Cocción en Caldo:</strong> Para un sabor más profundo, puedes cocinar los vegetales en caldo de verduras en lugar de agua.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80b8-8cac-d01497f8e5ae" class="bulleted-list"><li style="list-style-type:disc"><strong>Uso de la Freidora de Aire:</strong> Si usas la freidora para asar el ajo o la remolacha, siempre asegúrate de no obstruir el flujo de aire colocando el papel de aluminio de forma correcta.</li></ul></div><div style="display:contents" dir="auto"><hr id="1c21870d-02b0-80a4-bd76-f826ff0f6b35"/></div><div style="display:contents" dir="auto"><hr id="1c21870d-02b0-80e6-89b9-dd7580479520"/></div><div style="display:contents" dir="auto"><hr id="1c21870d-02b0-80a3-8e5b-dab8679b9e5c"/></div><div style="display:contents" dir="auto"><h2 id="1c21870d-02b0-8035-94b2-cf047f299b6d" class="">🥩 Ojo de Bife</h2></div><div style="display:contents" dir="auto"><h3 id="1c21870d-02b0-8025-9249-d848171707e7" class="">Ingredientes</h3></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-802a-b5c4-c4f70164a8c6" class="bulleted-list"><li style="list-style-type:disc">🥩 <strong>1 Ojo de Bife</strong> (300-400 g por persona, ¡el protagonista del show!)</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8069-940f-d50c17329f04" class="bulleted-list"><li style="list-style-type:disc">🧂 <strong>Sal gruesa y pimienta negra</strong> recién molida, al gusto</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8090-a7f9-c2a8c0743b85" class="bulleted-list"><li style="list-style-type:disc">🍈 <strong>Aceite de oliva o de girasol</strong> (elige uno con alto punto de humo)</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8053-8792-ed3696c0d3ab" class="bulleted-list"><li style="list-style-type:disc">🌿 <strong>Hierbas provenzales</strong> (opcional, para un toque aromático y chic)</li></ul></div><div style="display:contents" dir="auto"><h2 id="1c21870d-02b0-805e-bb8c-c3cb7972433d" class="">Equipamiento</h2></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-805f-8248-df68db0f55ee" class="bulleted-list"><li style="list-style-type:disc">🔥 <strong>Sartén de hierro:</strong> El aliado perfecto para lograr un sellado magistral y una caramelización de infarto.</li></ul></div><div style="display:contents" dir="auto"><h2 id="1c21870d-02b0-806d-abb1-c53011620f35" class="">Instrucciones</h2></div><div style="display:contents" dir="auto"><ol type="1" id="1c21870d-02b0-80a2-b228-f9f86a2f0ca1" class="numbered-list" start="1"><li><strong>Prepara al Protagonista:</strong><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-808c-9163-fb9d505b01fa" class="bulleted-list"><li style="list-style-type:disc">Saca el ojo de bife del refrigerador <strong>30 minutos</strong> antes para que se relaje y alcance temperatura ambiente.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8014-b29e-ec7aa721db14" class="bulleted-list"><li style="list-style-type:disc">Sécalo bien con papel absorbente (¡nada de humedades que le quiten el protagonismo!).</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8053-b38a-e9323c1d6661" class="bulleted-list"><li style="list-style-type:disc">Sazónalo generosamente con sal gruesa y pimienta negra. Si te sientes creativo, espolvorea unas hierbas provenzales para un extra de aroma.</li></ul></div></li></ol></div><div style="display:contents" dir="auto"><ol type="1" id="1c21870d-02b0-80e2-9c9f-d2ded897c2d4" class="numbered-list" start="2"><li><strong>Calienta la Sartén:</strong><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80a7-99fb-dc1db0ddc324" class="bulleted-list"><li style="list-style-type:disc">Coloca tu sartén de hierro sobre la hornalla a fuego medio-alto.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8042-b27b-e6b1210c5a5b" class="bulleted-list"><li style="list-style-type:disc">Añade un chorrito de aceite y espera a que se caliente hasta que empiece a humear ligeramente; ese es el momento perfecto para la acción.</li></ul></div></li></ol></div><div style="display:contents" dir="auto"><ol type="1" id="1c21870d-02b0-8080-a37d-fbbc924524a7" class="numbered-list" start="3"><li><strong>El Gran Sellado:</strong><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80b4-b7d9-dd095abc2e49" class="bulleted-list"><li style="list-style-type:disc">Con todo listo, coloca el bife en la sartén y déjalo sin mover durante <strong>3-4 minutos</strong>.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-8091-8fb7-c632299f1d54" class="bulleted-list"><li style="list-style-type:disc">Este sellado crea una costra dorada y jugosa que encierra todos los sabores.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80ad-bcce-cf5a39f97fe9" class="bulleted-list"><li style="list-style-type:disc">Dale la vuelta y cocina el otro lado por otros <strong>3-4 minutos</strong> para lograr un término medio ideal (ajusta el tiempo si prefieres más o menos cocción).</li></ul></div></li></ol></div><div style="display:contents" dir="auto"><ol type="1" id="1c21870d-02b0-8078-a1e0-e2458266cb62" class="numbered-list" start="4"><li><strong>El Reposo Esencial:</strong><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80ef-aec0-c7f4a366a8d3" class="bulleted-list"><li style="list-style-type:disc">Retira el bife y colócalo en un plato.</li></ul></div><div style="display:contents" dir="auto"><ul id="1c21870d-02b0-80c9-93da-dcd7ba0b4862" class="bulleted-list"><li style="list-style-type:disc">Deja que repose <strong>5 minutos</strong>; este tiempo es clave para que los jugos se redistribuyan y cada bocado sea una explosión de sabor.</li></ul></div></li></ol></div><div style="display:contents" dir="auto"><p id="1c21870d-02b0-8026-b4a5-c3c9fdc1d459" class="">
+</p></div></div></article><span class="sans" style="font-size:14px;padding-top:2em"></span></body></html>

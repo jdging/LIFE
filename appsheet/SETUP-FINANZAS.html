@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guía AppSheet — LIFE Finanzas</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0e0e0c;
+    --surface:  #161614;
+    --surface2: #1e1e1b;
+    --surface3: #252521;
+    --border:   #2a2a26;
+    --text:     #e8e4da;
+    --muted:    #6b6860;
+    --accent:   #8fb87a;
+    --accent2:  #c4a96b;
+    --danger:   #c47a7a;
+    --info:     #7a8fb8;
+    --max-w:    780px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-weight: 300;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+
+  /* ── HEADER ── */
+  .doc-header {
+    border-bottom: 1px solid var(--border);
+    padding: 2.5rem 4rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+
+  .doc-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .doc-breadcrumb {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .doc-breadcrumb a { color: var(--muted); text-decoration: none; }
+  .doc-breadcrumb a:hover { color: var(--accent); }
+
+  .doc-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.4rem;
+    font-weight: 300;
+    line-height: 1.1;
+    color: var(--text);
+  }
+  .doc-title em { font-style: italic; color: var(--accent2); }
+
+  .doc-meta {
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    display: flex;
+    gap: 1.5rem;
+  }
+
+  .doc-logo {
+    height: 36px;
+    opacity: 0.5;
+    flex-shrink: 0;
+  }
+
+  /* ── PROGRESS BAR ── */
+  .progress-bar {
+    padding: 1.25rem 4rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    background: var(--surface);
+  }
+
+  .progress-step {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+    padding: 0.25rem 1rem 0.25rem 0;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .progress-step:hover { color: var(--text); }
+
+  .step-num {
+    width: 22px; height: 22px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.58rem;
+    flex-shrink: 0;
+    transition: border-color 0.2s, background 0.2s, color 0.2s;
+  }
+  .progress-step:hover .step-num { border-color: var(--muted); }
+
+  .step-sep {
+    color: var(--border);
+    padding: 0 0.5rem;
+    font-size: 0.7rem;
+    align-self: center;
+  }
+
+  /* ── MAIN CONTENT ── */
+  .doc-body {
+    max-width: var(--max-w);
+    margin: 0 auto;
+    padding: 3rem 2rem 6rem;
+  }
+
+  /* ── INTRO BOX ── */
+  .intro-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 3rem;
+  }
+  .intro-box p { font-size: 0.8rem; color: var(--text); line-height: 1.9; }
+  .intro-box strong { color: var(--accent); font-weight: 400; }
+
+  /* ── STEP SECTION ── */
+  .step {
+    margin-bottom: 3.5rem;
+    scroll-margin-top: 2rem;
+  }
+
+  .step-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .step-badge {
+    width: 36px; height: 36px;
+    border: 1px solid var(--accent);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1rem;
+    color: var(--accent);
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+  }
+
+  .step-title-block { flex: 1; }
+
+  .step-label {
+    font-size: 0.55rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.25rem;
+  }
+
+  .step-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.6rem;
+    font-weight: 400;
+    color: var(--text);
+    line-height: 1.2;
+  }
+
+  .step-desc {
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.8;
+    letter-spacing: 0.02em;
+    margin-top: 0.5rem;
+  }
+
+  /* ── SUBSTEPS ── */
+  .substeps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .substep {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .substep-num {
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    color: var(--accent2);
+    white-space: nowrap;
+    padding-top: 0.1rem;
+    min-width: 28px;
+  }
+
+  .substep-text {
+    font-size: 0.78rem;
+    color: var(--text);
+    line-height: 1.8;
+  }
+  .substep-text b { color: var(--accent2); font-weight: 400; }
+
+  /* ── TABLES ── */
+  .config-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.72rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border);
+  }
+
+  .config-table thead th {
+    background: var(--surface2);
+    padding: 0.6rem 1rem;
+    text-align: left;
+    font-weight: 400;
+    font-size: 0.58rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  .config-table tbody td {
+    padding: 0.55rem 1rem;
+    border-bottom: 1px solid rgba(42,42,38,0.6);
+    vertical-align: top;
+    line-height: 1.6;
+  }
+  .config-table tbody tr:last-child td { border-bottom: none; }
+  .config-table tbody tr:hover { background: var(--surface); }
+
+  .col-field { color: var(--accent); font-weight: 400; }
+  .col-type  { color: var(--accent2); }
+  .col-note  { color: var(--muted); font-size: 0.68rem; }
+
+  /* ── CODE BLOCKS ── */
+  .expr {
+    display: inline-block;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.15rem 0.5rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent2);
+    white-space: nowrap;
+  }
+
+  .code-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--accent2);
+    border-radius: 4px;
+    padding: 1rem 1.25rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent2);
+    margin: 0.75rem 0 1rem;
+    overflow-x: auto;
+    white-space: pre;
+    line-height: 1.9;
+  }
+
+  /* ── CALLOUTS ── */
+  .callout {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-radius: 4px;
+    margin: 1rem 0;
+    font-size: 0.75rem;
+    line-height: 1.8;
+  }
+  .callout-icon { font-size: 1rem; flex-shrink: 0; margin-top: 0.05rem; }
+  .callout-text { flex: 1; }
+  .callout-text b { font-weight: 400; }
+
+  .callout.tip    { background: rgba(143,184,122,0.07); border: 1px solid rgba(143,184,122,0.2); }
+  .callout.tip .callout-icon { color: var(--accent); }
+  .callout.warn   { background: rgba(196,169,107,0.07); border: 1px solid rgba(196,169,107,0.2); }
+  .callout.warn .callout-icon { color: var(--accent2); }
+  .callout.info   { background: rgba(122,143,184,0.07); border: 1px solid rgba(122,143,184,0.2); }
+  .callout.info .callout-icon { color: var(--info); }
+
+  /* ── FIELD GRID (para config rápida) ── */
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+  }
+
+  .field-card {
+    background: var(--surface);
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .field-card-name {
+    font-size: 0.72rem;
+    color: var(--accent);
+    font-weight: 400;
+  }
+  .field-card-type {
+    font-size: 0.65rem;
+    color: var(--accent2);
+  }
+  .field-card-note {
+    font-size: 0.62rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .field-card-expr {
+    font-size: 0.65rem;
+    color: var(--text);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    margin-top: 0.2rem;
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* ── CHECKLIST FINAL ── */
+  .checklist {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    font-size: 0.78rem;
+    line-height: 1.7;
+  }
+  .check-box {
+    width: 16px; height: 16px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    flex-shrink: 0;
+    margin-top: 0.18rem;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.55rem;
+    color: var(--accent);
+  }
+
+  /* ── FINAL BLOCK ── */
+  .final-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 2px solid var(--accent);
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+    text-align: center;
+  }
+  .final-block .final-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+  .final-block .final-code {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--accent2);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 0.75rem 1.5rem;
+    display: inline-block;
+    border-radius: 4px;
+    margin: 0.5rem 0 1rem;
+    max-width: 100%;
+    overflow-x: auto;
+    word-break: break-all;
+  }
+  .final-block .final-note {
+    font-size: 0.68rem;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+  .final-block .final-note b { color: var(--text); font-weight: 400; }
+
+  /* ── SECTION DIVIDER ── */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 2rem 0;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 640px) {
+    .doc-header { padding: 1.5rem; flex-direction: column; }
+    .progress-bar { padding: 1rem 1.5rem; }
+    .doc-body { padding: 2rem 1.25rem 4rem; }
+    .field-grid { grid-template-columns: 1fr; }
+    .config-table { font-size: 0.68rem; }
+    .config-table thead th, .config-table tbody td { padding: 0.5rem 0.75rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="doc-header">
+  <div class="doc-header-left">
+    <div class="doc-breadcrumb">
+      <a href="../src/index.html">LIFE</a>
+      <span>›</span>
+      <span>Finanzas</span>
+      <span>›</span>
+      <span>Guía de configuración</span>
+    </div>
+    <h1 class="doc-title">Configurar <em>AppSheet</em><br>para Finanzas</h1>
+    <div class="doc-meta">
+      <span>Versión 1.0 · 2026-04-02</span>
+      <span>Uso interno · JDG</span>
+    </div>
+  </div>
+  <img src="../marca/jdg/logoclaro.svg" alt="JDG" class="doc-logo">
+</header>
+
+<!-- PROGRESS BAR -->
+<nav class="progress-bar">
+  <a href="#paso-1" class="progress-step">
+    <span class="step-num">1</span>
+    <span>Crear app</span>
+  </a>
+  <span class="step-sep">›</span>
+  <a href="#paso-2" class="progress-step">
+    <span class="step-num">2</span>
+    <span>Columnas</span>
+  </a>
+  <span class="step-sep">›</span>
+  <a href="#paso-3" class="progress-step">
+    <span class="step-num">3</span>
+    <span>Show_If</span>
+  </a>
+  <span class="step-sep">›</span>
+  <a href="#paso-4" class="progress-step">
+    <span class="step-num">4</span>
+    <span>Valid_If</span>
+  </a>
+  <span class="step-sep">›</span>
+  <a href="#paso-5" class="progress-step">
+    <span class="step-num">5</span>
+    <span>Formulario</span>
+  </a>
+  <span class="step-sep">›</span>
+  <a href="#paso-6" class="progress-step">
+    <span class="step-num">6</span>
+    <span>Publicar</span>
+  </a>
+</nav>
+
+<!-- BODY -->
+<main class="doc-body">
+
+  <!-- INTRO -->
+  <div class="intro-box">
+    <p>
+      AppSheet actúa como el formulario de carga de datos para el sistema Finanzas.
+      Los datos que cargues en AppSheet van directo a la <strong>hoja Log</strong> de la Google Sheet,
+      y desde ahí el dashboard los consume via la Apps Script API.<br><br>
+      Esta guía asume que ya tenés la Google Sheet creada con <strong>setupFinanzasSheet()</strong>
+      y el trigger de auto-ID instalado con <strong>setupTriggers()</strong>.
+      No necesitás saber programar — solo seguir los pasos en el orden indicado.
+    </p>
+  </div>
+
+  <!-- ────────────────────────────────────────── PASO 1 -->
+  <section class="step" id="paso-1">
+    <div class="step-header">
+      <div class="step-badge">1</div>
+      <div class="step-title-block">
+        <div class="step-label">Paso 1 de 6</div>
+        <h2 class="step-title">Crear la app en AppSheet</h2>
+        <p class="step-desc">Conectar AppSheet a la Google Sheet existente. Solo se hace una vez.</p>
+      </div>
+    </div>
+
+    <div class="substeps">
+      <div class="substep">
+        <span class="substep-num">1.1</span>
+        <div class="substep-text">Ir a <b>appsheet.com</b> e iniciar sesión con la cuenta de Google que tiene acceso a la Sheet.</div>
+      </div>
+      <div class="substep">
+        <span class="substep-num">1.2</span>
+        <div class="substep-text">Hacer click en <b>Create &gt; App &gt; Start with existing data</b>.</div>
+      </div>
+      <div class="substep">
+        <span class="substep-num">1.3</span>
+        <div class="substep-text">Elegir <b>Google Sheets</b> como fuente de datos.</div>
+      </div>
+      <div class="substep">
+        <span class="substep-num">1.4</span>
+        <div class="substep-text">Seleccionar la Sheet llamada <b>LIFE - Finanzas</b> (o el nombre que le hayas dado al crearla).</div>
+      </div>
+      <div class="substep">
+        <span class="substep-num">1.5</span>
+        <div class="substep-text">AppSheet va a detectar las 4 hojas. Cuando pregunte qué tabla usar como principal, elegir <b>Log</b>. Las demás (Tarjetas, Categorías, Config) también van a estar disponibles como tablas de referencia.</div>
+      </div>
+      <div class="substep">
+        <span class="substep-num">1.6</span>
+        <div class="substep-text">Asignarle un nombre a la app, por ejemplo <b>LIFE Finanzas</b>. Hacer click en <b>Customize your app</b>.</div>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <span class="callout-icon">✓</span>
+      <div class="callout-text">
+        Al terminar este paso vas a ver el editor de AppSheet con una vista previa de la app. Las columnas van a aparecer en la tab <b>Data › Columns</b>. Desde ahí arranca la configuración real.
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────────────────────────────────────── PASO 2 -->
+  <section class="step" id="paso-2">
+    <div class="step-header">
+      <div class="step-badge">2</div>
+      <div class="step-title-block">
+        <div class="step-label">Paso 2 de 6</div>
+        <h2 class="step-title">Configurar tipos de columna</h2>
+        <p class="step-desc">AppSheet detecta los tipos automáticamente, pero algunos necesitan corrección manual. Ir a <b>Data › Columns › Log</b> y ajustar según la tabla.</p>
+      </div>
+    </div>
+
+    <table class="config-table">
+      <thead>
+        <tr>
+          <th>Columna</th>
+          <th>Tipo AppSheet</th>
+          <th>Editable</th>
+          <th>Configuración adicional</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="col-field">id</td>
+          <td class="col-type">Text</td>
+          <td class="col-note">No</td>
+          <td class="col-note">Lo genera el trigger. Desmarcar "Editable". Puede dejarse oculto en el formulario.</td>
+        </tr>
+        <tr>
+          <td class="col-field">fecha</td>
+          <td class="col-type">Date</td>
+          <td class="col-note">Sí</td>
+          <td class="col-note">Initial value: <span class="expr">TODAY()</span></td>
+        </tr>
+        <tr>
+          <td class="col-field">tipo</td>
+          <td class="col-type">Enum</td>
+          <td class="col-note">Sí</td>
+          <td class="col-note">Valores: Gasto, Ingreso, Inversión</td>
+        </tr>
+        <tr>
+          <td class="col-field">categoria</td>
+          <td class="col-type">EnumList → Enum</td>
+          <td class="col-note">Sí</td>
+          <td class="col-note">Cambiarlo a <b>Enum</b> simple. Valid_If: se configura en Paso 4.</td>
+        </tr>
+        <tr>
+          <td class="col-field">subcategoria</td>
+          <td class="col-type">Enum</td>
+          <td class="col-note">Sí</td>
+          <td class="col-note">Valid_If: se configura en Paso 4.</td>
+        </tr>
+        <tr>
+          <td class="col-field">descripcion</td>
+          <td class="col-type">Text</td>
+          <td class="col-note">Sí</td>
+          <td class="col-note">—</td>
+        </tr>
+        <tr>
+          <td class="col-field">monto_total</td>
+          <td class="col-type">Decimal</td>
+          <td class="col-note">Sí</td>
+          <td class="col-note">Required: Sí</td>
+        </tr>
+        <tr>
+          <td class="col-field">cuotas_total</td>
+          <td class="col-type">Number</td>
+          <td class="col-note">Sí</td>
+          <td class="col-note">Initial value: <span class="expr">1</span>. Min: 1.</td>
+        </tr>
+        <tr>
+          <td class="col-field">cuota_nro</td>
+          <td class="col-type">Number</td>
+          <td class="col-note">No</td>
+          <td class="col-note">Lo gestiona el trigger. Ocultar del formulario (Show_If: FALSE).</td>
+        </tr>
+        <tr>
+          <td class="col-field">cuota_ref</td>
+          <td class="col-type">Text</td>
+          <td class="col-note">No</td>
+          <td class="col-note">Lo gestiona el trigger. Ocultar del formulario (Show_If: FALSE).</td>
+        </tr>
+        <tr>
+          <td class="col-field">medio_pago</td>
+          <td class="col-type">Enum</td>
+          <td class="col-note">Sí</td>
+          <td class="col-note">Valores: Crédito, Débito, Efectivo, Transferencia</td>
+        </tr>
+        <tr>
+          <td class="col-field">tarjeta</td>
+          <td class="col-type">Text</td>
+          <td class="col-note">Sí</td>
+          <td class="col-note">Show_If y Valid_If: se configuran en Pasos 3 y 4.</td>
+        </tr>
+        <tr>
+          <td class="col-field">pago</td>
+          <td class="col-type">Enum</td>
+          <td class="col-note">Sí</td>
+          <td class="col-note">Valores: Común, JD, Pinki</td>
+        </tr>
+        <tr>
+          <td class="col-field">es_fijo</td>
+          <td class="col-type">Yes/No</td>
+          <td class="col-note">Sí</td>
+          <td class="col-note">Initial value: <span class="expr">FALSE</span></td>
+        </tr>
+        <tr>
+          <td class="col-field">notas</td>
+          <td class="col-type">LongText</td>
+          <td class="col-note">Sí</td>
+          <td class="col-note">Cambiar de Text a LongText para poder escribir más.</td>
+        </tr>
+        <tr>
+          <td class="col-field">borrado</td>
+          <td class="col-type">Yes/No</td>
+          <td class="col-note">No</td>
+          <td class="col-note">Ocultar del formulario (Show_If: FALSE). Initial value: <span class="expr">FALSE</span>.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <span class="callout-icon">!</span>
+      <div class="callout-text">
+        <b>Importante:</b> Los campos <b>id</b>, <b>cuota_nro</b>, <b>cuota_ref</b> y <b>borrado</b> no deben ser editables por el usuario. Si AppSheet los marca como editables, desmarcarlos. El trigger de Apps Script los maneja automáticamente.
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────────────────────────────────────── PASO 3 -->
+  <section class="step" id="paso-3">
+    <div class="step-header">
+      <div class="step-badge">3</div>
+      <div class="step-title-block">
+        <div class="step-label">Paso 3 de 6</div>
+        <h2 class="step-title">Campos condicionales — Show_If</h2>
+        <p class="step-desc">Algunos campos solo deben aparecer cuando tienen sentido. El campo <b>tarjeta</b>, por ejemplo, solo aplica cuando el medio de pago es con tarjeta.</p>
+      </div>
+    </div>
+
+    <p style="font-size:0.78rem;color:var(--muted);margin-bottom:1.25rem">
+      Para configurar Show_If: en <b>Data › Columns › Log</b>, hacer click en el campo y buscar la propiedad <b>Show_If</b> en el panel derecho. Pegar la expresión exacta.
+    </p>
+
+    <table class="config-table">
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Show_If</th>
+          <th>Explicación</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="col-field">tarjeta</td>
+          <td><span class="expr">OR([medio_pago]="Crédito", [medio_pago]="Débito")</span></td>
+          <td class="col-note">Solo aparece si se eligió pago con tarjeta</td>
+        </tr>
+        <tr>
+          <td class="col-field">cuotas_total</td>
+          <td><span class="expr">OR([medio_pago]="Crédito", [medio_pago]="Débito")</span></td>
+          <td class="col-note">Las cuotas solo aplican a tarjeta de crédito/débito</td>
+        </tr>
+        <tr>
+          <td class="col-field">cuota_nro</td>
+          <td><span class="expr">FALSE</span></td>
+          <td class="col-note">Siempre oculto — lo gestiona el trigger</td>
+        </tr>
+        <tr>
+          <td class="col-field">cuota_ref</td>
+          <td><span class="expr">FALSE</span></td>
+          <td class="col-note">Siempre oculto — lo gestiona el trigger</td>
+        </tr>
+        <tr>
+          <td class="col-field">borrado</td>
+          <td><span class="expr">FALSE</span></td>
+          <td class="col-note">El borrado se hace desde el dashboard, no desde AppSheet</td>
+        </tr>
+        <tr>
+          <td class="col-field">id</td>
+          <td><span class="expr">FALSE</span></td>
+          <td class="col-note">Ocultar — se auto-genera. Opcional: dejar visible en modo solo lectura</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <span class="callout-icon">i</span>
+      <div class="callout-text">
+        <b>Cómo funciona Show_If:</b> Si la expresión devuelve TRUE (o el campo siempre está sin condición), el campo aparece en el formulario. Si devuelve FALSE, el campo queda oculto pero sigue guardándose con su valor inicial (si tiene uno configurado).
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────────────────────────────────────── PASO 4 -->
+  <section class="step" id="paso-4">
+    <div class="step-header">
+      <div class="step-badge">4</div>
+      <div class="step-title-block">
+        <div class="step-label">Paso 4 de 6</div>
+        <h2 class="step-title">Dropdowns filtrados — Valid_If</h2>
+        <p class="step-desc">Las listas de <b>categoría</b>, <b>subcategoría</b> y <b>tarjeta</b> deben filtrarse según lo que el usuario eligió antes. Esto se logra con expresiones Valid_If que cruzan datos de las otras hojas.</p>
+      </div>
+    </div>
+
+    <p style="font-size:0.78rem;color:var(--muted);margin-bottom:1.25rem">
+      Para configurar Valid_If: en <b>Data › Columns › Log</b>, hacer click en el campo y buscar la propiedad <b>Valid_If</b>. Reemplazar el contenido (si hay algo) por la expresión exacta de abajo.
+    </p>
+
+    <!-- Categoria -->
+    <h3 style="font-size:0.65rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:0.75rem">Campo: categoria</h3>
+    <p style="font-size:0.78rem;color:var(--text);margin-bottom:0.25rem">Mostrar solo las categorías del tipo seleccionado (Gasto, Ingreso o Inversión):</p>
+    <div class="code-block">SELECT(Categorías[categoria], [tipo] = [_THISROW].[tipo])</div>
+    <div class="callout tip" style="margin-bottom:1.5rem">
+      <span class="callout-icon">✓</span>
+      <div class="callout-text">Esta expresión lee la hoja Categorías, filtra por las filas donde la columna <b>tipo</b> coincide con el tipo elegido en la fila que se está cargando, y devuelve solo las <b>categorias</b> correspondientes.</div>
+    </div>
+
+    <!-- Subcategoria -->
+    <h3 style="font-size:0.65rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:0.75rem">Campo: subcategoria</h3>
+    <p style="font-size:0.78rem;color:var(--text);margin-bottom:0.25rem">Mostrar solo las subcategorías que corresponden al tipo Y categoría seleccionados:</p>
+    <div class="code-block">SELECT(Categorías[subcategoria], AND([tipo] = [_THISROW].[tipo], [categoria] = [_THISROW].[categoria]))</div>
+    <div class="callout tip" style="margin-bottom:1.5rem">
+      <span class="callout-icon">✓</span>
+      <div class="callout-text">Doble filtro: primero por tipo, luego por categoría. Así si elegiste <b>Gasto › Comida</b>, solo vas a ver Supermercado, Verdulería, Carnicería, etc.</div>
+    </div>
+
+    <!-- Tarjeta -->
+    <h3 style="font-size:0.65rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:0.75rem">Campo: tarjeta</h3>
+    <p style="font-size:0.78rem;color:var(--text);margin-bottom:0.25rem">Mostrar solo las tarjetas que coinciden con el tipo de medio de pago (Crédito o Débito):</p>
+    <div class="code-block">SELECT(Tarjetas[nombre], [tipo] = [_THISROW].[medio_pago])</div>
+
+    <div class="callout warn">
+      <span class="callout-icon">!</span>
+      <div class="callout-text">
+        <b>Atención:</b> Para que esto funcione, la hoja Tarjetas debe tener datos cargados. Antes de probar el formulario, agregá al menos una tarjeta directamente en la Google Sheet (hoja Tarjetas).
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────────────────────────────────────── PASO 5 -->
+  <section class="step" id="paso-5">
+    <div class="step-header">
+      <div class="step-badge">5</div>
+      <div class="step-title-block">
+        <div class="step-label">Paso 5 de 6</div>
+        <h2 class="step-title">Ajustes del formulario</h2>
+        <p class="step-desc">Pequeños ajustes de UX para que el formulario sea cómodo de usar en el celular.</p>
+      </div>
+    </div>
+
+    <div class="substeps">
+      <div class="substep">
+        <span class="substep-num">5.1</span>
+        <div class="substep-text">
+          Ir a <b>UX › Views</b>. Verificar que haya una vista de tipo <b>Form</b> para la tabla Log. Si no existe, crear una: <b>+ New View › Form</b>.
+        </div>
+      </div>
+      <div class="substep">
+        <span class="substep-num">5.2</span>
+        <div class="substep-text">
+          En la vista Form, buscar la opción <b>Column order</b> y reordenar los campos en este orden lógico:
+          <br><br>
+          fecha → tipo → categoria → subcategoria → descripcion → monto_total → cuotas_total → medio_pago → tarjeta → pago → es_fijo → notas
+        </div>
+      </div>
+      <div class="substep">
+        <span class="substep-num">5.3</span>
+        <div class="substep-text">
+          Ir a <b>UX › Branding</b> y personalizar si querés: nombre de la app, ícono, colores. Opcional — no afecta la funcionalidad.
+        </div>
+      </div>
+      <div class="substep">
+        <span class="substep-num">5.4</span>
+        <div class="substep-text">
+          <b>Test rápido:</b> en la preview del editor (panel derecho), probá cargar una entrada de Gasto. Verificar que:
+          <br>— La categoría filtra según el tipo
+          <br>— La subcategoría filtra según la categoría
+          <br>— El campo "tarjeta" aparece solo si medio_pago = Crédito o Débito
+          <br>— El campo "cuotas_total" aparece solo si usás tarjeta
+        </div>
+      </div>
+    </div>
+
+    <div class="callout info">
+      <span class="callout-icon">i</span>
+      <div class="callout-text">
+        <b>Sobre los campos ocultos:</b> aunque cuota_nro, cuota_ref y borrado no aparecen en el formulario, AppSheet los va a enviar a la Sheet con sus valores iniciales (1, vacío, y FALSE respectivamente). El trigger de Apps Script va a sobreescribirlos si corresponde (por ejemplo, si cuotas_total &gt; 1, va a crear todas las filas necesarias con los valores correctos).
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────────────────────────────────────── PASO 6 -->
+  <section class="step" id="paso-6">
+    <div class="step-header">
+      <div class="step-badge">6</div>
+      <div class="step-title-block">
+        <div class="step-label">Paso 6 de 6</div>
+        <h2 class="step-title">Publicar y conectar al dashboard</h2>
+        <p class="step-desc">Obtener la URL pública de la app y pegarla en el dashboard para activar el panel de carga.</p>
+      </div>
+    </div>
+
+    <div class="substeps">
+      <div class="substep">
+        <span class="substep-num">6.1</span>
+        <div class="substep-text">En el editor de AppSheet, hacer click en el botón <b>Deploy</b> (esquina superior derecha o menú izquierdo según la versión).</div>
+      </div>
+      <div class="substep">
+        <span class="substep-num">6.2</span>
+        <div class="substep-text">Seleccionar <b>Move app to deployed state</b>. AppSheet va a verificar que la app no tenga errores graves.</div>
+      </div>
+      <div class="substep">
+        <span class="substep-num">6.3</span>
+        <div class="substep-text">
+          Una vez deployada, ir a <b>Manage › Integrations › IN: AppSheet API</b> (o simplemente copiar la URL desde la barra del navegador cuando estás viendo la app). La URL va a tener el formato:
+          <div class="code-block">https://www.appsheet.com/start/XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX</div>
+        </div>
+      </div>
+      <div class="substep">
+        <span class="substep-num">6.4</span>
+        <div class="substep-text">
+          Abrir el archivo <b>src/finanzas/index.html</b> y buscar la línea (cerca del inicio del bloque <span class="expr">&lt;script&gt;</span>):
+          <div class="code-block">const APPSHEET_URL = ''; // ← Pegá acá la URL pública de tu app AppSheet</div>
+          Reemplazarla por:
+          <div class="code-block">const APPSHEET_URL = 'https://www.appsheet.com/start/TU-ID-AQUI';</div>
+        </div>
+      </div>
+      <div class="substep">
+        <span class="substep-num">6.5</span>
+        <div class="substep-text">
+          Guardar el archivo, hacer push a GitHub. En el dashboard, el botón <b>+</b> de la esquina inferior derecha va a abrir el formulario de AppSheet como panel lateral.
+        </div>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-icon">!</span>
+      <div class="callout-text">
+        <b>Importante:</b> Si la app pide login de Google al abrirse en el iframe, es porque está en modo privado. Para que funcione embebida sin autenticación, la app debe estar en modo <b>público</b> o con el link compartido como <b>"Anyone with the link"</b>. Esto se configura en <b>Manage › Users › Security</b>.
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- CHECKLIST FINAL -->
+  <section style="margin-bottom:2rem">
+    <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:400;margin-bottom:1.25rem;color:var(--text)">Checklist de verificación</h2>
+    <ul class="checklist">
+      <li><span class="check-box">□</span> App creada y conectada a la Sheet LIFE - Finanzas</li>
+      <li><span class="check-box">□</span> Tipos de columna corregidos (Decimal, LongText, Enum con valores correctos)</li>
+      <li><span class="check-box">□</span> id, cuota_nro, cuota_ref y borrado marcados como no editables</li>
+      <li><span class="check-box">□</span> Show_If configurado para tarjeta, cuotas_total, cuota_nro, cuota_ref y borrado</li>
+      <li><span class="check-box">□</span> Valid_If configurado para categoria, subcategoria y tarjeta</li>
+      <li><span class="check-box">□</span> Al menos una tarjeta cargada en la hoja Tarjetas de la Sheet</li>
+      <li><span class="check-box">□</span> Formulario probado: filtros dinámicos funcionan en la preview</li>
+      <li><span class="check-box">□</span> App publicada (deployed)</li>
+      <li><span class="check-box">□</span> URL pegada en APPSHEET_URL en src/finanzas/index.html</li>
+      <li><span class="check-box">□</span> Test end-to-end: cargar un gasto → verificar ID en Sheet → verificar en dashboard</li>
+    </ul>
+  </section>
+
+  <!-- BLOQUE FINAL -->
+  <div class="final-block">
+    <div class="final-label">Constante a configurar en el dashboard</div>
+    <div class="final-code">const APPSHEET_URL = 'https://www.appsheet.com/start/...';</div>
+    <p class="final-note">
+      Esta línea está al inicio del bloque <b>&lt;script&gt;</b> en <b>src/finanzas/index.html</b>.<br>
+      Una vez que la pegás y hacés push, el botón + del dashboard queda operativo.
+    </p>
+  </div>
+
+</main>
+
+</body>
+</html>

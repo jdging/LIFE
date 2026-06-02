@@ -1,0 +1,8 @@
+Bueno, ok, de todos modos me gustaria mantener el original (adjuntado) pero quiero quiero que lo modiques a pens para que sea adecuado mas a este estilo que te pase de marca, osea tengo las ganas que tenga el formato este que te pase, fondo blanco viste. pero conlo otro un poco tocado para adecuar al estilo. ademas te pase el datos.json para que veas que lo complete todo, pero aun no se actualiza en el template html, y es porque nunca lo referenciaste. podes hacer eso?
+
+por otro lado, aca vive el template G:\Mi unidad\15 - Sistemas\XX - DESARROLLOS y veo que hay un md que es lessons, estaría bueno que ese, y a su vez, el Claude.local.md se vaya actualizando en el template a medida que voy desarrollando otros proyectos. y lo mismo que jdg en marca si es que doy autorización. 
+
+por ultimo explícame que hace esto y si tengo que completarlo yo o lo completa code solo a medida que desarrollamos el proyecto:## Comandos del Proyecto
+- `npm run dev` → [completar cuando se defina]
+- `npm run build` → [completar cuando se defina]
+- `npm run test` → [completar cuando se defina]

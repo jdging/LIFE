@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es" data-marca="jdg">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Documento — JDG</title>
+
+  <!-- ACOTACIÓN PARA R.P.: Los estilos de marca se cargan desde colores.css -->
+  <link rel="stylesheet" href="../marca/jdg/colores.css">
+
+  <style>
+    /* === LAYOUT DEL DOCUMENTO === */
+    /* ACOTACIÓN PARA R.P.: Estructura general del documento. Modificar márgenes y anchos acá. */
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      max-width: 210mm; /* A4 width */
+      margin: 0 auto;
+      padding: var(--jdg-spacing-xl);
+      background: var(--jdg-white);
+    }
+
+    /* === HEADER === */
+    /* ACOTACIÓN PARA R.P.: El header contiene logo + subtítulo a la izquierda, datos a la derecha. */
+    .doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding-bottom: var(--jdg-spacing-lg);
+      border-bottom: 3px solid var(--jdg-primary);
+      margin-bottom: var(--jdg-spacing-lg);
+    }
+
+    .doc-header .logo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .doc-header .logo img {
+      height: 50px;
+    }
+
+    /* ACOTACIÓN PARA R.P.: Subtítulo debajo del logo. Lato light, uppercase, espaciado. */
+    .doc-header .logo-sub {
+      font-family: var(--jdg-font-body);
+      font-weight: 300;
+      font-size: 8.5px;
+      letter-spacing: 0.30em;
+      text-transform: uppercase;
+      color: var(--jdg-mid-gray);
+      margin-top: 5px;
+    }
+
+    .doc-header .datos {
+      text-align: right;
+      font-size: var(--jdg-font-size-small);
+      color: var(--jdg-mid-gray);
+      line-height: 1.8;
+    }
+
+    /* === TÍTULO DEL DOCUMENTO === */
+    .doc-titulo {
+      text-align: center;
+      margin-bottom: var(--jdg-spacing-lg);
+    }
+
+    .doc-titulo h1 {
+      font-size: var(--jdg-font-size-h1);
+      color: var(--jdg-primary);
+      margin-bottom: var(--jdg-spacing-sm);
+    }
+
+    .doc-titulo .subtitulo {
+      color: var(--jdg-mid-gray);
+      font-size: var(--jdg-font-size-base);
+    }
+
+    /* === SECCIONES === */
+    /* ACOTACIÓN PARA R.P.: Cada sección del documento usa esta clase.
+       Nota: el colores.css tiene h2 a 14px (pensado para labels uppercase del presupuesto oscuro).
+       Acá se sobreescribe a 18px para que los títulos se lean bien en fondo blanco. */
+    .doc-seccion {
+      margin-bottom: var(--jdg-spacing-lg);
+    }
+
+    .doc-seccion h2 {
+      font-size: 18px;
+      color: var(--jdg-primary);
+      border-left: 4px solid var(--jdg-primary);
+      padding-left: var(--jdg-spacing-md);
+      margin-bottom: var(--jdg-spacing-md);
+    }
+
+    .doc-seccion h3 {
+      font-size: 15px;
+      margin-bottom: var(--jdg-spacing-sm);
+    }
+
+    .doc-seccion p {
+      margin-bottom: var(--jdg-spacing-sm);
+    }
+
+    /* === TABLA DE ITEMS (para presupuestos) === */
+    /* ACOTACIÓN PARA R.P.: Tabla principal de ítems/precios. */
+    .tabla-items {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: var(--jdg-spacing-lg);
+    }
+
+    .tabla-items th {
+      background: var(--jdg-primary);
+      color: var(--jdg-white);
+      padding: 12px 16px;
+      text-align: left;
+      font-family: var(--jdg-font-heading);
+      font-size: var(--jdg-font-size-small);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .tabla-items td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--jdg-light-gray);
+    }
+
+    .tabla-items tr:nth-child(even) {
+      background: var(--jdg-light-gray);
+    }
+
+    .tabla-items .monto {
+      text-align: right;
+      font-family: var(--jdg-font-mono);
+    }
+
+    /* === TOTAL === */
+    .doc-total {
+      text-align: right;
+      padding: var(--jdg-spacing-md);
+      background: var(--jdg-light-gray);
+      border-radius: 8px;
+      margin-bottom: var(--jdg-spacing-lg);
+    }
+
+    .doc-total .label {
+      font-size: 15px;
+      color: var(--jdg-mid-gray);
+    }
+
+    .doc-total .valor {
+      font-size: var(--jdg-font-size-h1);
+      color: var(--jdg-primary);
+      font-weight: 700;
+      font-family: var(--jdg-font-mono);
+    }
+
+    /* === NOTAS Y CONDICIONES === */
+    .doc-notas {
+      font-size: var(--jdg-font-size-small);
+      color: var(--jdg-mid-gray);
+      border-top: 1px solid var(--jdg-light-gray);
+      padding-top: var(--jdg-spacing-md);
+    }
+
+    .doc-notas ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .doc-notas li::before {
+      content: "→ ";
+      color: var(--jdg-primary);
+    }
+
+    /* === FOOTER === */
+    /* ACOTACIÓN PARA R.P.: Pie de página con datos legales. Datos de datos.json. */
+    .doc-footer {
+      margin-top: var(--jdg-spacing-xl);
+      padding-top: var(--jdg-spacing-md);
+      border-top: 2px solid var(--jdg-primary);
+      text-align: center;
+      font-size: var(--jdg-font-size-small);
+      color: var(--jdg-mid-gray);
+    }
+
+    /* === BOTÓN EXPORTAR PDF === */
+    .print-btn {
+      display: flex;
+      justify-content: flex-end;
+      max-width: 210mm;
+      margin: 0 auto var(--jdg-spacing-sm);
+    }
+
+    .print-btn button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--jdg-primary);
+      color: var(--jdg-white);
+      border: none;
+      padding: 10px 22px;
+      font-family: var(--jdg-font-heading);
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 2px 14px rgba(43, 50, 99, 0.18);
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .print-btn button:hover { background: #1e2348; transform: translateY(-1px); }
+    .print-btn button:active { transform: translateY(0); }
+
+    /* === PRINT === */
+    @media print {
+      .print-btn { display: none !important; }
+      body { padding: 0; }
+      .doc-header { break-after: avoid; }
+      .tabla-items { break-inside: avoid; }
+      .doc-footer { position: fixed; bottom: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- BOTÓN EXPORTAR (no aparece en PDF) -->
+  <div class="print-btn">
+    <button onclick="window.print()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 6 2 18 2 18 9"/>
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+        <rect x="6" y="14" width="12" height="8"/>
+      </svg>
+      Exportar PDF
+    </button>
+  </div>
+
+  <!-- === HEADER === -->
+  <!-- ACOTACIÓN PARA R.P.: Logo + subtítulo a la izquierda, datos a la derecha.
+       Datos de contacto vienen de marca/jdg/datos.json -->
+  <header class="doc-header">
+    <div class="logo">
+      <img src="../marca/jdg/logoclaro.svg" alt="JDG">
+      <div class="logo-sub">SISTEMAS &amp; ESTRUCTURAS</div>
+    </div>
+    <div class="datos">
+      <!-- datos.json → nombre_completo, contacto -->
+      Juan David Guzmán<br>
+      juandavidguzman96@gmail.com | 341 360 3215<br>
+      Rosario, Santa Fe, Argentina<br>
+      CUIT: 20-39755941-7
+    </div>
+  </header>
+
+  <!-- === TÍTULO === -->
+  <div class="doc-titulo">
+    <h1><!-- [VAR: tipo_documento] -->Presupuesto<!-- [/VAR] --></h1>
+    <p class="subtitulo">Para: <!-- [VAR: cliente] -->[nombre del cliente]<!-- [/VAR] --> — Fecha: <!-- [VAR: fecha] -->[DD/MM/YYYY]<!-- [/VAR] --></p>
+  </div>
+
+  <!-- === DESCRIPCIÓN DEL PROYECTO === -->
+  <section class="doc-seccion">
+    <h2>Descripción del proyecto</h2>
+    <p><!-- [VAR: descripcion] -->[Descripción clara de qué se va a hacer, alcance del trabajo.]<!-- [/VAR] --></p>
+  </section>
+
+  <!-- === TABLA DE ITEMS === -->
+  <section class="doc-seccion">
+    <h2>Detalle de ítems</h2>
+    <table class="tabla-items">
+      <thead>
+        <tr>
+          <th>Ítem</th>
+          <th>Descripción</th>
+          <th>Cant.</th>
+          <th>Precio unit.</th>
+          <th>Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td><!-- [VAR: item_01_desc] -->[Descripción del ítem]<!-- [/VAR] --></td>
+          <td>1</td>
+          <td class="monto"><!-- [VAR: item_01_precio] -->$0.00<!-- [/VAR] --></td>
+          <td class="monto"><!-- [VAR: item_01_subtotal] -->$0.00<!-- [/VAR] --></td>
+        </tr>
+        <!-- Agregar más filas según necesidad -->
+      </tbody>
+    </table>
+  </section>
+
+  <!-- === TOTAL === -->
+  <div class="doc-total">
+    <span class="label">Total</span><br>
+    <span class="valor"><!-- [VAR: total_monto] -->$0.00<!-- [/VAR] --></span>
+  </div>
+
+  <!-- === CONDICIONES === -->
+  <section class="doc-seccion doc-notas">
+    <h2>Condiciones</h2>
+    <ul>
+      <!-- [VAR: condiciones] -->
+      <li>Validez del presupuesto: 15 días corridos</li>
+      <li>Forma de pago: [a definir]</li>
+      <li>Plazo de entrega estimado: [a definir]</li>
+      <li>No incluye: [especificar exclusiones]</li>
+      <!-- [/VAR] -->
+    </ul>
+  </section>
+
+  <!-- === FOOTER === -->
+  <!-- ACOTACIÓN PARA R.P.: Datos de contacto cargados desde datos.json -->
+  <footer class="doc-footer">
+    <p>Juan David Guzmán — Ingeniero Estructural</p>
+    <p>juandavidguzman96@gmail.com | 341 360 3215 | Rosario, Santa Fe</p>
+  </footer>
+
+</body>
+</html>

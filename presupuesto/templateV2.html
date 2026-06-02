@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Presupuesto — <!-- [VAR: cliente] -->[Nombre del cliente]<!-- [/VAR] --></title>
+
+<!-- ACOTACIÓN PARA R.P.: Las fuentes se cargan desde Google Fonts (Montserrat + Lato).
+     Los colores de marca están en colores.css, pero este template es autocontenido
+     para que funcione como PDF sin dependencias externas. -->
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy: #2b3263;
+    --white: #ffffff;
+    --text: #1a1d2e;
+    --text-mid: #4a4f6e;
+    --text-dim: #9098b8;
+  }
+
+  /* ── PANTALLA ── */
+  body {
+    background: #1e2348;
+    font-family: 'Lato', sans-serif;
+    font-size: 13.5px;
+    color: var(--text);
+    line-height: 1.7;
+    padding: 40px 20px 60px;
+  }
+
+  .page {
+    max-width: 780px;
+    margin: 0 auto;
+    background: var(--navy);
+    box-shadow: 0 8px 60px rgba(0,0,0,0.4);
+    opacity: 0;
+    animation: fadeIn 0.5s ease forwards;
+  }
+
+  @keyframes fadeIn { to { opacity: 1; } }
+
+  /* ── HEADER ── */
+  /* ACOTACIÓN PARA R.P.: El header tiene logo a la izquierda y datos del documento
+     a la derecha. El logo es SVG inline (paths blancos sobre navy). */
+  .header {
+    padding: 44px 56px 36px;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 32px;
+  }
+
+  .logo-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .logo-block svg { width: 200px; height: auto; display: block; }
+
+  /* ACOTACIÓN PARA R.P.: Subtítulo debajo del logo. Letra fina, espaciada, uppercase.
+     Cambiar el texto en el HTML, no acá. */
+  .logo-sub {
+    font-family: 'Lato', sans-serif;
+    font-weight: 300;
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.45);
+    text-align: center;
+    margin-top: 7px;
+  }
+
+  .doc-info { text-align: right; }
+
+  .doc-label {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    font-size: 24px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #fff;
+    line-height: 1;
+    margin-bottom: 14px;
+  }
+
+  .doc-meta {
+    font-size: 11.5px;
+    color: rgba(255,255,255,0.38);
+    line-height: 2.1;
+  }
+
+  .doc-meta strong {
+    color: rgba(255,255,255,0.65);
+    font-weight: 700;
+  }
+
+  /* ── BODY ── */
+  .body { padding: 0 56px 48px; }
+
+  /* ACOTACIÓN PARA R.P.: Labels de sección — texto chiquito uppercase con línea decorativa. */
+  .section-label {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    font-size: 9px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.4);
+    padding: 28px 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255,255,255,0.1);
+  }
+
+  /* ── ITEMS ── */
+  /* ACOTACIÓN PARA R.P.: Cada ítem tiene dos variantes de encabezado:
+     .dark = fondo blanco (para ítems confirmados)
+     .light = fondo transparente (para ítems a definir) */
+  .item {
+    border: 1px solid rgba(255,255,255,0.11);
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+
+  .item-top {
+    padding: 18px 24px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .item-top.dark  { background: #ffffff; }
+  .item-top.light { background: rgba(255,255,255,0.055); border-bottom: 1px solid rgba(255,255,255,0.09); }
+
+  .item-num {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    margin-bottom: 3px;
+  }
+  .dark  .item-num { color: rgba(43,50,99,0.35); }
+  .light .item-num { color: rgba(255,255,255,0.3); }
+
+  .item-title {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .dark  .item-title { color: var(--navy); }
+  .light .item-title { color: #ffffff; }
+
+  .item-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  /* ACOTACIÓN PARA R.P.: Badges de estado — .badge-ok (confirmado, navy sólido)
+     y .badge-tbd (a definir, borde semitransparente). */
+  .badge {
+    padding: 3px 11px;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 8.5px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .badge-ok  { background: var(--navy); color: #fff; }
+  .badge-tbd { background: rgba(255,255,255,0.09); color: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.14); }
+
+  .price-amount {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    font-size: 26px;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+  .dark  .price-amount { color: var(--navy); }
+  .light .price-amount { color: #fff; }
+
+  .price-tbd {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.35);
+  }
+
+  .item-body { padding: 16px 24px 18px; }
+
+  .includes { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+
+  .includes li {
+    display: flex;
+    gap: 10px;
+    font-size: 12.5px;
+    color: rgba(255,255,255,0.55);
+    line-height: 1.55;
+  }
+
+  .includes li::before { content: '—'; color: rgba(255,255,255,0.25); flex-shrink: 0; }
+
+  /* ACOTACIÓN PARA R.P.: .no = ítem excluido (más opaco, con × en vez de —) */
+  .includes li.no { color: rgba(255,255,255,0.28); }
+  .includes li.no::before { content: '×'; }
+
+  .condition {
+    margin-top: 14px;
+    background: rgba(255,255,255,0.045);
+    border-left: 3px solid rgba(255,255,255,0.25);
+    padding: 12px 16px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.65;
+  }
+
+  .condition strong {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.7);
+    display: block;
+    margin-bottom: 5px;
+  }
+
+  /* ── TOTALES ── */
+  /* ACOTACIÓN PARA R.P.: Bloque de resumen con filas y total destacado en blanco. */
+  .totals { margin-top: 24px; border: 1px solid rgba(255,255,255,0.11); overflow: hidden; }
+
+  .totals-head {
+    background: rgba(255,255,255,0.07);
+    padding: 11px 24px;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    font-size: 9px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.35);
+  }
+
+  .totals-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 24px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    font-size: 12.5px;
+    color: rgba(255,255,255,0.45);
+  }
+
+  .totals-row.main {
+    background: #ffffff;
+    border-top: none;
+    padding: 16px 24px;
+  }
+
+  .totals-row.main .tl {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--navy);
+  }
+
+  .totals-row.main .tv {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    font-size: 24px;
+    color: var(--navy);
+  }
+
+  /* ── FOOTER ── */
+  /* ACOTACIÓN PARA R.P.: Footer con nota legal a la izquierda y mini-logo a la derecha. */
+  .footer {
+    background: rgba(0,0,0,0.18);
+    border-top: 1px solid rgba(255,255,255,0.09);
+    padding: 28px 56px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .footer-note {
+    font-size: 11px;
+    color: rgba(255,255,255,0.3);
+    line-height: 1.8;
+    max-width: 440px;
+  }
+
+  .footer-brand { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+  .footer-brand svg { width: 80px; height: auto; display: block; opacity: 0.45; }
+
+  .footer-brand-sub {
+    font-family: 'Lato', sans-serif;
+    font-weight: 300;
+    font-size: 8px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.28);
+    margin-top: 7px;
+    text-align: center;
+  }
+
+  /* ── BOTÓN IMPRIMIR ── */
+  .print-btn {
+    display: flex;
+    justify-content: flex-end;
+    margin: 0 auto 14px;
+    max-width: 780px;
+  }
+
+  .print-btn button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #ffffff;
+    color: var(--navy);
+    border: none;
+    padding: 10px 22px;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 2px 14px rgba(0,0,0,0.22);
+    transition: background 0.15s, transform 0.1s;
+  }
+
+  .print-btn button:hover { background: #e8eaf5; transform: translateY(-1px); }
+  .print-btn button:active { transform: translateY(0); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 620px) {
+    .header, .body, .footer { padding-left: 24px; padding-right: 24px; }
+    .header { flex-direction: column; align-items: flex-start; }
+    .doc-info { text-align: left; }
+    .footer { flex-direction: column; align-items: flex-start; }
+  }
+
+  /* ── IMPRESIÓN / PDF ── */
+  @media print {
+    @page { size: A4; margin: 0; }
+    html { background: #2b3263 !important; }
+    body {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #2b3263 !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .print-btn { display: none !important; }
+    .page {
+      max-width: 100% !important;
+      width: 100% !important;
+      box-shadow: none !important;
+      background: #2b3263 !important;
+    }
+    .item, .totals, .condition, .footer, .item-body, .totals-row.main {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .section-label { page-break-after: avoid; break-after: avoid; }
+    html::before {
+      content: '';
+      display: block;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #2b3263;
+      z-index: -1;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="print-btn">
+  <button onclick="window.print()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 6 2 18 2 18 9"/>
+      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+      <rect x="6" y="14" width="12" height="8"/>
+    </svg>
+    Exportar PDF
+  </button>
+</div>
+
+<div class="page">
+
+  <!-- ============================================================
+       HEADER
+       ACOTACIÓN PARA R.P.: Logo JDG a la izquierda con subtítulo,
+       tipo de documento y datos a la derecha.
+       ============================================================ -->
+  <header class="header">
+    <div class="logo-block">
+      <!-- ACOTACIÓN PARA R.P.: Logo JDG — SVG inline, paths blancos.
+           Para cambiar el logo, reemplazar este bloque <svg> completo.
+           El archivo fuente está en marca/jdg/logo.svg -->
+      <svg viewBox="0 0 1469.0724 536.11828" xmlns="http://www.w3.org/2000/svg">
+        <g transform="translate(57.751308,38.806125)">
+          <path d="M 0,0 V -117.555 H 61.79 V 55.96 Z" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,1153.6016,272.55507)"/>
+          <path d="M 0,0 H -64.981 V 55.668 H 62.332 Z" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,1135.5769,273.2028)"/>
+          <path d="m 0,0 v -1.401 -61.168 c -1.415,-0.497 -3.53,-1.214 -6.12,-1.982 -8.443,-2.504 -22.406,-5.701 -47.022,-5.246 -15.666,0.29 -27.539,0.509 -42.942,4.275 -26.218,6.41 -44.164,18.496 -51.103,23.511 -18.292,13.221 -29.105,27.547 -33.614,34.003 -17.657,25.281 -22.172,49.472 -24.094,60.429 -4.56,25.986 -1.533,46.519 -0.389,53.241 2.951,17.332 10.746,44.841 32.255,70.921 17.305,20.983 36.57,32.654 48.576,38.667 26.794,13.419 50.282,15.114 63.498,15.933 13.955,0.865 46.145,2.474 81.843,-14.184 17.628,-8.226 30.515,-18.294 38.862,-25.843 L 19.723,142.58 c -0.968,0.864 -2.363,2.085 -4.081,3.497 -1.716,1.41 -15.745,12.81 -31.477,19.236 -27.921,11.404 -54.6,5.635 -54.601,5.635 -6.777,-1.465 -29.954,-7.327 -48.187,-28.757 -13.572,-15.951 -17.472,-32.38 -19.237,-40.221 -6.173,-27.437 1.037,-49.382 3.109,-55.183 2.878,-8.061 9.76,-26.57 28.369,-41.193 23.081,-18.138 48.664,-18.087 56.737,-18.071 19.837,0.04 37.458,6.699 42.554,8.744 1.558,0.626 2.834,1.176 3.692,1.554 L 0,0" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,1142.3315,335.71453)"/>
+          <path d="M 0,0 V -166.615 L 63.992,-218.954 63.733,54.391 Z" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,318.98187,97.775067)"/>
+          <path d="M 0,0 H -83.449 V 54.647 H 66.834 Z" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,302.21613,97.775067)"/>
+          <path d="m 0,0 c -11.39,-6.601 -29.669,-15.512 -53.645,-20.235 -14.407,-2.838 -47.125,-8.778 -85.067,4.863 -11.361,4.084 -39.612,14.653 -61.686,42.745 -25.041,31.87 -27.25,67.355 -28.411,86.002 -1.005,16.148 0.321,29.652 1.75,39.032 h 65.451 c -3.115,-15.89 -2.783,-29.105 -1.932,-38.008 1.195,-12.494 2.621,-27.408 12.542,-42.745 3.59,-5.55 10.433,-15.855 23.804,-22.78 14.514,-7.519 28.064,-6.619 34.042,-6.144 13.837,1.1 24.11,6.166 29.504,9.328 C -42.432,34.706 -21.216,17.353 0,0" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,397.96747,398.41893)"/>
+          <path d="M 0,0 66.148,-60.076 V -241.69 l -66.309,-59.679 z" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,455.23827,27.397467)"/>
+          <path d="m 0,0 c 35.617,-0.831 58.924,-0.408 74.123,0.202 5.822,0.234 20.949,0.916 41.192,-0.259 8.114,-0.47 14.069,-0.816 20.986,-1.813 23.125,-3.334 41.376,-11.699 51.814,-17.359 26.263,-14.238 41.418,-32.145 44.821,-36.27 6.304,-7.644 19.214,-24.905 26.943,-50.52 1.09,-3.608 6.265,-21.269 6.218,-45.079 -0.02,-10.344 -0.268,-31.666 -10.363,-56.218 -2.956,-7.189 -6.035,-12.902 -8.322,-16.812 l -53.301,48.285 c 0.408,1.24 0.972,3.071 1.518,5.315 3.97,16.325 1.004,29.957 -1.037,38.861 -2.553,11.145 -5.71,24.92 -16.84,39.121 -2.997,3.824 -13.077,15.979 -30.57,24.093 -13.422,6.227 -25.465,7.411 -32.385,8.032 -6.55,0.588 -12.083,0.487 -16.063,0.259 H 65.79 Z" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,470.81707,26.8636)"/>
+          <path d="m 0,0 c 8.302,-0.365 20.356,-0.676 34.975,-0.259 14.269,0.407 21.562,0.651 29.275,2.591 17.275,4.345 28.893,13.113 33.421,16.84 11.866,9.765 17.982,20.249 19.949,23.834 2.851,5.195 4.668,9.89 5.833,13.435 L 175.118,9.395 C 173.855,7.511 172.024,4.872 169.694,1.813 163.578,-6.212 144.931,-30.112 112.18,-45.079 93.76,-53.497 78.293,-55.7 61.919,-58.033 c -16.278,-2.319 -28.441,-2.349 -41.193,-2.331 -34.001,0.048 -62.201,0.131 -88.604,0.259 z" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,561.3568,348.8832)"/>
+        </g>
+      </svg>
+      <div class="logo-sub">SISTEMAS &amp; ESTRUCTURAS</div>
+    </div>
+
+    <div class="doc-info">
+      <!-- ACOTACIÓN PARA R.P.: Tipo de documento (PRESUPUESTO, PROPUESTA, INFORME, etc.) -->
+      <div class="doc-label"><!-- [VAR: tipo_documento] -->Presupuesto<!-- [/VAR] --></div>
+      <div class="doc-meta">
+        <strong>Fecha</strong> &ensp;<!-- [VAR: fecha] -->[Mes Año]<!-- [/VAR] --><br>
+        <strong>Cliente</strong> &ensp;<!-- [VAR: cliente] -->[Nombre del cliente]<!-- [/VAR] --><br>
+        <strong>Versión</strong> &ensp;<!-- [VAR: version] -->1.0<!-- [/VAR] -->
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       BODY
+       ACOTACIÓN PARA R.P.: Zona principal del documento.
+       Cada ítem tiene encabezado (dark o light) + cuerpo con bullets.
+       ============================================================ -->
+  <div class="body">
+    <div class="section-label"><!-- [VAR: seccion_titulo] -->Detalle de servicios<!-- [/VAR] --></div>
+
+    <!-- ============================================================
+         ÍTEM CON PRECIO CONFIRMADO (dark + badge-ok)
+         ACOTACIÓN PARA R.P.: Fondo blanco = ítem cerrado/confirmado.
+         Duplicar este bloque para agregar más ítems confirmados.
+         ============================================================ -->
+    <div class="item">
+      <div class="item-top dark">
+        <div>
+          <div class="item-num">01</div>
+          <div class="item-title"><!-- [VAR: item_01_titulo] -->[Título del servicio]<!-- [/VAR] --></div>
+        </div>
+        <div class="item-right">
+          <span class="badge badge-ok">Confirmado</span>
+          <div class="price-amount dark"><!-- [VAR: item_01_precio] -->$0<!-- [/VAR] --></div>
+        </div>
+      </div>
+      <div class="item-body">
+        <ul class="includes">
+          <!-- [VAR: item_01_bullets] -->
+          <li>[Descripción de lo que incluye]</li>
+          <li>[Otra cosa que incluye]</li>
+          <li class="no">[Algo que NO incluye]</li>
+          <!-- [/VAR] -->
+        </ul>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         ÍTEM A DEFINIR (light + badge-tbd)
+         ACOTACIÓN PARA R.P.: Fondo semitransparente = ítem pendiente.
+         Duplicar este bloque para agregar más ítems a definir.
+         ============================================================ -->
+    <div class="item">
+      <div class="item-top light">
+        <div>
+          <div class="item-num">02</div>
+          <div class="item-title"><!-- [VAR: item_02_titulo] -->[Título del servicio]<!-- [/VAR] --></div>
+        </div>
+        <div class="item-right">
+          <span class="badge badge-tbd">A definir</span>
+          <div class="price-tbd">Por cotizar</div>
+        </div>
+      </div>
+      <div class="item-body">
+        <ul class="includes">
+          <!-- [VAR: item_02_bullets] -->
+          <li>[Descripción de lo que incluiría]</li>
+          <!-- [/VAR] -->
+        </ul>
+        <!-- ACOTACIÓN PARA R.P.: Bloque de condición opcional.
+             Borrar si el ítem no tiene condiciones previas. -->
+        <!-- [VAR: item_02_condicion] -->
+        <div class="condition">
+          <strong>Condición previa</strong>
+          [Descripción de la condición]
+        </div>
+        <!-- [/VAR] -->
+      </div>
+    </div>
+
+    <!-- NOTA ACLARATORIA -->
+    <!-- ACOTACIÓN PARA R.P.: Texto en itálica al final de los ítems. Opcional. -->
+    <div style="padding: 14px 32px; color: rgba(255,255,255,0.38); font-size: 11.5px; font-style: italic; border-top: 1px solid rgba(255,255,255,0.07);">
+      <!-- [VAR: nota_aclaratoria] -->Cualquier módulo o funcionalidad por fuera del alcance descripto se cotiza de forma independiente previo acuerdo.<!-- [/VAR] -->
+    </div>
+
+    <!-- ============================================================
+         TOTALES
+         ACOTACIÓN PARA R.P.: Resumen con filas por ítem y total destacado.
+         Agregar/quitar .totals-row según la cantidad de ítems.
+         ============================================================ -->
+    <div class="totals">
+      <div class="totals-head">Resumen</div>
+      <div class="totals-row"><span>01 — [Servicio]</span><span><strong>$0</strong></span></div>
+      <div class="totals-row"><span>02 — [Servicio]</span><span style="color:rgba(255,255,255,0.25)">A definir</span></div>
+      <div class="totals-row main">
+        <span class="tl"><!-- [VAR: total_label] -->Total<!-- [/VAR] --></span>
+        <span class="tv"><!-- [VAR: total_monto] -->$0<!-- [/VAR] --></span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================
+       FOOTER
+       ACOTACIÓN PARA R.P.: Nota legal a la izquierda, mini-logo a la derecha.
+       El logo del footer es una versión reducida (80px) con opacidad baja.
+       ============================================================ -->
+  <footer class="footer">
+    <div class="footer-note">
+      <!-- [VAR: footer_texto] -->
+      [Condiciones generales, vigencia del presupuesto, forma de pago, etc.]
+      <!-- [/VAR] -->
+    </div>
+    <div class="footer-brand">
+      <svg viewBox="0 0 1469.0724 536.11828" xmlns="http://www.w3.org/2000/svg">
+        <g transform="translate(57.751308,38.806125)">
+          <path d="M 0,0 V -117.555 H 61.79 V 55.96 Z" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,1153.6016,272.55507)"/>
+          <path d="M 0,0 H -64.981 V 55.668 H 62.332 Z" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,1135.5769,273.2028)"/>
+          <path d="m 0,0 v -1.401 -61.168 c -1.415,-0.497 -3.53,-1.214 -6.12,-1.982 -8.443,-2.504 -22.406,-5.701 -47.022,-5.246 -15.666,0.29 -27.539,0.509 -42.942,4.275 -26.218,6.41 -44.164,18.496 -51.103,23.511 -18.292,13.221 -29.105,27.547 -33.614,34.003 -17.657,25.281 -22.172,49.472 -24.094,60.429 -4.56,25.986 -1.533,46.519 -0.389,53.241 2.951,17.332 10.746,44.841 32.255,70.921 17.305,20.983 36.57,32.654 48.576,38.667 26.794,13.419 50.282,15.114 63.498,15.933 13.955,0.865 46.145,2.474 81.843,-14.184 17.628,-8.226 30.515,-18.294 38.862,-25.843 L 19.723,142.58 c -0.968,0.864 -2.363,2.085 -4.081,3.497 -1.716,1.41 -15.745,12.81 -31.477,19.236 -27.921,11.404 -54.6,5.635 -54.601,5.635 -6.777,-1.465 -29.954,-7.327 -48.187,-28.757 -13.572,-15.951 -17.472,-32.38 -19.237,-40.221 -6.173,-27.437 1.037,-49.382 3.109,-55.183 2.878,-8.061 9.76,-26.57 28.369,-41.193 23.081,-18.138 48.664,-18.087 56.737,-18.071 19.837,0.04 37.458,6.699 42.554,8.744 1.558,0.626 2.834,1.176 3.692,1.554 L 0,0" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,1142.3315,335.71453)"/>
+          <path d="M 0,0 V -166.615 L 63.992,-218.954 63.733,54.391 Z" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,318.98187,97.775067)"/>
+          <path d="M 0,0 H -83.449 V 54.647 H 66.834 Z" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,302.21613,97.775067)"/>
+          <path d="m 0,0 c -11.39,-6.601 -29.669,-15.512 -53.645,-20.235 -14.407,-2.838 -47.125,-8.778 -85.067,4.863 -11.361,4.084 -39.612,14.653 -61.686,42.745 -25.041,31.87 -27.25,67.355 -28.411,86.002 -1.005,16.148 0.321,29.652 1.75,39.032 h 65.451 c -3.115,-15.89 -2.783,-29.105 -1.932,-38.008 1.195,-12.494 2.621,-27.408 12.542,-42.745 3.59,-5.55 10.433,-15.855 23.804,-22.78 14.514,-7.519 28.064,-6.619 34.042,-6.144 13.837,1.1 24.11,6.166 29.504,9.328 C -42.432,34.706 -21.216,17.353 0,0" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,397.96747,398.41893)"/>
+          <path d="M 0,0 66.148,-60.076 V -241.69 l -66.309,-59.679 z" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,455.23827,27.397467)"/>
+          <path d="m 0,0 c 35.617,-0.831 58.924,-0.408 74.123,0.202 5.822,0.234 20.949,0.916 41.192,-0.259 8.114,-0.47 14.069,-0.816 20.986,-1.813 23.125,-3.334 41.376,-11.699 51.814,-17.359 26.263,-14.238 41.418,-32.145 44.821,-36.27 6.304,-7.644 19.214,-24.905 26.943,-50.52 1.09,-3.608 6.265,-21.269 6.218,-45.079 -0.02,-10.344 -0.268,-31.666 -10.363,-56.218 -2.956,-7.189 -6.035,-12.902 -8.322,-16.812 l -53.301,48.285 c 0.408,1.24 0.972,3.071 1.518,5.315 3.97,16.325 1.004,29.957 -1.037,38.861 -2.553,11.145 -5.71,24.92 -16.84,39.121 -2.997,3.824 -13.077,15.979 -30.57,24.093 -13.422,6.227 -25.465,7.411 -32.385,8.032 -6.55,0.588 -12.083,0.487 -16.063,0.259 H 65.79 Z" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,470.81707,26.8636)"/>
+          <path d="m 0,0 c 8.302,-0.365 20.356,-0.676 34.975,-0.259 14.269,0.407 21.562,0.651 29.275,2.591 17.275,4.345 28.893,13.113 33.421,16.84 11.866,9.765 17.982,20.249 19.949,23.834 2.851,5.195 4.668,9.89 5.833,13.435 L 175.118,9.395 C 173.855,7.511 172.024,4.872 169.694,1.813 163.578,-6.212 144.931,-30.112 112.18,-45.079 93.76,-53.497 78.293,-55.7 61.919,-58.033 c -16.278,-2.319 -28.441,-2.349 -41.193,-2.331 -34.001,0.048 -62.201,0.131 -88.604,0.259 z" style="fill:#ffffff;" transform="matrix(1.3333333,0,0,-1.3333333,561.3568,348.8832)"/>
+        </g>
+      </svg>
+      <div class="footer-brand-sub">SISTEMAS &amp; ESTRUCTURAS</div>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>

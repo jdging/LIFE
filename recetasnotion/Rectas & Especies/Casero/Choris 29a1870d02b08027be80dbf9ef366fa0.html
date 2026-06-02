@@ -1,0 +1,743 @@
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/><title>Choris</title><style>
+/* cspell:disable-file */
+/* webkit printing magic: print all background colors */
+html {
+	-webkit-print-color-adjust: exact;
+}
+* {
+	box-sizing: border-box;
+	-webkit-print-color-adjust: exact;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+}
+@media only screen {
+	body {
+		margin: 2em auto;
+		max-width: 900px;
+		color: rgb(55, 53, 47);
+	}
+}
+
+body {
+	line-height: 1.5;
+	white-space: pre-wrap;
+}
+
+a,
+a.visited {
+	color: inherit;
+	text-decoration: underline;
+}
+
+.pdf-relative-link-path {
+	font-size: 80%;
+	color: #444;
+}
+
+h1,
+h2,
+h3 {
+	letter-spacing: -0.01em;
+	line-height: 1.2;
+	font-weight: 600;
+	margin-bottom: 0;
+}
+
+/* Override strong tags inside headings to maintain consistent weight */
+h1 strong,
+h2 strong,
+h3 strong {
+	font-weight: 600;
+}
+
+.page-title {
+	font-size: 2.5rem;
+	font-weight: 700;
+	margin-top: 0;
+	margin-bottom: 0.75em;
+}
+
+h1 {
+	font-size: 1.875rem;
+	margin-top: 1.875rem;
+}
+
+h2 {
+	font-size: 1.5rem;
+	margin-top: 1.5rem;
+}
+
+h3 {
+	font-size: 1.25rem;
+	margin-top: 1.25rem;
+}
+
+.source {
+	border: 1px solid #ddd;
+	border-radius: 3px;
+	padding: 1.5em;
+	word-break: break-all;
+}
+
+.callout {
+	border-radius: 10px;
+	padding: 1rem;
+}
+
+figure {
+	margin: 1.25em 0;
+	page-break-inside: avoid;
+}
+
+figcaption {
+	opacity: 0.5;
+	font-size: 85%;
+	margin-top: 0.5em;
+}
+
+mark {
+	background-color: transparent;
+}
+
+.indented {
+	padding-left: 1.5em;
+}
+
+hr {
+	background: transparent;
+	display: block;
+	width: 100%;
+	height: 1px;
+	visibility: visible;
+	border: none;
+	border-bottom: 1px solid rgba(55, 53, 47, 0.09);
+}
+
+img {
+	max-width: 100%;
+}
+
+@media only print {
+	img {
+		max-height: 100vh;
+		object-fit: contain;
+	}
+
+	table.collection-content {
+		width: 100%;
+		table-layout: fixed;
+	}
+
+	table.collection-content th,
+	table.collection-content td {
+		overflow-wrap: anywhere;
+	}
+
+	table.collection-content td > .user,
+	table.collection-content td > time {
+		white-space: pre-wrap;
+	}
+}
+
+@page {
+	margin: 1in;
+}
+
+.collection-content-wrapper {
+	overflow-x: auto;
+}
+
+@media only print {
+	.collection-content-wrapper {
+		overflow-x: visible;
+	}
+}
+
+.collection-content {
+	font-size: 0.875rem;
+}
+
+.collection-content td {
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.column-list {
+	display: flex;
+	gap: 46px;
+}
+
+.column {
+	min-width: 0;
+	overflow: hidden;
+}
+
+.column > *:first-child {
+	margin-top: 0;
+}
+
+.table_of_contents-item {
+	display: block;
+	font-size: 0.875rem;
+	line-height: 1.3;
+	padding: 0.125rem;
+}
+
+.table_of_contents-indent-1 {
+	margin-left: 1.5rem;
+}
+
+.table_of_contents-indent-2 {
+	margin-left: 3rem;
+}
+
+.table_of_contents-indent-3 {
+	margin-left: 4.5rem;
+}
+
+.table_of_contents-link {
+	text-decoration: none;
+	opacity: 0.7;
+	border-bottom: 1px solid rgba(55, 53, 47, 0.18);
+}
+
+table,
+th,
+td {
+	border: 1px solid rgba(55, 53, 47, 0.09);
+	border-collapse: collapse;
+}
+
+table {
+	border-left: none;
+	border-right: none;
+}
+
+th,
+td {
+	font-weight: normal;
+	padding: 0.25em 0.5em;
+	line-height: 1.5;
+	min-height: 1.5em;
+	text-align: left;
+}
+
+th {
+	color: rgba(55, 53, 47, 0.6);
+}
+
+ol,
+ul {
+	margin: 0;
+	margin-block-start: 0.6em;
+	margin-block-end: 0.6em;
+}
+
+li > ol:first-child,
+li > ul:first-child {
+	margin-block-start: 0.6em;
+}
+
+ul > li {
+	list-style: disc;
+}
+
+ul.to-do-list {
+	padding-inline-start: 0;
+}
+
+ul.to-do-list > li {
+	list-style: none;
+}
+
+.to-do-children-checked {
+	text-decoration: line-through;
+	opacity: 0.375;
+}
+
+ul.toggle > li {
+	list-style: none;
+}
+
+ul {
+	padding-inline-start: 1.7em;
+}
+
+ul > li {
+	padding-left: 0.1em;
+}
+
+ol {
+	padding-inline-start: 1.6em;
+}
+
+ol.numbered-list.numbered-list-digits-2 {
+	padding-inline-start: 2em;
+}
+
+ol.numbered-list.numbered-list-digits-3plus {
+	padding-inline-start: 2.4em;
+}
+
+ol > li {
+	padding-left: 0.2em;
+}
+
+.mono ol {
+	padding-inline-start: 2em;
+}
+
+.mono ol > li {
+	text-indent: -0.4em;
+}
+
+.toggle {
+	padding-inline-start: 0em;
+	list-style-type: none;
+}
+
+/* Indent toggle children */
+.toggle > li > details {
+	padding-left: 1.7em;
+}
+
+.toggle > li > details > summary {
+	margin-left: -1.1em;
+}
+
+.selected-value {
+	display: inline-block;
+	padding: 0 0.5em;
+	background: rgba(206, 205, 202, 0.5);
+	border-radius: 3px;
+	margin-right: 0.5em;
+	margin-top: 0.3em;
+	margin-bottom: 0.3em;
+	white-space: nowrap;
+}
+
+.collection-title {
+	display: inline-block;
+	margin-right: 1em;
+}
+
+.page-description {
+	margin-bottom: 2em;
+}
+
+.simple-table {
+	margin-top: 1em;
+	font-size: 0.875rem;
+	empty-cells: show;
+}
+.simple-table td {
+	height: 29px;
+	min-width: 120px;
+}
+
+.simple-table th {
+	height: 29px;
+	min-width: 120px;
+}
+
+.simple-table-header-color {
+	background: rgb(247, 246, 243);
+	color: black;
+}
+.simple-table-header {
+	font-weight: 500;
+}
+
+time {
+	opacity: 0.5;
+}
+
+.icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	max-width: 1.2em;
+	max-height: 1.2em;
+	text-decoration: none;
+	vertical-align: text-bottom;
+	margin-right: 0.5em;
+}
+
+img.icon {
+	border-radius: 3px;
+}
+
+.callout img.notion-static-icon {
+	width: 1em;
+	height: 1em;
+}
+
+.callout p {
+	margin: 0;
+}
+
+.callout h1,
+.callout h2,
+.callout h3 {
+	margin: 0 0 0.6rem;
+}
+
+.user-icon {
+	width: 1.5em;
+	height: 1.5em;
+	border-radius: 100%;
+	margin-right: 0.5rem;
+}
+
+.user-icon-inner {
+	font-size: 0.8em;
+}
+
+.text-icon {
+	border: 1px solid #000;
+	text-align: center;
+}
+
+.page-cover-image {
+	display: block;
+	object-fit: cover;
+	width: 100%;
+	max-height: 30vh;
+}
+
+.page-header-icon {
+	font-size: 3rem;
+	margin-bottom: 1rem;
+}
+
+.page-header-icon-with-cover {
+	margin-top: -0.72em;
+	margin-left: 0.07em;
+}
+
+.page-header-icon img {
+	border-radius: 3px;
+}
+
+.link-to-page {
+	margin: 1em 0;
+	padding: 0;
+	border: none;
+	font-weight: 500;
+}
+
+p > .user {
+	opacity: 0.5;
+}
+
+td > .user,
+td > time {
+	white-space: nowrap;
+}
+
+input[type="checkbox"] {
+	transform: scale(1.5);
+	margin-right: 0.6em;
+	vertical-align: middle;
+}
+
+p {
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
+}
+
+.image {
+	border: none;
+	margin: 1.5em 0;
+	padding: 0;
+	border-radius: 0;
+	text-align: center;
+}
+
+.code,
+code {
+	background: rgba(135, 131, 120, 0.15);
+	border-radius: 3px;
+	padding: 0.2em 0.4em;
+	border-radius: 3px;
+	font-size: 85%;
+	tab-size: 2;
+}
+
+code {
+	color: #eb5757;
+}
+
+.code {
+	padding: 1.5em 1em;
+}
+
+.code-wrap {
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+.code > code {
+	background: none;
+	padding: 0;
+	font-size: 100%;
+	color: inherit;
+}
+
+blockquote {
+	font-size: 1em;
+	margin: 1em 0;
+	padding-left: 1em;
+	border-left: 3px solid rgb(55, 53, 47);
+}
+
+blockquote.quote-large {
+	font-size: 1.25em;
+}
+
+.bookmark {
+	text-decoration: none;
+	max-height: 8em;
+	padding: 0;
+	display: flex;
+	width: 100%;
+	align-items: stretch;
+}
+
+.bookmark-title {
+	font-size: 0.85em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	height: 1.75em;
+	white-space: nowrap;
+}
+
+.bookmark-text {
+	display: flex;
+	flex-direction: column;
+}
+
+.bookmark-info {
+	flex: 4 1 180px;
+	padding: 12px 14px 14px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+}
+
+.bookmark-image {
+	width: 33%;
+	flex: 1 1 180px;
+	display: block;
+	position: relative;
+	object-fit: cover;
+	border-radius: 1px;
+}
+
+.bookmark-description {
+	color: rgba(55, 53, 47, 0.6);
+	font-size: 0.75em;
+	overflow: hidden;
+	max-height: 4.5em;
+	word-break: break-word;
+}
+
+.bookmark-href {
+	font-size: 0.75em;
+	margin-top: 0.25em;
+}
+
+.sans { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol"; }
+.code { font-family: "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace; }
+.serif { font-family: Lyon-Text, Georgia, ui-serif, serif; }
+.mono { font-family: iawriter-mono, Nitti, Menlo, Courier, monospace; }
+.pdf .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK JP'; }
+.pdf:lang(zh-CN) .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK SC'; }
+.pdf:lang(zh-TW) .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK TC'; }
+.pdf:lang(ko-KR) .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK KR'; }
+.pdf .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK JP'; }
+.pdf:lang(zh-CN) .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK SC'; }
+.pdf:lang(zh-TW) .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK TC'; }
+.pdf:lang(ko-KR) .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK KR'; }
+.pdf .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK JP'; }
+.pdf:lang(zh-CN) .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK SC'; }
+.pdf:lang(zh-TW) .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK TC'; }
+.pdf:lang(ko-KR) .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK KR'; }
+.pdf .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK JP'; }
+.pdf:lang(zh-CN) .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK SC'; }
+.pdf:lang(zh-TW) .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK TC'; }
+.pdf:lang(ko-KR) .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK KR'; }
+.highlight-default {
+	color: rgba(44, 44, 43, 1);
+}
+.highlight-gray {
+	color: rgba(125, 122, 117, 1);
+	fill: rgba(125, 122, 117, 1);
+}
+.highlight-brown {
+	color: rgba(159, 118, 90, 1);
+	fill: rgba(159, 118, 90, 1);
+}
+.highlight-orange {
+	color: rgba(210, 123, 45, 1);
+	fill: rgba(210, 123, 45, 1);
+}
+.highlight-yellow {
+	color: rgba(203, 148, 52, 1);
+	fill: rgba(203, 148, 52, 1);
+}
+.highlight-teal {
+	color: rgba(80, 148, 110, 1);
+	fill: rgba(80, 148, 110, 1);
+}
+.highlight-blue {
+	color: rgba(56, 125, 201, 1);
+	fill: rgba(56, 125, 201, 1);
+}
+.highlight-purple {
+	color: rgba(154, 107, 180, 1);
+	fill: rgba(154, 107, 180, 1);
+}
+.highlight-pink {
+	color: rgba(193, 76, 138, 1);
+	fill: rgba(193, 76, 138, 1);
+}
+.highlight-red {
+	color: rgba(207, 81, 72, 1);
+	fill: rgba(207, 81, 72, 1);
+}
+.highlight-default_background {
+	color: rgba(44, 44, 43, 1);
+}
+.highlight-gray_background {
+	background: rgba(42, 28, 0, 0.07);
+}
+.highlight-brown_background {
+	background: rgba(139, 46, 0, 0.086);
+}
+.highlight-orange_background {
+	background: rgba(224, 101, 1, 0.129);
+}
+.highlight-yellow_background {
+	background: rgba(211, 168, 0, 0.137);
+}
+.highlight-teal_background {
+	background: rgba(0, 100, 45, 0.09);
+}
+.highlight-blue_background {
+	background: rgba(0, 124, 215, 0.094);
+}
+.highlight-purple_background {
+	background: rgba(102, 0, 178, 0.078);
+}
+.highlight-pink_background {
+	background: rgba(197, 0, 93, 0.086);
+}
+.highlight-red_background {
+	background: rgba(223, 22, 0, 0.094);
+}
+.block-color-default {
+	color: inherit;
+	fill: inherit;
+}
+.block-color-gray {
+	color: rgba(125, 122, 117, 1);
+	fill: rgba(125, 122, 117, 1);
+}
+.block-color-brown {
+	color: rgba(159, 118, 90, 1);
+	fill: rgba(159, 118, 90, 1);
+}
+.block-color-orange {
+	color: rgba(210, 123, 45, 1);
+	fill: rgba(210, 123, 45, 1);
+}
+.block-color-yellow {
+	color: rgba(203, 148, 52, 1);
+	fill: rgba(203, 148, 52, 1);
+}
+.block-color-teal {
+	color: rgba(80, 148, 110, 1);
+	fill: rgba(80, 148, 110, 1);
+}
+.block-color-blue {
+	color: rgba(56, 125, 201, 1);
+	fill: rgba(56, 125, 201, 1);
+}
+.block-color-purple {
+	color: rgba(154, 107, 180, 1);
+	fill: rgba(154, 107, 180, 1);
+}
+.block-color-pink {
+	color: rgba(193, 76, 138, 1);
+	fill: rgba(193, 76, 138, 1);
+}
+.block-color-red {
+	color: rgba(207, 81, 72, 1);
+	fill: rgba(207, 81, 72, 1);
+}
+.block-color-default_background {
+	color: inherit;
+	fill: inherit;
+}
+.block-color-gray_background {
+	background: rgba(240, 239, 237, 1);
+}
+.block-color-brown_background {
+	background: rgba(245, 237, 233, 1);
+}
+.block-color-orange_background {
+	background: rgba(251, 235, 222, 1);
+}
+.block-color-yellow_background {
+	background: rgba(249, 243, 220, 1);
+}
+.block-color-teal_background {
+	background: rgba(232, 241, 236, 1);
+}
+.block-color-blue_background {
+	background: rgba(229, 242, 252, 1);
+}
+.block-color-purple_background {
+	background: rgba(243, 235, 249, 1);
+}
+.block-color-pink_background {
+	background: rgba(250, 233, 241, 1);
+}
+.block-color-red_background {
+	background: rgba(252, 233, 231, 1);
+}
+.select-value-color-default { background-color: rgba(42, 28, 0, 0.07); }
+.select-value-color-gray { background-color: rgba(28, 19, 1, 0.11); }
+.select-value-color-brown { background-color: rgba(127, 51, 0, 0.156); }
+.select-value-color-orange { background-color: rgba(196, 88, 0, 0.203); }
+.select-value-color-yellow { background-color: rgba(209, 156, 0, 0.282); }
+.select-value-color-green { background-color: rgba(0, 96, 38, 0.156); }
+.select-value-color-blue { background-color: rgba(0, 118, 217, 0.203); }
+.select-value-color-purple { background-color: rgba(92, 0, 163, 0.141); }
+.select-value-color-pink { background-color: rgba(183, 0, 78, 0.152); }
+.select-value-color-red { background-color: rgba(206, 24, 0, 0.164); }
+
+.checkbox {
+	display: inline-flex;
+	vertical-align: text-bottom;
+	width: 16;
+	height: 16;
+	background-size: 16px;
+	margin-left: 2px;
+	margin-right: 5px;
+}
+
+.checkbox-on {
+	background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Crect%20width%3D%2216%22%20height%3D%2216%22%20fill%3D%22%2358A9D7%22%2F%3E%0A%3Cpath%20d%3D%22M6.71429%2012.2852L14%204.9995L12.7143%203.71436L6.71429%209.71378L3.28571%206.2831L2%207.57092L6.71429%2012.2852Z%22%20fill%3D%22white%22%2F%3E%0A%3C%2Fsvg%3E");
+}
+
+.checkbox-off {
+	background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Crect%20x%3D%220.75%22%20y%3D%220.75%22%20width%3D%2214.5%22%20height%3D%2214.5%22%20fill%3D%22white%22%20stroke%3D%22%2336352F%22%20stroke-width%3D%221.5%22%2F%3E%0A%3C%2Fsvg%3E");
+}
+	
+</style></head><body><article id="29a1870d-02b0-8027-be80-dbf9ef366fa0" class="page sans"><header><img class="page-cover-image" src="https://www.notion.so/images/page-cover/woodcuts_11.jpg" style="object-position:center 50%"/><div class="page-header-icon page-header-icon-with-cover"><span class="icon">🌭</span></div><h1 class="page-title" dir="auto">Choris</h1><p class="page-description" dir="auto"></p><table class="properties"><tbody><tr class="property-row property-row-created_time"><th><span class="icon property-icon"><img src="https://www.notion.so/icons/clock_gray.svg" style="width:14px;height:14px;display:block"/></span>Created</th><td><time>October 28, 2025 2:05 PM</time></td></tr><tr class="property-row property-row-multi_select"><th><span class="icon property-icon"><img src="https://www.notion.so/icons/list_gray.svg" style="width:14px;height:14px;display:block"/></span>Tags</th><td></td></tr></tbody></table></header><div class="page-body"><div style="display:contents" dir="auto"><h1 id="29a1870d-02b0-8064-9829-d76c8499e647" class="">🐷 <strong>Chorizo Parrillero Casero (Puro Cerdo)</strong></h1></div><div style="display:contents" dir="auto"><p id="29a1870d-02b0-8047-8de7-e4ce16021d71" class=""><strong>Tipo:</strong> fresco — se cocina, no se cura.</p></div><div style="display:contents" dir="auto"><p id="29a1870d-02b0-8065-abd1-cba97a222fef" class=""><strong>Rinde:</strong> 1 kg de mezcla = aprox. 6 chorizos medianos.</p></div><div style="display:contents" dir="auto"><p id="29a1870d-02b0-809a-8b77-e67de37030f5" class=""><strong>Objetivo:</strong> lograr un chori jugoso, con buena mordida y sin que se desarme.</p></div><div style="display:contents" dir="auto"><hr id="29a1870d-02b0-80f7-849a-f80d41536b31"/></div><div style="display:contents" dir="auto"><h2 id="29a1870d-02b0-807b-9a48-d507cd935c08" class="">🧩 1. <strong>Proporciones base</strong></h2></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-801f-849b-efc936ffd0fc" class="bulleted-list"><li style="list-style-type:disc"><strong>Carne magra de cerdo:</strong> 800 g</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-80cc-ae6e-de24948ce13f" class="bulleted-list"><li style="list-style-type:disc"><strong>Grasa (tocino o papada):</strong> 200 g</li></ul></div><div style="display:contents" dir="auto"><blockquote id="29a1870d-02b0-80e9-a09b-e499821204a9" class="">Idealmente el tocino cortado a cuchillo en cubitos, para textura artesanal.</blockquote></div><div style="display:contents" dir="auto"><p id="29a1870d-02b0-8061-88ae-eb469ad082a3" class=""><strong>Consejo:</strong> mantener todo <strong>frío (≤ 4 °C)</strong> durante el proceso.</p></div><div style="display:contents" dir="auto"><p id="29a1870d-02b0-80fe-b890-e6567c806955" class="">La grasa no debe fundirse mientras se trabaja.</p></div><div style="display:contents" dir="auto"><hr id="29a1870d-02b0-807d-ba68-d77d3cf7cbf9"/></div><div style="display:contents" dir="auto"><h2 id="29a1870d-02b0-80c4-ad05-f203a170c58d" class="">⚙️ 2. <strong>Picado</strong></h2></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-8097-bd60-c98c23c41c24" class="bulleted-list"><li style="list-style-type:disc">Usar <strong>picadora con disco grueso (12–14 mm)</strong>.</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-8080-8b80-cf79c746948d" class="bulleted-list"><li style="list-style-type:disc">Cortar la mitad de la carne con disco mediano (4–6 mm) y la otra con grueso para una textura equilibrada.</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-80ba-b781-c03b4babac7a" class="bulleted-list"><li style="list-style-type:disc"><strong>No uses licuadora ni procesadora:</strong> destruyen la fibra y generan pasta.</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-805d-aa90-cea425582362" class="bulleted-list"><li style="list-style-type:disc">Mezclá las carnes apenas terminás de picar para mantener la temperatura.</li></ul></div><div style="display:contents" dir="auto"><blockquote id="29a1870d-02b0-8022-9338-cfb1932a67f3" class="">💡 Cuanto más grueso el picado, más “desgranado” el chorizo; cuanto más fino, más uniforme. En Entre Ríos se prefiere desgranado, en Buenos Aires más liso.</blockquote></div><div style="display:contents" dir="auto"><hr id="29a1870d-02b0-80cb-b4d1-f1546df55aff"/></div><div style="display:contents" dir="auto"><h2 id="29a1870d-02b0-8028-98f1-cd1b192d05be" class="">🧂 3. <strong>Condimentos y aditivos por kilo</strong></h2></div><div style="display:contents" dir="ltr"><table id="29a1870d-02b0-8033-8a58-ea62e3752928" class="simple-table"><thead class="simple-table-header"><div style="display:contents" dir="ltr"><tr id="29a1870d-02b0-804d-b9ab-f3a4f53970b0"><th id="Qi\@" class="simple-table-header-color simple-table-header">Ingrediente</th><th id="`RZp" class="simple-table-header-color simple-table-header">Cantidad</th><th id="{oZk" class="simple-table-header-color simple-table-header">Función</th></tr></div></thead><tbody><div style="display:contents" dir="ltr"><tr id="29a1870d-02b0-8027-902a-d45296b1433b"><td id="Qi\@" class=""><strong>Sal fina</strong></td><td id="`RZp" class="">20–25 g</td><td id="{oZk" class="">Sabor y extracción proteica</td></tr></div><div style="display:contents" dir="ltr"><tr id="29a1870d-02b0-80b5-a0f3-c1faac76f617"><td id="Qi\@" class=""><strong>Sal de cura (nitritada)</strong> <em>(opcional pero recomendable)</em></td><td id="`RZp" class="">3 g</td><td id="{oZk" class="">Previene botulismo y da color</td></tr></div><div style="display:contents" dir="ltr"><tr id="29a1870d-02b0-80fa-b501-dfb26f15d78d"><td id="Qi\@" class=""><strong>Fosfato de sodio</strong></td><td id="`RZp" class="">3 g</td><td id="{oZk" class="">Mejora textura, retiene agua</td></tr></div><div style="display:contents" dir="ltr"><tr id="29a1870d-02b0-80e2-b9e5-cd7586f2bcd0"><td id="Qi\@" class=""><strong>Almidón de mandioca o maíz</strong></td><td id="`RZp" class="">20 g</td><td id="{oZk" class="">Ligar y absorber jugos</td></tr></div><div style="display:contents" dir="ltr"><tr id="29a1870d-02b0-801c-870b-c53ff15398dd"><td id="Qi\@" class=""><strong>Pimienta negra molida</strong></td><td id="`RZp" class="">2 g</td><td id="{oZk" class="">Sabor clásico</td></tr></div><div style="display:contents" dir="ltr"><tr id="29a1870d-02b0-8088-9143-dfb62530f154"><td id="Qi\@" class=""><strong>Pimentón dulce o ahumado</strong></td><td id="`RZp" class="">4 g</td><td id="{oZk" class="">Color y aroma</td></tr></div><div style="display:contents" dir="ltr"><tr id="29a1870d-02b0-80e1-a9cd-fc89a2d5d3f5"><td id="Qi\@" class=""><strong>Ajo deshidratado o fresco picado</strong></td><td id="`RZp" class="">2 g</td><td id="{oZk" class="">Sabor</td></tr></div><div style="display:contents" dir="ltr"><tr id="29a1870d-02b0-8061-b07a-d96a9cfe740e"><td id="Qi\@" class=""><strong>Vino blanco o jerez</strong></td><td id="`RZp" class="">100–150 cc</td><td id="{oZk" class="">Aporta perfume y jugosidad</td></tr></div></tbody></table></div><div style="display:contents" dir="auto"><blockquote id="29a1870d-02b0-8085-a268-ce758ba3f314" class="">🔸 Si querés sabor más complejo: reemplazá parte del vino por una demi-glace casera o caldo concentrado frío.</blockquote></div><div style="display:contents" dir="auto"><hr id="29a1870d-02b0-80a5-b818-dabf9372414b"/></div><div style="display:contents" dir="auto"><h2 id="29a1870d-02b0-8042-b2e7-ddf80cec2dc8" class="">🥣 4. <strong>Preparación del amasado</strong></h2></div><div style="display:contents" dir="auto"><ol type="1" id="29a1870d-02b0-80d2-bd33-f3574c22354d" class="numbered-list" start="1"><li>Colocá en una fuente la carne picada y arriba el tocino.</li></ol></div><div style="display:contents" dir="auto"><ol type="1" id="29a1870d-02b0-80c0-b906-f224c070feaf" class="numbered-list" start="2"><li>Disolvé los <strong>fosfatos y el almidón en un poco del vino</strong> para evitar grumos.</li></ol></div><div style="display:contents" dir="auto"><ol type="1" id="29a1870d-02b0-8034-bcf0-e7c3b55f9651" class="numbered-list" start="3"><li>Agregá todos los condimentos y líquidos.</li></ol></div><div style="display:contents" dir="auto"><ol type="1" id="29a1870d-02b0-80bc-9b5d-f4d3466d7942" class="numbered-list" start="4"><li><strong>Amasá con la palma</strong>, como si fresaras masa de pan: extendé, plegá y repetí.</li></ol></div><div style="display:contents" dir="auto"><p id="29a1870d-02b0-8010-acd0-dade78ed53e1" class="">🧠 <strong>Qué estás haciendo:</strong></p></div><div style="display:contents" dir="auto"><p id="29a1870d-02b0-804b-b0de-df7070744b6a" class="">Separás las proteínas <em>actina y miosina</em> con la acción mecánica y la sal.</p></div><div style="display:contents" dir="auto"><p id="29a1870d-02b0-8098-870d-c1d1efe77559" class="">Cuando la mezcla se vuelve <strong>pegajosa y brillante</strong>, está lista.</p></div><div style="display:contents" dir="auto"><blockquote id="29a1870d-02b0-80d1-b720-cc4003f8a781" class="">Si no se pega en la mano, aún no lograste la liga.<div style="display:contents" dir="auto"><p id="29a1870d-02b0-804d-be1f-fe9325e8988e" class="">Si se recalienta (más de 10 °C), se emulsiona y se arruina la textura.</p></div></blockquote></div><div style="display:contents" dir="auto"><hr id="29a1870d-02b0-8073-a19f-e2e4b308d938"/></div><div style="display:contents" dir="auto"><h2 id="29a1870d-02b0-802f-8770-ee4f5b64b07d" class="">🌭 5. <strong>Tripas y embutido</strong></h2></div><div style="display:contents" dir="auto"><h3 id="29a1870d-02b0-8063-987d-f62a8342e117" class="">Tripa recomendada:</h3></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-80fb-b82e-ceb5965c7056" class="bulleted-list"><li style="list-style-type:disc"><strong>Tripa natural de cerdo (“chinesca”)</strong> o</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-807e-be16-c3ea5ca25f1a" class="bulleted-list"><li style="list-style-type:disc"><strong>Tripa orilla vacuna</strong> (más mordida y crocante).</li></ul></div><div style="display:contents" dir="auto"><h3 id="29a1870d-02b0-80d5-ba79-d4438788c2c7" class="">Preparación:</h3></div><div style="display:contents" dir="auto"><ol type="1" id="29a1870d-02b0-804b-912f-c5557c38c67c" class="numbered-list" start="1"><li><strong>Enjuagala y dales vuelta.</strong><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-80a1-bca8-fc7924ec8613" class="bulleted-list"><li style="list-style-type:disc">Inflala con agua para revisar pinchazos.</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-80ce-b99c-f974f6b46e13" class="bulleted-list"><li style="list-style-type:disc">La grasa debe quedar del lado externo.</li></ul></div></li></ol></div><div style="display:contents" dir="auto"><ol type="1" id="29a1870d-02b0-808d-b40f-f68f05b2fefb" class="numbered-list" start="2"><li>Mantenela <strong>en agua con sal</strong> hasta usar.</li></ol></div><div style="display:contents" dir="auto"><h3 id="29a1870d-02b0-8044-9928-ccd418a602fc" class="">Embutido:</h3></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-80ab-a269-e4209f699c04" class="bulleted-list"><li style="list-style-type:disc">Cargá la embutidora <strong>por capas</strong> para evitar burbujas de aire.</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-80db-85cb-d19b1d1a1c0a" class="bulleted-list"><li style="list-style-type:disc">Embutí con presión pareja (ni muy suelta ni tensa).</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-8047-9b4f-d876f011be88" class="bulleted-list"><li style="list-style-type:disc">Si ves burbujas, pinchalas con aguja fina.</li></ul></div><div style="display:contents" dir="auto"><blockquote id="29a1870d-02b0-8050-acc6-f9ed994c369c" class="">💡 Una embutidora manual o eléctrica tamaño #32 anda perfecto; las chicas recalientan y se traban.</blockquote></div><div style="display:contents" dir="auto"><hr id="29a1870d-02b0-80c9-861d-e4baf2e170b4"/></div><div style="display:contents" dir="auto"><h2 id="29a1870d-02b0-805a-96da-f05252f71f85" class="">🧵 6. <strong>Atado</strong></h2></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-80bf-a2c5-e2e0cbe9a635" class="bulleted-list"><li style="list-style-type:disc">Usá <strong>hilo choricero</strong> (rojo o natural).</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-8069-ad12-e3f70960e7e5" class="bulleted-list"><li style="list-style-type:disc">Atá cada 6 unidades (≈ 1 kg).</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-80c3-af06-c84b0331f36f" class="bulleted-list"><li style="list-style-type:disc">Dejá un pequeño espacio entre chorizos (“destaque”) para que el carnicero pueda cortar sin que se desarme.</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-80a6-b981-f4e90de641aa" class="bulleted-list"><li style="list-style-type:disc">Haceles una <strong>gaza o lazo</strong> para colgar y secar unas horas.</li></ul></div><div style="display:contents" dir="auto"><blockquote id="29a1870d-02b0-80ed-9de4-d62c9f85505f" class="">Una tripa mala o muy salada “te manda al psicólogo”, dice el maestro — se rompe todo 😄.</blockquote></div><div style="display:contents" dir="auto"><hr id="29a1870d-02b0-803c-92a2-d9cf1f1cd2b7"/></div><div style="display:contents" dir="auto"><h2 id="29a1870d-02b0-80d6-be0f-c9ed0e0ed8e6" class="">🕐 7. <strong>Reposo y cocción</strong></h2></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-80a4-9332-d33ed9099d61" class="bulleted-list"><li style="list-style-type:disc">Guardalos tapados en la heladera <strong>12 h mínimo</strong> antes de cocinar.</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-8038-9af3-cdfab0fbcb40" class="bulleted-list"><li style="list-style-type:disc">Cociná a <strong>fuego medio</strong> (ni brasa viva ni llama).</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-8087-8903-e094715e85ef" class="bulleted-list"><li style="list-style-type:disc">No los pinches; el jugo se pierde.</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-800f-84e4-d6c22b6ee529" class="bulleted-list"><li style="list-style-type:disc">Idealmente llegar a <strong>70 °C internos</strong>.</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-80ab-9b30-d410630fb743" class="bulleted-list"><li style="list-style-type:disc">Si los hacés al horno, 180 °C unos 30–35 min.</li></ul></div><div style="display:contents" dir="auto"><hr id="29a1870d-02b0-80df-85c7-dbee1a0bbe08"/></div><div style="display:contents" dir="auto"><h2 id="29a1870d-02b0-80f0-bc5d-c90238464fbd" class="">🍽️ 8. <strong>Variantes tradicionales</strong></h2></div><div style="display:contents" dir="ltr"><table id="29a1870d-02b0-802e-ab09-e67ee472f510" class="simple-table"><thead class="simple-table-header"><div style="display:contents" dir="ltr"><tr id="29a1870d-02b0-8024-8cfb-f220899cce55"><th id="Ke{K" class="simple-table-header-color simple-table-header">Región</th><th id="vTrZ" class="simple-table-header-color simple-table-header">Características</th></tr></div></thead><tbody><div style="display:contents" dir="ltr"><tr id="29a1870d-02b0-80c3-89af-f9115873e3f2"><td id="Ke{K" class=""><strong>Bonaerense</strong></td><td id="vTrZ" class="">50 % vaca + 50 % cerdo, vino tinto, ajo y pimentón.</td></tr></div><div style="display:contents" dir="ltr"><tr id="29a1870d-02b0-80f6-a3dd-fff25bf2c5af"><td id="Ke{K" class=""><strong>Cordobés</strong></td><td id="vTrZ" class="">100 % cerdo, vino blanco, clavo de olor y canela.</td></tr></div><div style="display:contents" dir="ltr"><tr id="29a1870d-02b0-808b-b9b7-f307fe8b9682"><td id="Ke{K" class=""><strong>Casero Premium</strong></td><td id="vTrZ" class="">80 % carne, 20 % tocino, ajo fresco, vino jerez, orilla vacuna.</td></tr></div></tbody></table></div><div style="display:contents" dir="auto"><hr id="29a1870d-02b0-80bf-9799-c5090493a9cc"/></div><div style="display:contents" dir="auto"><h2 id="29a1870d-02b0-808a-9a77-c7b2b3a5e847" class="">🧑‍🍳 9. <strong>Tips finales</strong></h2></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-8086-8086-cfda54e9f6db" class="bulleted-list"><li style="list-style-type:disc">Si ves pedazos grandes de tocino: <strong>no preguntes el precio</strong> — es señal de calidad.</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-80c2-8aec-f3a147b09ea9" class="bulleted-list"><li style="list-style-type:disc">La mezcla debe oler fresca, nunca rancia.</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-803b-b8c1-fbef75560bf1" class="bulleted-list"><li style="list-style-type:disc">Para freezarlos, hacelo <strong>crudos y sin cocer</strong>, bien cerrados, hasta 3 meses.</li></ul></div><div style="display:contents" dir="auto"><ul id="29a1870d-02b0-8075-aab5-c49cba5df6ab" class="bulleted-list"><li style="list-style-type:disc">Si querés más crocante, usá <strong>tripa vacuna orilla</strong> y parrilla fuerte al final.</li></ul></div></div></article><span class="sans" style="font-size:14px;padding-top:2em"></span></body></html>

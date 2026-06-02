@@ -1,0 +1,743 @@
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/><title>Recetas</title><style>
+/* cspell:disable-file */
+/* webkit printing magic: print all background colors */
+html {
+	-webkit-print-color-adjust: exact;
+}
+* {
+	box-sizing: border-box;
+	-webkit-print-color-adjust: exact;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+}
+@media only screen {
+	body {
+		margin: 2em auto;
+		max-width: 900px;
+		color: rgb(55, 53, 47);
+	}
+}
+
+body {
+	line-height: 1.5;
+	white-space: pre-wrap;
+}
+
+a,
+a.visited {
+	color: inherit;
+	text-decoration: underline;
+}
+
+.pdf-relative-link-path {
+	font-size: 80%;
+	color: #444;
+}
+
+h1,
+h2,
+h3 {
+	letter-spacing: -0.01em;
+	line-height: 1.2;
+	font-weight: 600;
+	margin-bottom: 0;
+}
+
+/* Override strong tags inside headings to maintain consistent weight */
+h1 strong,
+h2 strong,
+h3 strong {
+	font-weight: 600;
+}
+
+.page-title {
+	font-size: 2.5rem;
+	font-weight: 700;
+	margin-top: 0;
+	margin-bottom: 0.75em;
+}
+
+h1 {
+	font-size: 1.875rem;
+	margin-top: 1.875rem;
+}
+
+h2 {
+	font-size: 1.5rem;
+	margin-top: 1.5rem;
+}
+
+h3 {
+	font-size: 1.25rem;
+	margin-top: 1.25rem;
+}
+
+.source {
+	border: 1px solid #ddd;
+	border-radius: 3px;
+	padding: 1.5em;
+	word-break: break-all;
+}
+
+.callout {
+	border-radius: 10px;
+	padding: 1rem;
+}
+
+figure {
+	margin: 1.25em 0;
+	page-break-inside: avoid;
+}
+
+figcaption {
+	opacity: 0.5;
+	font-size: 85%;
+	margin-top: 0.5em;
+}
+
+mark {
+	background-color: transparent;
+}
+
+.indented {
+	padding-left: 1.5em;
+}
+
+hr {
+	background: transparent;
+	display: block;
+	width: 100%;
+	height: 1px;
+	visibility: visible;
+	border: none;
+	border-bottom: 1px solid rgba(55, 53, 47, 0.09);
+}
+
+img {
+	max-width: 100%;
+}
+
+@media only print {
+	img {
+		max-height: 100vh;
+		object-fit: contain;
+	}
+
+	table.collection-content {
+		width: 100%;
+		table-layout: fixed;
+	}
+
+	table.collection-content th,
+	table.collection-content td {
+		overflow-wrap: anywhere;
+	}
+
+	table.collection-content td > .user,
+	table.collection-content td > time {
+		white-space: pre-wrap;
+	}
+}
+
+@page {
+	margin: 1in;
+}
+
+.collection-content-wrapper {
+	overflow-x: auto;
+}
+
+@media only print {
+	.collection-content-wrapper {
+		overflow-x: visible;
+	}
+}
+
+.collection-content {
+	font-size: 0.875rem;
+}
+
+.collection-content td {
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.column-list {
+	display: flex;
+	gap: 46px;
+}
+
+.column {
+	min-width: 0;
+	overflow: hidden;
+}
+
+.column > *:first-child {
+	margin-top: 0;
+}
+
+.table_of_contents-item {
+	display: block;
+	font-size: 0.875rem;
+	line-height: 1.3;
+	padding: 0.125rem;
+}
+
+.table_of_contents-indent-1 {
+	margin-left: 1.5rem;
+}
+
+.table_of_contents-indent-2 {
+	margin-left: 3rem;
+}
+
+.table_of_contents-indent-3 {
+	margin-left: 4.5rem;
+}
+
+.table_of_contents-link {
+	text-decoration: none;
+	opacity: 0.7;
+	border-bottom: 1px solid rgba(55, 53, 47, 0.18);
+}
+
+table,
+th,
+td {
+	border: 1px solid rgba(55, 53, 47, 0.09);
+	border-collapse: collapse;
+}
+
+table {
+	border-left: none;
+	border-right: none;
+}
+
+th,
+td {
+	font-weight: normal;
+	padding: 0.25em 0.5em;
+	line-height: 1.5;
+	min-height: 1.5em;
+	text-align: left;
+}
+
+th {
+	color: rgba(55, 53, 47, 0.6);
+}
+
+ol,
+ul {
+	margin: 0;
+	margin-block-start: 0.6em;
+	margin-block-end: 0.6em;
+}
+
+li > ol:first-child,
+li > ul:first-child {
+	margin-block-start: 0.6em;
+}
+
+ul > li {
+	list-style: disc;
+}
+
+ul.to-do-list {
+	padding-inline-start: 0;
+}
+
+ul.to-do-list > li {
+	list-style: none;
+}
+
+.to-do-children-checked {
+	text-decoration: line-through;
+	opacity: 0.375;
+}
+
+ul.toggle > li {
+	list-style: none;
+}
+
+ul {
+	padding-inline-start: 1.7em;
+}
+
+ul > li {
+	padding-left: 0.1em;
+}
+
+ol {
+	padding-inline-start: 1.6em;
+}
+
+ol.numbered-list.numbered-list-digits-2 {
+	padding-inline-start: 2em;
+}
+
+ol.numbered-list.numbered-list-digits-3plus {
+	padding-inline-start: 2.4em;
+}
+
+ol > li {
+	padding-left: 0.2em;
+}
+
+.mono ol {
+	padding-inline-start: 2em;
+}
+
+.mono ol > li {
+	text-indent: -0.4em;
+}
+
+.toggle {
+	padding-inline-start: 0em;
+	list-style-type: none;
+}
+
+/* Indent toggle children */
+.toggle > li > details {
+	padding-left: 1.7em;
+}
+
+.toggle > li > details > summary {
+	margin-left: -1.1em;
+}
+
+.selected-value {
+	display: inline-block;
+	padding: 0 0.5em;
+	background: rgba(206, 205, 202, 0.5);
+	border-radius: 3px;
+	margin-right: 0.5em;
+	margin-top: 0.3em;
+	margin-bottom: 0.3em;
+	white-space: nowrap;
+}
+
+.collection-title {
+	display: inline-block;
+	margin-right: 1em;
+}
+
+.page-description {
+	margin-bottom: 2em;
+}
+
+.simple-table {
+	margin-top: 1em;
+	font-size: 0.875rem;
+	empty-cells: show;
+}
+.simple-table td {
+	height: 29px;
+	min-width: 120px;
+}
+
+.simple-table th {
+	height: 29px;
+	min-width: 120px;
+}
+
+.simple-table-header-color {
+	background: rgb(247, 246, 243);
+	color: black;
+}
+.simple-table-header {
+	font-weight: 500;
+}
+
+time {
+	opacity: 0.5;
+}
+
+.icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	max-width: 1.2em;
+	max-height: 1.2em;
+	text-decoration: none;
+	vertical-align: text-bottom;
+	margin-right: 0.5em;
+}
+
+img.icon {
+	border-radius: 3px;
+}
+
+.callout img.notion-static-icon {
+	width: 1em;
+	height: 1em;
+}
+
+.callout p {
+	margin: 0;
+}
+
+.callout h1,
+.callout h2,
+.callout h3 {
+	margin: 0 0 0.6rem;
+}
+
+.user-icon {
+	width: 1.5em;
+	height: 1.5em;
+	border-radius: 100%;
+	margin-right: 0.5rem;
+}
+
+.user-icon-inner {
+	font-size: 0.8em;
+}
+
+.text-icon {
+	border: 1px solid #000;
+	text-align: center;
+}
+
+.page-cover-image {
+	display: block;
+	object-fit: cover;
+	width: 100%;
+	max-height: 30vh;
+}
+
+.page-header-icon {
+	font-size: 3rem;
+	margin-bottom: 1rem;
+}
+
+.page-header-icon-with-cover {
+	margin-top: -0.72em;
+	margin-left: 0.07em;
+}
+
+.page-header-icon img {
+	border-radius: 3px;
+}
+
+.link-to-page {
+	margin: 1em 0;
+	padding: 0;
+	border: none;
+	font-weight: 500;
+}
+
+p > .user {
+	opacity: 0.5;
+}
+
+td > .user,
+td > time {
+	white-space: nowrap;
+}
+
+input[type="checkbox"] {
+	transform: scale(1.5);
+	margin-right: 0.6em;
+	vertical-align: middle;
+}
+
+p {
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
+}
+
+.image {
+	border: none;
+	margin: 1.5em 0;
+	padding: 0;
+	border-radius: 0;
+	text-align: center;
+}
+
+.code,
+code {
+	background: rgba(135, 131, 120, 0.15);
+	border-radius: 3px;
+	padding: 0.2em 0.4em;
+	border-radius: 3px;
+	font-size: 85%;
+	tab-size: 2;
+}
+
+code {
+	color: #eb5757;
+}
+
+.code {
+	padding: 1.5em 1em;
+}
+
+.code-wrap {
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+.code > code {
+	background: none;
+	padding: 0;
+	font-size: 100%;
+	color: inherit;
+}
+
+blockquote {
+	font-size: 1em;
+	margin: 1em 0;
+	padding-left: 1em;
+	border-left: 3px solid rgb(55, 53, 47);
+}
+
+blockquote.quote-large {
+	font-size: 1.25em;
+}
+
+.bookmark {
+	text-decoration: none;
+	max-height: 8em;
+	padding: 0;
+	display: flex;
+	width: 100%;
+	align-items: stretch;
+}
+
+.bookmark-title {
+	font-size: 0.85em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	height: 1.75em;
+	white-space: nowrap;
+}
+
+.bookmark-text {
+	display: flex;
+	flex-direction: column;
+}
+
+.bookmark-info {
+	flex: 4 1 180px;
+	padding: 12px 14px 14px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+}
+
+.bookmark-image {
+	width: 33%;
+	flex: 1 1 180px;
+	display: block;
+	position: relative;
+	object-fit: cover;
+	border-radius: 1px;
+}
+
+.bookmark-description {
+	color: rgba(55, 53, 47, 0.6);
+	font-size: 0.75em;
+	overflow: hidden;
+	max-height: 4.5em;
+	word-break: break-word;
+}
+
+.bookmark-href {
+	font-size: 0.75em;
+	margin-top: 0.25em;
+}
+
+.sans { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol"; }
+.code { font-family: "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace; }
+.serif { font-family: Lyon-Text, Georgia, ui-serif, serif; }
+.mono { font-family: iawriter-mono, Nitti, Menlo, Courier, monospace; }
+.pdf .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK JP'; }
+.pdf:lang(zh-CN) .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK SC'; }
+.pdf:lang(zh-TW) .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK TC'; }
+.pdf:lang(ko-KR) .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", "Noto Sans Arabic", "Noto Sans Hebrew", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK KR'; }
+.pdf .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK JP'; }
+.pdf:lang(zh-CN) .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK SC'; }
+.pdf:lang(zh-TW) .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK TC'; }
+.pdf:lang(ko-KR) .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK KR'; }
+.pdf .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK JP'; }
+.pdf:lang(zh-CN) .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK SC'; }
+.pdf:lang(zh-TW) .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK TC'; }
+.pdf:lang(ko-KR) .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK KR'; }
+.pdf .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK JP'; }
+.pdf:lang(zh-CN) .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK SC'; }
+.pdf:lang(zh-TW) .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK TC'; }
+.pdf:lang(ko-KR) .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK KR'; }
+.highlight-default {
+	color: rgba(44, 44, 43, 1);
+}
+.highlight-gray {
+	color: rgba(125, 122, 117, 1);
+	fill: rgba(125, 122, 117, 1);
+}
+.highlight-brown {
+	color: rgba(159, 118, 90, 1);
+	fill: rgba(159, 118, 90, 1);
+}
+.highlight-orange {
+	color: rgba(210, 123, 45, 1);
+	fill: rgba(210, 123, 45, 1);
+}
+.highlight-yellow {
+	color: rgba(203, 148, 52, 1);
+	fill: rgba(203, 148, 52, 1);
+}
+.highlight-teal {
+	color: rgba(80, 148, 110, 1);
+	fill: rgba(80, 148, 110, 1);
+}
+.highlight-blue {
+	color: rgba(56, 125, 201, 1);
+	fill: rgba(56, 125, 201, 1);
+}
+.highlight-purple {
+	color: rgba(154, 107, 180, 1);
+	fill: rgba(154, 107, 180, 1);
+}
+.highlight-pink {
+	color: rgba(193, 76, 138, 1);
+	fill: rgba(193, 76, 138, 1);
+}
+.highlight-red {
+	color: rgba(207, 81, 72, 1);
+	fill: rgba(207, 81, 72, 1);
+}
+.highlight-default_background {
+	color: rgba(44, 44, 43, 1);
+}
+.highlight-gray_background {
+	background: rgba(42, 28, 0, 0.07);
+}
+.highlight-brown_background {
+	background: rgba(139, 46, 0, 0.086);
+}
+.highlight-orange_background {
+	background: rgba(224, 101, 1, 0.129);
+}
+.highlight-yellow_background {
+	background: rgba(211, 168, 0, 0.137);
+}
+.highlight-teal_background {
+	background: rgba(0, 100, 45, 0.09);
+}
+.highlight-blue_background {
+	background: rgba(0, 124, 215, 0.094);
+}
+.highlight-purple_background {
+	background: rgba(102, 0, 178, 0.078);
+}
+.highlight-pink_background {
+	background: rgba(197, 0, 93, 0.086);
+}
+.highlight-red_background {
+	background: rgba(223, 22, 0, 0.094);
+}
+.block-color-default {
+	color: inherit;
+	fill: inherit;
+}
+.block-color-gray {
+	color: rgba(125, 122, 117, 1);
+	fill: rgba(125, 122, 117, 1);
+}
+.block-color-brown {
+	color: rgba(159, 118, 90, 1);
+	fill: rgba(159, 118, 90, 1);
+}
+.block-color-orange {
+	color: rgba(210, 123, 45, 1);
+	fill: rgba(210, 123, 45, 1);
+}
+.block-color-yellow {
+	color: rgba(203, 148, 52, 1);
+	fill: rgba(203, 148, 52, 1);
+}
+.block-color-teal {
+	color: rgba(80, 148, 110, 1);
+	fill: rgba(80, 148, 110, 1);
+}
+.block-color-blue {
+	color: rgba(56, 125, 201, 1);
+	fill: rgba(56, 125, 201, 1);
+}
+.block-color-purple {
+	color: rgba(154, 107, 180, 1);
+	fill: rgba(154, 107, 180, 1);
+}
+.block-color-pink {
+	color: rgba(193, 76, 138, 1);
+	fill: rgba(193, 76, 138, 1);
+}
+.block-color-red {
+	color: rgba(207, 81, 72, 1);
+	fill: rgba(207, 81, 72, 1);
+}
+.block-color-default_background {
+	color: inherit;
+	fill: inherit;
+}
+.block-color-gray_background {
+	background: rgba(240, 239, 237, 1);
+}
+.block-color-brown_background {
+	background: rgba(245, 237, 233, 1);
+}
+.block-color-orange_background {
+	background: rgba(251, 235, 222, 1);
+}
+.block-color-yellow_background {
+	background: rgba(249, 243, 220, 1);
+}
+.block-color-teal_background {
+	background: rgba(232, 241, 236, 1);
+}
+.block-color-blue_background {
+	background: rgba(229, 242, 252, 1);
+}
+.block-color-purple_background {
+	background: rgba(243, 235, 249, 1);
+}
+.block-color-pink_background {
+	background: rgba(250, 233, 241, 1);
+}
+.block-color-red_background {
+	background: rgba(252, 233, 231, 1);
+}
+.select-value-color-default { background-color: rgba(42, 28, 0, 0.07); }
+.select-value-color-gray { background-color: rgba(28, 19, 1, 0.11); }
+.select-value-color-brown { background-color: rgba(127, 51, 0, 0.156); }
+.select-value-color-orange { background-color: rgba(196, 88, 0, 0.203); }
+.select-value-color-yellow { background-color: rgba(209, 156, 0, 0.282); }
+.select-value-color-green { background-color: rgba(0, 96, 38, 0.156); }
+.select-value-color-blue { background-color: rgba(0, 118, 217, 0.203); }
+.select-value-color-purple { background-color: rgba(92, 0, 163, 0.141); }
+.select-value-color-pink { background-color: rgba(183, 0, 78, 0.152); }
+.select-value-color-red { background-color: rgba(206, 24, 0, 0.164); }
+
+.checkbox {
+	display: inline-flex;
+	vertical-align: text-bottom;
+	width: 16;
+	height: 16;
+	background-size: 16px;
+	margin-left: 2px;
+	margin-right: 5px;
+}
+
+.checkbox-on {
+	background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Crect%20width%3D%2216%22%20height%3D%2216%22%20fill%3D%22%2358A9D7%22%2F%3E%0A%3Cpath%20d%3D%22M6.71429%2012.2852L14%204.9995L12.7143%203.71436L6.71429%209.71378L3.28571%206.2831L2%207.57092L6.71429%2012.2852Z%22%20fill%3D%22white%22%2F%3E%0A%3C%2Fsvg%3E");
+}
+
+.checkbox-off {
+	background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Crect%20x%3D%220.75%22%20y%3D%220.75%22%20width%3D%2214.5%22%20height%3D%2214.5%22%20fill%3D%22white%22%20stroke%3D%22%2336352F%22%20stroke-width%3D%221.5%22%2F%3E%0A%3C%2Fsvg%3E");
+}
+	
+</style></head><body><article id="4d9f2763-d8e5-4845-b5b7-c71a29cac474" class="page sans"><header><img class="page-cover-image" src="https://www.notion.so/images/page-cover/gradients_11.jpg" style="object-position:center 65.67%"/><div class="page-header-icon page-header-icon-with-cover"><span class="icon">🥑</span></div><h1 class="page-title" dir="auto">Recetas</h1><p class="page-description" dir="auto"></p></header><div class="page-body"><div class="collection-content-wrapper"><table class="collection-content"><thead><tr><th><span class="icon property-icon"><img src="https://www.notion.so/icons/font_gray.svg" style="width:14px;height:14px;display:block"/></span>Name</th><th><span class="icon property-icon"><img src="https://www.notion.so/icons/list_gray.svg" style="width:14px;height:14px;display:block"/></span>Tags</th><th><span class="icon property-icon"><img src="https://www.notion.so/icons/link_gray.svg" style="width:14px;height:14px;display:block"/></span>Link</th></tr></thead><tbody><tr id="21d1870d-02b0-8072-875a-efd1034e3a0f"><td class="cell-title"><a href="Recetas/Caldo%2021d1870d02b08072875aefd1034e3a0f.html"><span class="icon">🍲</span>Caldo</a></td><td class="cell-ymgk"><span class="selected-value select-value-color-orange">Dinner</span><span class="selected-value select-value-color-yellow">Easy</span><span class="selected-value select-value-color-default">Entrada</span><span class="selected-value select-value-color-brown">Verduras</span></td><td class="cell-xe1?"></td></tr><tr id="3171870d-02b0-8033-b183-c9876cfd3e16"><td class="cell-title"><a href="Recetas/Caldo%20de%20Huesos%203171870d02b08033b183c9876cfd3e16.html"><span class="icon">🦴</span>Caldo de Huesos</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"></td></tr><tr id="3ec0266f-4d6e-44b3-9f8b-1747f896237b"><td class="cell-title"><a href="Recetas/Coliflor%20al%20horno%203ec0266f4d6e44b39f8b1747f896237b.html"><span class="icon">🫕</span>Coliflor al horno</a></td><td class="cell-ymgk"><span class="selected-value select-value-color-red">Acompañante</span><span class="selected-value select-value-color-blue">ChatGPT</span><span class="selected-value select-value-color-brown">Verduras</span></td><td class="cell-xe1?"></td></tr><tr id="8777bef6-ac4b-4e87-8de6-0b0df4445288"><td class="cell-title"><a href="Recetas/Coliflor%20salteado%208777bef6ac4b4e878de60b0df4445288.html"><span class="icon">🥦</span>Coliflor salteado</a></td><td class="cell-ymgk"><span class="selected-value select-value-color-red">Acompañante</span><span class="selected-value select-value-color-blue">ChatGPT</span><span class="selected-value select-value-color-brown">Verduras</span></td><td class="cell-xe1?"></td></tr><tr id="1b01870d-02b0-80f4-8766-defde39a91a6"><td class="cell-title"><a href="Recetas/Corazones%20de%20alcaucil%201b01870d02b080f48766defde39a91a6.html"><span class="icon">☎️</span>Corazones de alcaucil</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"></td></tr><tr id="1401870d-02b0-8013-b2f7-ef3f7e4adeba"><td class="cell-title"><a href="Recetas/Crema%20alcaparras%201401870d02b08013b2f7ef3f7e4adeba.html">Crema alcaparras</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"></td></tr><tr id="b9014d6f-dc97-4beb-8d3f-24341a5fe5ee"><td class="cell-title"><a href="Recetas/Ensalada%20pinki%20b9014d6fdc974beb8d3f24341a5fe5ee.html"><span class="icon">🥗</span>Ensalada pinki</a></td><td class="cell-ymgk"><span class="selected-value select-value-color-gray">Ensalada</span><span class="selected-value select-value-color-gray">Pinki</span></td><td class="cell-xe1?"></td></tr><tr id="1121870d-02b0-80a5-9523-ecc6e6b9ba9a"><td class="cell-title"><a href="Recetas/Esp%C3%A1rragos%20limon%201121870d02b080a59523ecc6e6b9ba9a.html"><span class="icon">🪴</span>Espárragos limon</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"></td></tr><tr id="3575c474-79b2-4cc8-9f8b-050176315c49"><td class="cell-title"><a href="Recetas/Hamburguesa%203575c47479b24cc89f8b050176315c49.html"><span class="icon">🍔</span>Hamburguesa</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"></td></tr><tr id="a66fb625-d126-48a9-8a2b-d3b9dc860710"><td class="cell-title"><a href="Recetas/il%20y%20a%20on%20Instagram%20Stay%20with%20me%20Tuna%20Tartare%20%F0%9F%AB%B6%F0%9F%8F%BC%F0%9F%90%9F%20%20a66fb625d12648a98a2bd3b9dc860710.html">il y a. on Instagram: &quot;Stay with me Tuna Tartare 🫶🏼🐟 RECIPE📝👇🏼 put the fresh egg yolk into a small bowl and cover it with soy sauce. Let it sit in the fridge while you prepare the tartare. I have used for two persons about 400g of fresh tuna filet half of an avocado a small shallot about 50g of beetroot fresh lemon juice A little bit of good flacky sea salt pepper roasted black sesame seeds tbsp soy sauce half a tosp oyster sauce tbsp avocado oil tbsp white sesame oil place the fresh egg yolk on your tartare and garnish it with some flacky salt, pepper, black sesame and small onions :) . . . #fish #asian #japan #fyp #fypシ #food #foodporn #foodie #cooking&quot;</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"><a href="https://www.instagram.com/reel/C5dpY8mNgdq/?igsh=ZWVuODh4eTZzeTR2" class="url-value">https://www.instagram.com/reel/C5dpY8mNgdq/?igsh=ZWVuODh4eTZzeTR2</a></td></tr><tr id="4ecaa814-5494-4317-b077-533b1c67cc29"><td class="cell-title"><a href="Recetas/Jessica%20Cha%20on%20Instagram%20Korean%20oxtail%20soup%20or%20kko%204ecaa81454944317b077533b1c67cc29.html">Jessica Cha on Instagram: &quot;Korean oxtail soup or kkori gomtang recipe &amp; tips ⬇️ ~2.5lbs of sliced oxtail (sold at Asian grocery stores) Water 2 tbsp minced garlic Salt and pepper to taste 1 bunch of green onions/scallions - chopped 1. In a large bowl, add the sliced oxtail meat and fill it up with cold water until the meat is covered 2. Cover the bowl with plastic wrap and place it in the fridge for a minimum of 2hrs. Although 6 hrs to overnight is better, changing the water a few times. 3. Boil water in a large pot 4. Discard the water and strain out the meat 5. Carefully place the meat into the boiling water. Let is boil for 10mins or until brown foam floats up 6. Strain out the meat and discard the water. This process helps to get the creamy white color for the soup 7. Wash the pot or get another large pot 8. Place the meat into the pot and pour 12-15 cups of water or until it covers the meat 9. Bring it to a boil 10. Turn down the heat to medium-low and simmer for 4hrs 11. Add more</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"><a href="https://www.instagram.com/reel/C7iC47VRcUh/?igsh=M3VoZHF2MXpvZm1k" class="url-value">https://www.instagram.com/reel/C7iC47VRcUh/?igsh=M3VoZHF2MXpvZm1k</a></td></tr><tr id="2241870d-02b0-8055-ab5f-cc067482d622"><td class="cell-title"><a href="Recetas/Kebbab%202241870d02b08055ab5fcc067482d622.html"><span class="icon">🥙</span>Kebbab</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"></td></tr><tr id="2171870d-02b0-80b2-80e2-c0c021ef5505"><td class="cell-title"><a href="Recetas/Limoncello%202171870d02b080b280e2c0c021ef5505.html"><span class="icon">🍋</span>Limoncello</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"></td></tr><tr id="19ecf9b6-d750-485d-a1cb-24ffa026098b"><td class="cell-title"><a href="Recetas/Mermelada%20de%20tomate%2019ecf9b6d750485da1cb24ffa026098b.html"><span class="icon">🫙</span>Mermelada de tomate</a></td><td class="cell-ymgk"><span class="selected-value select-value-color-green">Desayuno</span></td><td class="cell-xe1?"><a href="https://vm.tiktok.com/ZMMcxQSeP/" class="url-value">https://vm.tiktok.com/ZMMcxQSeP/</a></td></tr><tr id="1c21870d-02b0-809b-ac27-ffa7a1e59429"><td class="cell-title"><a href="Recetas/Ojo%20de%20bife%20&amp;%20Pure%20de%20raices%20con%20ajo%20asado%201c21870d02b0809bac27ffa7a1e59429.html"><span class="icon">🫀</span>Ojo de bife &amp; Pure de raices con ajo asado</a></td><td class="cell-ymgk"><span class="selected-value select-value-color-red">Acompañante</span><span class="selected-value select-value-color-blue">ChatGPT</span><span class="selected-value select-value-color-orange">Dinner</span></td><td class="cell-xe1?"></td></tr><tr id="22f1870d-02b0-80e7-9b8b-de739f351eab"><td class="cell-title"><a href="Recetas/Panchito%20alem%C3%A1n%2022f1870d02b080e79b8bde739f351eab.html"><span class="icon">🌭</span>Panchito alemán </a></td><td class="cell-ymgk"></td><td class="cell-xe1?"></td></tr><tr id="18b1870d-02b0-800e-9987-ed72eb1d1f4e"><td class="cell-title"><a href="Recetas/Pastichio%2018b1870d02b0800e9987ed72eb1d1f4e.html">Pastichio</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"></td></tr><tr id="1401870d-02b0-80ba-bab0-dcdf7dc451cf"><td class="cell-title"><a href="Recetas/Pho%20Bo%201401870d02b080babab0dcdf7dc451cf.html"><span class="icon">🍲</span>Pho Bo</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"></td></tr><tr id="144f2434-7a0a-4f69-ba51-b52748be55e0"><td class="cell-title"><a href="Recetas/Pure%20144f24347a0a4f69ba51b52748be55e0.html"><span class="icon">🥔</span>Pure</a></td><td class="cell-ymgk"><span class="selected-value select-value-color-red">Acompañante</span><span class="selected-value select-value-color-blue">ChatGPT</span><span class="selected-value select-value-color-orange">Dinner</span><span class="selected-value select-value-color-brown">Verduras</span></td><td class="cell-xe1?"></td></tr><tr id="03d570cd-2297-4499-942e-1f8004f84671"><td class="cell-title"><a href="Recetas/Recetardas%20Cocina%20argentina%20on%20Instagram%20%F0%9F%94%A5Ri%C3%B1oncit%2003d570cd22974499942e1f8004f84671.html">Recetardas | Cocina argentina on Instagram: &quot;🔥Riñoncitos a la provenzal 🧄 Un clásico de bodegón muy simple y barato que nunca te va a dejar a pata 💪 Asador 👉 @fuegosjl #recetardas #riñones #recetas #recetasdebodegón #parrillas&quot;</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"><a href="https://www.instagram.com/reel/C-iOI5JpIER/?igsh=MTNhem1qOXRnZTRzMQ==" class="url-value">https://www.instagram.com/reel/C-iOI5JpIER/?igsh=MTNhem1qOXRnZTRzMQ==</a></td></tr><tr id="ada33ce6-8124-402e-94c4-27b260e7f27e"><td class="cell-title"><a href="Recetas/Salmorejo%20cordobes%20ada33ce68124402e94c427b260e7f27e.html"><span class="icon">🍅</span>Salmorejo cordobes</a></td><td class="cell-ymgk"><span class="selected-value select-value-color-default">Entrada</span></td><td class="cell-xe1?"><a href="https://www.youtube.com/watch?v=uGPEM1NA8YI&amp;pp=ygUQc2FsbW9yZWpvIHJlY2V0YQ%3D%3D" class="url-value">https://www.youtube.com/watch?v=uGPEM1NA8YI&amp;pp=ygUQc2FsbW9yZWpvIHJlY2V0YQ%3D%3D</a></td></tr><tr id="1f91870d-02b0-807b-b220-d4d1a140bfa1"><td class="cell-title"><a href="Recetas/Salsa%20Pinki%201f91870d02b0807bb220d4d1a140bfa1.html"><span class="icon">🎋</span>Salsa Pinki </a></td><td class="cell-ymgk"></td><td class="cell-xe1?"></td></tr><tr id="1341870d-02b0-803c-add5-c810c2f2edc1"><td class="cell-title"><a href="Recetas/Salsita%20de%20hojas%20de%20apio%201341870d02b0803cadd5c810c2f2edc1.html"><span class="icon">🥬</span>Salsita de hojas de apio</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"></td></tr><tr id="1061870d-02b0-8047-99ab-cbd3d22a3986"><td class="cell-title"><a href="Recetas/Sopa%20de%20calabaza%201061870d02b0804799abcbd3d22a3986.html"><span class="icon">🎃</span>Sopa de calabaza</a></td><td class="cell-ymgk"><span class="selected-value select-value-color-orange">Dinner</span><span class="selected-value select-value-color-yellow">Easy</span><span class="selected-value select-value-color-brown">Verduras</span></td><td class="cell-xe1?"></td></tr><tr id="1511870d-02b0-8172-9b7d-cac9258e82a8"><td class="cell-title"><a href="Recetas/TikTok%20-%20Make%20Your%20Day%201511870d02b081729b7dcac9258e82a8.html">TikTok - Make Your Day</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"><a href="https://vm.tiktok.com/ZMk1sXNqS/" class="url-value">https://vm.tiktok.com/ZMk1sXNqS/</a></td></tr><tr id="b5ae195a-6f48-4e76-86ae-c0e5c3409f9c"><td class="cell-title"><a href="Recetas/TikTok%20-%20Make%20Your%20Day%20b5ae195a6f484e7686aec0e5c3409f9c.html">TikTok - Make Your Day</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"><a href="https://vm.tiktok.com/ZMrXeRSAJ/" class="url-value">https://vm.tiktok.com/ZMrXeRSAJ/</a></td></tr><tr id="e09eb7fe-6d04-429c-acd4-09ca8fd39019"><td class="cell-title"><a href="Recetas/TikTok%20-%20Make%20Your%20Day%20e09eb7fe6d04429cacd409ca8fd39019.html">TikTok - Make Your Day</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"><a href="https://vm.tiktok.com/ZMr9Y2gd1/" class="url-value">https://vm.tiktok.com/ZMr9Y2gd1/</a></td></tr><tr id="2241870d-02b0-80f9-af35-e618f8ba0c75"><td class="cell-title"><a href="Recetas/Tortilla%20de%20papa%202241870d02b080f9af35e618f8ba0c75.html"><span class="icon">🥔</span>Tortilla de papa</a></td><td class="cell-ymgk"><span class="selected-value select-value-color-red">Acompañante</span><span class="selected-value select-value-color-red">Almuerzo</span><span class="selected-value select-value-color-orange">Dinner</span><span class="selected-value select-value-color-brown">Verduras</span></td><td class="cell-xe1?"></td></tr><tr id="07beece9-9c3c-4e69-9a79-20bf9b258d2d"><td class="cell-title"><a href="Recetas/Tutancamon%2007beece99c3c4e699a7920bf9b258d2d.html"><span class="icon">🍰</span>Tutancamon</a></td><td class="cell-ymgk"><span class="selected-value select-value-color-pink">Lula</span><span class="selected-value select-value-color-yellow">Postre</span></td><td class="cell-xe1?"></td></tr><tr id="a89bd376-09c3-47dd-918b-4d8038545ac2"><td class="cell-title"><a href="Recetas/Victoria%20Minell%20on%20Instagram%20CRISPY%20ASIAN%20CABBAGE%20%20a89bd37609c347dd918b4d8038545ac2.html">Victoria Minell on Instagram: &quot;CRISPY ASIAN CABBAGE ROLLS 🔥 Day 4 of 10 high protein, low calorie recipes. 335 calories, 38g protein. Full recipe on my substack. Link in bio!&quot;</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"><a href="https://www.instagram.com/reel/C9wkBgeS9uB/?igsh=MWNmOHhpNjhtb2swcw==" class="url-value">https://www.instagram.com/reel/C9wkBgeS9uB/?igsh=MWNmOHhpNjhtb2swcw==</a></td></tr><tr id="1fc1870d-02b0-806e-b729-ff0bd48bc6e1"><td class="cell-title"><a href="Recetas/Yogurt%201fc1870d02b0806eb729ff0bd48bc6e1.html"><span class="icon">🍶</span>Yogurt</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"></td></tr><tr id="1121870d-02b0-8090-88bb-dbcf660a0749"><td class="cell-title"><a href="Recetas/Zanahoria%20glaseada%201121870d02b0809088bbdbcf660a0749.html"><span class="icon">🥕</span>Zanahoria glaseada</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"></td></tr><tr id="b5c91d3e-d9c4-440d-a00d-eac0bdc3d91c"><td class="cell-title"><a href="Recetas/Untitled%20b5c91d3ed9c4440da00deac0bdc3d91c.html">Untitled</a></td><td class="cell-ymgk"></td><td class="cell-xe1?"><a href="https://www.instagram.com/reel/C8w8EjGJxoe/?igsh=dTlidTh0YjljODVk" class="url-value">https://www.instagram.com/reel/C8w8EjGJxoe/?igsh=dTlidTh0YjljODVk</a></td></tr></tbody></table></div><br/><br/></div></article><span class="sans" style="font-size:14px;padding-top:2em"></span></body></html>
