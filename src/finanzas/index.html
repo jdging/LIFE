@@ -2174,9 +2174,6 @@ function renderGastos() {
   const cuotasAll      = rows.filter(r => (parseInt(r.cuotas_total) || 1) > 1);
   const cuotasFiltered = applyPersonaFiltro(cuotasAll);
   const cuotasAdjusted = applyPersonaMonto(cuotasFiltered, _gastosPersonaFiltro, p1, p2);
-  // TODO: remover — diagnóstico para verificar que applyPersonaFiltro funciona en cuotas
-  console.log('[CUOTAS DEBUG] cuotasAll:', cuotasAll.map(r => ({ desc: r.descripcion, tipo: r.tipo_proporcion, pjd: r.proporcion_jd, cuota: r.cuota_nro, total: r.cuotas_total })));
-  console.log('[CUOTAS DEBUG] cuotasFiltered:', cuotasFiltered.length, 'de', cuotasAll.length, '| filtro:', _gastosPersonaFiltro);
 
   // Card "Gastos fijos" — muestra datos del endpoint fixed
   const fijosCount = S.fixed?.data?.length || 0;
@@ -3172,7 +3169,7 @@ function renderInversiones() {
   renderInvLine();
 
   // Tabla
-  const sorted = [...rows].sort((a,b) => b.fecha?.localeCompare(a.fecha));
+  const sorted = [...rows].sort((a,b) => (b.fecha || '').localeCompare(a.fecha || ''));
   document.getElementById('inversiones-table-wrap').innerHTML = rows.length ? `
     <table>
       <thead><tr>
@@ -3365,7 +3362,7 @@ function renderIngresos() {
   renderIncLines(p1, p2);
 
   // Tabla
-  const sorted = [...rows].sort((a,b) => b.fecha?.localeCompare(a.fecha));
+  const sorted = [...rows].sort((a,b) => (b.fecha || '').localeCompare(a.fecha || ''));
   document.getElementById('ingresos-table-wrap').innerHTML = rows.length ? `
     <table>
       <thead><tr>
@@ -3971,11 +3968,12 @@ function renderCreditoCard(gastosRows) {
   const _filtro = _gastosPersonaFiltro || 'comun';
   const _p1 = S.config.nombre_persona1 || 'JD';
   const _p2 = S.config.nombre_persona2 || 'Pinki';
+  const fixedMonths = getMonthsInPeriod(S.period.from, S.period.to).length || 1;
   const fijosCredito = (S.fixed?.data || [])
     .filter(item => {
       if (item.medio_pago !== 'Crédito') return false;
       const { pct1, pct2 } = getRowPct(item, _p1, _p2);
-      if (_filtro === 'comun')        return pct1 > 0 && pct2 > 0;
+      if (_filtro === 'comun')        return getFixedKind(item) === 'shared';
       if (_filtro === 'jd_comun')    return pct1 > 0;
       if (_filtro === 'jd')          return pct1 === 100;
       if (_filtro === 'pinki_comun') return pct2 > 0;
@@ -3984,7 +3982,7 @@ function renderCreditoCard(gastosRows) {
     })
     .map(item => ({
       ...item,
-      monto_total:  item.monto_mensual,
+      monto_total:  (item.monto_mensual || 0) * fixedMonths,
       cuota_nro:    1,
       cuotas_total: 1,
       fecha:        '',
@@ -4012,6 +4010,7 @@ function toggleCreditoDetail() {
     const _filtro = _gastosPersonaFiltro || 'comun';
     const _p1 = S.config.nombre_persona1 || 'JD';
     const _p2 = S.config.nombre_persona2 || 'Pinki';
+    const fixedMonths = getMonthsInPeriod(S.period.from, S.period.to).length || 1;
 
     const gastosRows    = filterLog({ tipo: 'Gasto', from: S.period.from, to: S.period.to });
     const gastosCredito = applyPersonaFiltro(gastosRows)
@@ -4022,7 +4021,7 @@ function toggleCreditoDetail() {
       .filter(item => {
         if (item.medio_pago !== 'Crédito') return false;
         const { pct1, pct2 } = getRowPct(item, _p1, _p2);
-        if (_filtro === 'comun')        return pct1 > 0 && pct2 > 0;
+        if (_filtro === 'comun')        return getFixedKind(item) === 'shared';
         if (_filtro === 'jd_comun')    return pct1 > 0;
         if (_filtro === 'jd')          return pct1 === 100;
         if (_filtro === 'pinki_comun') return pct2 > 0;
@@ -4031,7 +4030,7 @@ function toggleCreditoDetail() {
       })
       .map(item => ({
         ...item,
-        monto_total:  item.monto_mensual,
+        monto_total:  (item.monto_mensual || 0) * fixedMonths,
         cuota_nro:    1,
         cuotas_total: 1,
         fecha:        '',
