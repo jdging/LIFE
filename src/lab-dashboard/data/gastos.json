@@ -11,8 +11,12 @@
     "descripcion_original": "Super de la semana",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.153773+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.243254+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 2,
@@ -26,8 +30,12 @@
     "descripcion_original": "Carga de nafta",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.155793+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.245010+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 3,
@@ -41,8 +49,12 @@
     "descripcion_original": "Alquiler agosto",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.157799+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.246687+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 4,
@@ -56,8 +68,12 @@
     "descripcion_original": "Farmacia",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.159748+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.248421+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 5,
@@ -71,8 +87,12 @@
     "descripcion_original": "Cena afuera",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.161633+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.250156+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 6,
@@ -86,8 +106,12 @@
     "descripcion_original": "Verdulería",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.163920+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.251840+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 7,
@@ -101,8 +125,12 @@
     "descripcion_original": "Carga SUBE",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.165888+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.253565+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 8,
@@ -116,8 +144,12 @@
     "descripcion_original": "Factura de luz",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.167832+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.255335+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 9,
@@ -131,8 +163,12 @@
     "descripcion_original": "Consulta médica",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.169785+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.257042+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 10,
@@ -146,8 +182,12 @@
     "descripcion_original": "Suscripciones streaming",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.173659+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.258747+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 11,
@@ -161,8 +201,12 @@
     "descripcion_original": "Super de la semana",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.175512+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.260191+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 12,
@@ -176,8 +220,12 @@
     "descripcion_original": "Peajes viaje",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.177325+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.261953+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 13,
@@ -191,8 +239,12 @@
     "descripcion_original": "Artículos de limpieza",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.179127+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.264035+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 14,
@@ -206,8 +258,12 @@
     "descripcion_original": "Farmacia",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.181110+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.266086+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 15,
@@ -221,8 +277,12 @@
     "descripcion_original": "Alquiler septiembre",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.182931+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.268140+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 16,
@@ -236,8 +296,12 @@
     "descripcion_original": "Cine",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.184639+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.270082+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 17,
@@ -251,8 +315,12 @@
     "descripcion_original": "Delivery viernes",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.186517+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.272052+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 18,
@@ -266,8 +334,12 @@
     "descripcion_original": "Carga de nafta",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.188388+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.273981+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 19,
@@ -281,8 +353,12 @@
     "descripcion_original": "Cuota obra social",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.190187+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.275972+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   },
   {
     "id": 20,
@@ -296,7 +372,11 @@
     "descripcion_original": "Super de la semana",
     "origen": "texto",
     "confirmado": 1,
-    "created_at": "2026-09-24T12:21:10.192186+00:00",
-    "chat_id": null
+    "created_at": "2026-09-24T13:16:38.277852+00:00",
+    "chat_id": null,
+    "tarjeta_id": null,
+    "tipo_proporcion": "dinamico",
+    "proporcion_jd": null,
+    "proporcion_pinki": null
   }
 ]

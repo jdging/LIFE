@@ -22,6 +22,34 @@ class Gasto:
     fecha: Optional[str] = None
     id: Optional[int] = None
     created_at: Optional[str] = None
+    # Tarjeta usada (opcional, FK a `tarjetas`) y reparto del costo entre
+    # JD/Pinki — independiente de `pagado_por` (quién puso la plata). Ver
+    # README sección "Tarjetas y reparto".
+    tarjeta_id: Optional[str] = None
+    tipo_proporcion: str = "dinamico"  # 'dinamico' o 'custom'
+    proporcion_jd: Optional[float] = None
+    proporcion_pinki: Optional[float] = None
+
+
+@dataclass
+class Tarjeta:
+    """Catálogo de tarjetas, portado de la hoja `Tarjetas` del sistema real.
+
+    Extensión deliberada de esta tarea: `titular` acepta 'Común' además de
+    'JD'/'Pinki' (tarjeta de la cuenta conjunta), ver README.
+    """
+
+    id: str
+    nombre: str
+    tipo: str  # 'Crédito' o 'Débito'
+    titular: str  # 'JD' / 'Pinki' / 'Común' — dueño legal/nominal
+    banco: Optional[str] = None
+    dia_cierre: Optional[int] = None  # solo crédito
+    dia_vencimiento: Optional[int] = None  # solo crédito
+    es_default_dinamico: bool = False
+    # Independiente de `titular`: si ambos usan la tarjeta habitualmente
+    # aunque el titular sea uno solo (ver README).
+    uso_compartido: bool = False
 
 
 @dataclass

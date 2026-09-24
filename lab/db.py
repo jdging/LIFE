@@ -1,7 +1,11 @@
 """Capa de acceso a SQLite para el bot Lasso (Fases 1 y 3).
 
 Tablas (esquema reconciliado con LIFE-lab-propuesta.md sección 3):
-    - gastos: registros de gastos ("Log" en el documento aprobado).
+    - gastos: registros de gastos ("Log" en el documento aprobado). Extendido
+      en esta tarea con `tarjeta_id`, `tipo_proporcion`, `proporcion_jd` y
+      `proporcion_pinki` — ver README sección "Tarjetas y reparto".
+    - tarjetas: catálogo de tarjetas (crédito/débito), portado de la hoja
+      `Tarjetas` del sistema real (ver README).
     - estado_conversacional: estado del flujo multi-turno por chat_id.
     - recetas / receta_ingredientes: recetario de ejemplo (Fase 3).
     - inventario_bienes: bienes del hogar (Fase 3, sin lógica de negocio
@@ -104,6 +108,21 @@ CREATE TABLE IF NOT EXISTS lista_compras (
     fecha_agregado TEXT NOT NULL,
     fecha_comprado TEXT
 );
+
+-- Catálogo de tarjetas (portado de la hoja `Tarjetas` del sistema real).
+-- Extensión deliberada de esta tarea: `titular` acepta 'Común' además de
+-- 'JD'/'Pinki', para modelar tarjetas de la cuenta conjunta (ver README).
+CREATE TABLE IF NOT EXISTS tarjetas (
+    id TEXT PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    tipo TEXT NOT NULL,
+    banco TEXT,
+    titular TEXT NOT NULL,
+    dia_cierre INTEGER,
+    dia_vencimiento INTEGER,
+    es_default_dinamico INTEGER NOT NULL DEFAULT 0,
+    uso_compartido INTEGER NOT NULL DEFAULT 0
+);
 """
 
 
@@ -116,9 +135,50 @@ def get_connection(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     return conn
 
 
+def _column_names(conn: sqlite3.Connection, table: str) -> set:
+    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
+def _migrar_columnas_gastos(conn: sqlite3.Connection) -> None:
+    """Agrega a `gastos` las columnas de tarjetas/reparto si faltan.
+
+    Usa ALTER TABLE ADD COLUMN en vez de recrear la tabla para no perder
+    datos existentes en bases ya inicializadas (ver README).
+    """
+    existentes = _column_names(conn, "gastos")
+    columnas_nuevas = (
+        ("tarjeta_id", "TEXT REFERENCES tarjetas(id)"),
+        ("tipo_proporcion", "TEXT NOT NULL DEFAULT 'dinamico'"),
+        ("proporcion_jd", "REAL"),
+        ("proporcion_pinki", "REAL"),
+    )
+    for columna, definicion in columnas_nuevas:
+        if columna not in existentes:
+            conn.execute(f"ALTER TABLE gastos ADD COLUMN {columna} {definicion}")
+    conn.commit()
+
+
+def _migrar_columnas_tarjetas(conn: sqlite3.Connection) -> None:
+    """Agrega a `tarjetas` las columnas nuevas si faltan (ver README).
+
+    Mismo patrón que `_migrar_columnas_gastos`: ALTER TABLE ADD COLUMN en
+    vez de recrear la tabla, para no perder datos en bases ya inicializadas.
+    """
+    existentes = _column_names(conn, "tarjetas")
+    columnas_nuevas = (
+        ("uso_compartido", "INTEGER NOT NULL DEFAULT 0"),
+    )
+    for columna, definicion in columnas_nuevas:
+        if columna not in existentes:
+            conn.execute(f"ALTER TABLE tarjetas ADD COLUMN {columna} {definicion}")
+    conn.commit()
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     conn.commit()
+    _migrar_columnas_gastos(conn)
+    _migrar_columnas_tarjetas(conn)
 
 
 def _now() -> str:
@@ -131,6 +191,15 @@ def insert_gasto(conn: sqlite3.Connection, gasto: dict) -> int:
     Este chequeo es deliberado y redundante con la máquina de estados de
     `conversation.py`: el bot nunca debe escribir en la base sin
     confirmación explícita del usuario, sin excepciones.
+
+    Campos de reparto (retrocompatibles — si no se pasan, un gasto queda
+    `tipo_proporcion='dinamico'` sin proporciones explícitas, igual que
+    antes de esta extensión):
+        - tarjeta_id: FK opcional a `tarjetas`.
+        - tipo_proporcion: 'dinamico' (default) o 'custom'.
+        - proporcion_jd / proporcion_pinki: sólo válidas (y obligatorias)
+          si tipo_proporcion='custom'; deben sumar 100 (±0.01). En modo
+          'dinamico' deben venir vacías — el cálculo se hace por fuera.
     """
     if gasto.get("confirmado") is not True:
         raise ValueError(
@@ -138,13 +207,41 @@ def insert_gasto(conn: sqlite3.Connection, gasto: dict) -> int:
             "(confirmado debe ser True)."
         )
 
+    tipo_proporcion = gasto.get("tipo_proporcion") or "dinamico"
+    proporcion_jd = gasto.get("proporcion_jd")
+    proporcion_pinki = gasto.get("proporcion_pinki")
+
+    if tipo_proporcion == "custom":
+        if proporcion_jd is None or proporcion_pinki is None:
+            raise ValueError(
+                "tipo_proporcion='custom' requiere proporcion_jd y "
+                "proporcion_pinki explícitas."
+            )
+        if abs((proporcion_jd + proporcion_pinki) - 100) > 0.01:
+            raise ValueError(
+                "proporcion_jd + proporcion_pinki debe sumar 100 "
+                f"(recibido {proporcion_jd} + {proporcion_pinki})."
+            )
+    elif tipo_proporcion == "dinamico":
+        if proporcion_jd is not None or proporcion_pinki is not None:
+            raise ValueError(
+                "tipo_proporcion='dinamico' no debe traer proporcion_jd/"
+                "proporcion_pinki (el reparto se calcula por fuera)."
+            )
+    else:
+        raise ValueError(
+            f"tipo_proporcion inválido: {tipo_proporcion!r} "
+            "(usar 'dinamico' o 'custom')."
+        )
+
     cursor = conn.execute(
         """
         INSERT INTO gastos
             (fecha, monto, moneda, categoria, subcategoria, medio_pago,
              pagado_por, descripcion_original, origen, chat_id, confirmado,
-             created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             created_at, tarjeta_id, tipo_proporcion, proporcion_jd,
+             proporcion_pinki)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             gasto.get("fecha") or _now(),
@@ -159,6 +256,10 @@ def insert_gasto(conn: sqlite3.Connection, gasto: dict) -> int:
             gasto.get("chat_id"),
             1,
             _now(),
+            gasto.get("tarjeta_id"),
+            tipo_proporcion,
+            proporcion_jd,
+            proporcion_pinki,
         ),
     )
     conn.commit()
@@ -492,3 +593,68 @@ def descontar_stock_por_receta(conn: sqlite3.Connection, receta_id: int) -> None
             restante -= descuento
 
     conn.commit()
+
+
+# --- Tarjetas --------------------------------------------------------------
+
+
+def insert_tarjeta(conn: sqlite3.Connection, tarjeta: dict) -> str:
+    """Inserta una tarjeta. Valida que a lo sumo una tenga `es_default_dinamico=1`.
+
+    Si ya existe una tarjeta marcada como default dinámico y se intenta
+    insertar otra con el flag en 1, rechaza con `ValueError` — el caller
+    debe desmarcar la anterior explícitamente primero (no hay update
+    automático implícito, para evitar cambios de default silenciosos).
+    """
+    es_default = 1 if tarjeta.get("es_default_dinamico") else 0
+    if es_default:
+        existente = conn.execute(
+            "SELECT id FROM tarjetas WHERE es_default_dinamico = 1"
+        ).fetchone()
+        if existente is not None:
+            raise ValueError(
+                f"Ya existe una tarjeta default dinámico ({existente['id']}); "
+                "desmarcá esa antes de marcar una nueva."
+            )
+
+    uso_compartido = 1 if tarjeta.get("uso_compartido") else 0
+
+    conn.execute(
+        """
+        INSERT INTO tarjetas
+            (id, nombre, tipo, banco, titular, dia_cierre, dia_vencimiento,
+             es_default_dinamico, uso_compartido)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            tarjeta["id"],
+            tarjeta["nombre"],
+            tarjeta["tipo"],
+            tarjeta.get("banco"),
+            tarjeta["titular"],
+            tarjeta.get("dia_cierre"),
+            tarjeta.get("dia_vencimiento"),
+            es_default,
+            uso_compartido,
+        ),
+    )
+    conn.commit()
+    return tarjeta["id"]
+
+
+def get_tarjetas(conn: sqlite3.Connection, titular: Optional[str] = None) -> list:
+    if titular is not None:
+        rows = conn.execute(
+            "SELECT * FROM tarjetas WHERE titular = ? ORDER BY id", (titular,)
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM tarjetas ORDER BY id").fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_tarjeta_default_dinamico(conn: sqlite3.Connection) -> Optional[dict]:
+    """Devuelve la tarjeta marcada como default para pagos dinámicos, o None."""
+    row = conn.execute(
+        "SELECT * FROM tarjetas WHERE es_default_dinamico = 1"
+    ).fetchone()
+    return dict(row) if row is not None else None
