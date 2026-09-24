@@ -12,6 +12,7 @@
   --green-deep:  #5f7d52;
   --terracotta:  #c97d55;
   --mustard:     #d1a13f;
+  --plum:        #8a6fa0;
   --danger:      #c25f4a;
   --shadow:      0 3px 14px rgba(76, 62, 30, 0.08);
   --shadow-hover:0 8px 22px rgba(76, 62, 30, 0.13);
@@ -49,7 +50,7 @@ h1, h2, h3 {
 }
 
 .masthead {
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .masthead-top {
@@ -93,25 +94,186 @@ h1, h2, h3 {
   font-size: 14.5px;
 }
 
+/* ---- Navegación entre vistas ---- */
+
+.view-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 2px;
+}
+
+.tab-btn {
+  font-family: 'Work Sans', sans-serif;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.tab-btn:hover {
+  color: var(--ink);
+}
+
+.tab-btn:focus-visible {
+  outline: 2px solid var(--green-deep);
+  outline-offset: 2px;
+}
+
+.tab-btn.active {
+  color: var(--green-deep);
+  border-bottom-color: var(--green-deep);
+  font-weight: 600;
+}
+
+/* ---- Barra de período ---- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 22px;
+  padding: 12px 16px;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+.topbar-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--ink-soft);
+}
+
+.period-selector,
+.persona-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.period-btn,
+.persona-btn {
+  font-family: 'Work Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: var(--paper-deep);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.period-btn:hover,
+.persona-btn:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.period-btn:focus-visible,
+.persona-btn:focus-visible {
+  outline: 2px solid var(--green-deep);
+  outline-offset: 1px;
+}
+
+.period-btn.active,
+.persona-btn.active {
+  background: var(--green-deep);
+  color: var(--paper-raised);
+  font-weight: 600;
+}
+
+.month-input {
+  font-family: 'Work Sans', sans-serif;
+  font-size: 12.5px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.range-pickers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.range-sep {
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+/* ---- Encabezados de sección ---- */
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 22px;
+  font-style: italic;
+}
+
+/* ---- Vistas ---- */
+
+.view[hidden] {
+  display: none;
+}
+
+/* ---- Cards ---- */
+
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 .card {
+  display: block;
   background: var(--paper-raised);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 20px 22px;
   box-shadow: var(--shadow);
   transition: transform 0.18s ease, box-shadow 0.18s ease;
+  text-align: left;
+  font-family: 'Work Sans', sans-serif;
+  width: 100%;
 }
 
 .card:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-hover);
+}
+
+button.card {
+  cursor: pointer;
+  color: inherit;
+}
+
+button.card:focus-visible {
+  outline: 2px solid var(--green-deep);
+  outline-offset: 2px;
 }
 
 .card-icon {
@@ -129,17 +291,18 @@ h1, h2, h3 {
 
 .card .value {
   font-family: 'Fraunces', serif;
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 600;
   color: var(--green-deep);
 }
 
 .card .value.muted {
   color: var(--ink);
-  font-size: 24px;
+  font-size: 22px;
 }
 
-.card .value.value-negative {
+.card .value.value-negative,
+.card .value.danger {
   color: var(--danger);
 }
 
@@ -149,19 +312,40 @@ h1, h2, h3 {
   margin-top: 4px;
 }
 
-.charts-grid-main {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
+.card .value-sub[hidden] {
+  display: none;
 }
 
-.charts-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 24px;
+/* ---- Paneles de detalle (cards expandibles) ---- */
+
+.detail-panel {
+  background: var(--paper-deep);
+  border-radius: 14px;
+  margin: -6px 0 18px;
+  overflow: hidden;
 }
+
+.detail-panel[hidden] {
+  display: none;
+}
+
+.detail-panel-inner {
+  padding: 6px;
+}
+
+.detail-panel table {
+  background: transparent;
+}
+
+.credito-tarjeta-header {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-soft);
+  padding: 12px 14px 4px;
+}
+
+/* ---- Panels genéricos ---- */
 
 .panel {
   background: var(--paper-raised);
@@ -170,6 +354,7 @@ h1, h2, h3 {
   padding: 22px;
   box-shadow: var(--shadow);
   transition: box-shadow 0.18s ease;
+  margin-bottom: 18px;
 }
 
 .panel:hover {
@@ -186,25 +371,47 @@ h1, h2, h3 {
   max-height: 300px;
 }
 
-.chart-error {
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.panel-title-row h2 {
+  margin-bottom: 0;
+}
+
+.btn-chart-toggle {
+  font-family: 'Work Sans', sans-serif;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--green-deep);
+  background: var(--paper-deep);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-chart-toggle:hover {
+  background: var(--line);
+}
+
+.btn-chart-toggle:focus-visible {
+  outline: 2px solid var(--green-deep);
+  outline-offset: 2px;
+}
+
+.chart-error,
+.section-error {
   color: var(--danger);
   font-size: 12.5px;
   margin-top: 10px;
 }
 
-.chart-error .detail {
-  display: block;
-  color: var(--ink-soft);
-  font-size: 11px;
-  margin-top: 4px;
-}
-
-.section-error {
-  color: var(--danger);
-  font-size: 12.5px;
-  padding: 10px 0;
-}
-
+.chart-error .detail,
 .section-error .detail {
   display: block;
   color: var(--ink-soft);
@@ -212,11 +419,155 @@ h1, h2, h3 {
   margin-top: 4px;
 }
 
-/* ---- Deudas ---- */
+/* ---- Subtotales de torta / chips de subcategoría ---- */
 
-.deuda-panel {
-  margin-bottom: 24px;
+.pie-subtotals {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
 }
+
+.pie-subtotals[hidden] {
+  display: none;
+}
+
+.pie-sub-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+
+.categ-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.categ-chip {
+  font-family: 'Work Sans', sans-serif;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  background: var(--paper-deep);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 11px;
+  cursor: pointer;
+}
+
+.categ-chip:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.categ-chip:focus-visible {
+  outline: 2px solid var(--green-deep);
+  outline-offset: 2px;
+}
+
+/* ---- Drill-down de subcategoría ---- */
+
+.drilldown-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.drilldown-title {
+  font-size: 16px;
+  font-style: italic;
+  flex: 1;
+}
+
+.drilldown-back {
+  font-family: 'Work Sans', sans-serif;
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: var(--paper-deep);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.drilldown-back:hover {
+  background: var(--line);
+}
+
+/* ---- Composición del gasto ---- */
+
+.composicion-labels-row {
+  display: flex;
+  margin-bottom: 4px;
+}
+
+.composicion-label-item {
+  display: flex;
+  flex-direction: column;
+  font-size: 10.5px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.composicion-label-name {
+  font-weight: 600;
+}
+
+.composicion-label-val {
+  color: var(--ink-faint);
+}
+
+.composicion-bar {
+  display: flex;
+  height: 18px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--paper-deep);
+  margin-bottom: 14px;
+}
+
+.composicion-seg {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.composicion-seg-fijos  { background: var(--terracotta); }
+.composicion-seg-var    { background: var(--mustard); }
+.composicion-seg-cuotas { background: var(--plum); }
+
+.composicion-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.composicion-leg-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.composicion-leg-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.composicion-leg-val {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.composicion-leg-pct {
+  color: var(--ink-faint);
+}
+
+/* ---- Deuda (reutilizado en el panel de detalle) ---- */
 
 .deuda-destacada {
   background: var(--paper-deep);
@@ -224,18 +575,11 @@ h1, h2, h3 {
   padding: 16px 20px;
 }
 
-.deuda-mes {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--ink-soft);
-}
-
 .deuda-texto {
   font-family: 'Fraunces', serif;
-  font-size: 19px;
+  font-size: 17px;
   font-style: italic;
-  margin: 4px 0 0;
+  margin: 0;
 }
 
 .deuda-monto {
@@ -247,48 +591,85 @@ h1, h2, h3 {
   color: var(--green-deep);
   font-weight: 500;
   margin: 0;
+  padding: 16px 20px;
 }
 
-.deuda-panel h3 {
-  font-family: 'Fraunces', serif;
-  font-size: 14px;
+.deuda-migracion {
+  color: var(--ink-soft);
   font-style: italic;
-  color: var(--ink-soft);
-  margin: 16px 0 8px;
-}
-
-.deuda-lista {
-  list-style: none;
   margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  padding: 16px 20px;
 }
 
-.deuda-lista li {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 13px;
-  padding: 7px 4px;
-  border-bottom: 1px solid var(--paper-deep);
+/* ---- Charts grid ---- */
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 18px;
 }
 
-.deuda-lista-mes {
+/* ---- Estado vacío (Inversiones / Presupuesto) ---- */
+
+.empty-state-panel {
+  text-align: center;
+  padding: 44px 24px;
+}
+
+.empty-state-icon {
+  display: block;
+  font-size: 30px;
+  margin-bottom: 12px;
+}
+
+.empty-state-title {
+  font-family: 'Fraunces', serif;
+  font-size: 19px;
+  font-style: italic;
+  margin: 0 0 8px;
+}
+
+.empty-state-text {
   color: var(--ink-soft);
-  white-space: nowrap;
+  font-size: 13px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.empty-state-text code {
+  background: var(--paper-deep);
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.empty-state {
+  color: var(--ink-faint);
+  font-size: 13px;
+  padding: 10px 0;
 }
 
 /* ---- Tabla: filtros y extras ---- */
 
-.table-filters {
+.table-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.table-header h2 {
+  margin-bottom: 0;
+}
+
+.table-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .table-filters label {
@@ -322,18 +703,6 @@ h1, h2, h3 {
   background: var(--paper-deep);
   color: var(--ink-soft);
   font-size: 10.5px;
-}
-
-.fijos-total {
-  margin: 14px 4px 0;
-  font-size: 13px;
-  color: var(--ink-soft);
-}
-
-.fijos-total strong {
-  color: var(--green-deep);
-  font-family: 'Fraunces', serif;
-  font-size: 15px;
 }
 
 .table-scroll {
@@ -383,6 +752,25 @@ tbody tr:hover {
   background: var(--paper-deep);
 }
 
+tfoot td {
+  padding: 10px 14px;
+  font-size: 12.5px;
+}
+
+.td-muted {
+  color: var(--ink-faint);
+}
+
+.td-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.td-accent {
+  color: var(--green-deep);
+  font-weight: 600;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -394,6 +782,10 @@ tbody tr:hover {
   font-size: 12px;
 }
 
+.pill-jd    { background: rgba(201, 125, 85, 0.16); color: var(--terracotta); }
+.pill-pinki { background: rgba(209, 161, 63, 0.18); color: #9c7a20; }
+.pill-comun { background: rgba(124, 154, 107, 0.18); color: var(--green-deep); }
+
 footer {
   color: var(--ink-faint);
   font-size: 11.5px;
@@ -403,7 +795,6 @@ footer {
 }
 
 @media (max-width: 980px) {
-  .charts-grid-main,
   .charts-grid {
     grid-template-columns: 1fr;
   }
@@ -420,13 +811,13 @@ footer {
     grid-template-columns: repeat(2, 1fr);
   }
   .card .value {
-    font-size: 24px;
-  }
-  .deuda-lista li {
-    flex-direction: column;
-    gap: 2px;
+    font-size: 22px;
   }
   .table-filters {
+    align-items: flex-start;
+  }
+  .topbar {
+    flex-direction: column;
     align-items: flex-start;
   }
 }

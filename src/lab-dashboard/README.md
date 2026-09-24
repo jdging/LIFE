@@ -145,3 +145,72 @@ visita → login → cookie → recargar sin que vuelva a pedir contraseña, y q
 `/app.js`, `/data/*.json` pedidos directamente también quedan protegidos. Si algo no anda
 como se describe, reportarlo para iterar — el punto con más chance de necesitar ajuste es la
 sintaxis exacta de `config.matcher` una vez corra contra la infraestructura real.
+# Finanzas — laboratorio (`dashboard-reorg-legacy`)
+
+`app.js` fue reescrito por completo para implementar las 4 vistas ya maquetadas en
+`index.html` (Gastos, Inversiones, Ingresos, Presupuesto), usando los datos reales de
+`data/*.json`. `index.html` y `style.css` no se tocaron.
+
+Segundo intento acotado solo a `app.js` (t_b8f60deb) después de que un intento previo con
+el brief completo cortara por timeout sin terminarlo.
+
+## Qué quedó completo
+
+- **Navegación entre las 4 vistas** (`switchView`) — tabs, `hidden`/`active` en cada panel.
+- **Selector de período** — `Mes`, `3 meses`, `6 meses`, `Año`, `Todo` y `Rango` funcionan
+  todos (no solo Mes/Todo): reutilizan la misma `computePeriod()` con from/to explícitos.
+- **Filtro de persona** (Comunes / JD+Común / JD / Pinki+Común / Pinki) — afecta cards,
+  torta, subtotales, composición y tabla en la vista Gastos.
+- **Vista Gastos**: 5 cards (Total, Fijos, Cuotas, Crédito, Deuda) con paneles de detalle
+  desplegables (`toggleDetail`), barra de composición (fijos/variable/cuotas), torta/barras
+  por categoría con drill-down a subcategoría (`toggleGastosCategType`,
+  `resetGastosDrilldown`, `toggleSubcatType`), gráfico de barras de los últimos 6 meses
+  reales (Gastos vs Ingresos, desde `resumen_meses.json`), y tabla de detalle con filtro por
+  categoría y columnas ordenables (click en el header).
+- **Vista Ingresos**: cards (total, JD, Pinki, proporción del mes), gráfico de líneas JD vs.
+  Pinki (últimos 6 meses reales) y tabla de detalle.
+- **Vistas Inversiones y Presupuesto**: se dejaron tal cual el estado vacío ya maquetado en
+  `index.html` (no requerían lógica según el brief — no existe `data/inversiones.json` ni
+  datos de presupuesto).
+
+## Simplificaciones por falta de datos o de tiempo (documentadas, no improvisadas)
+
+- **No existe `data/config.json`** en este workdir → los nombres `JD`/`Pinki` están
+  hardcodeados como constantes `P1`/`P2` (coinciden con `docs/CONTEXTO.md`, hoja `Config`).
+- **`data/deuda_pendiente.json` corregido por el coordinador tras revisión**: el brief
+  mencionaba este archivo pero no estaba copiado en el workdir cuando corrió el especialista,
+  así que la primera versión de `app.js` usaba (por error) el campo `deuda` histórico de
+  `resumen_meses.json`, mostrando meses ya saldados — justo lo que Juan pidió NO ver. Se
+  corrigió `renderDeudaCard`/`renderDeudaDetail` para leer `data/deuda_pendiente.json`
+  (deuda pendiente actual, sin importar el mes seleccionado ni el período elegido) y se
+  verificó con Playwright contra los datos reales del repo: card y detalle muestran
+  "$81.986 · JD le debe a Pinki", sin listado de meses pasados.
+- **`gastos_fijos.json` no tiene `tipo_proporcion`/`proporcion_jd` por ítem** (a diferencia
+  de `gastos.json`, que sí lo tiene por fila). Para los modos de filtro JD/Pinki, en vez de
+  aplicar una proporción por ítem (como hacía la legacy con `S.fixed.data`), se aplica la
+  proporción dinámica del mes de referencia (`resumen_meses.json`) al bloque completo de
+  fijos. En modo "100% JD" / "100% Pinki" los fijos aportan $0, porque no hay ningún ítem
+  marcado como personal en los datos migrados.
+- **`gastos_fijos.json` trae duplicados históricos** del mismo fijo (mismo `nombre`,
+  `ultima_actualizacion` distinta, ambos `activo: 1` — ej. "Seguro departamento" aparece dos
+  veces). Se deduplica por `nombre`, quedándose con el de `ultima_actualizacion` más
+  reciente, para no contar el mismo gasto fijo dos veces en los totales.
+- **Tarjetas de crédito**: no existe `data/tarjetas.json`, así que el panel "Carga en
+  crédito" agrupa por `tarjeta_id` crudo (`TC1`, `TC2`, etc.) en vez de mostrar un nombre de
+  banco/tarjeta legible.
+- **Gráfico "Últimos 6 meses"** de la vista Gastos usa los totales ya agregados de
+  `resumen_meses.json` (Gastos vs. Ingresos) en vez de recalcular por categoría/persona
+  desde `gastos.json` fila por fila — es más simple y ya refleja datos reales, pero por eso
+  no respeta el filtro de persona (documentado como limitación conocida).
+- **Sin borrado de filas ni "saldar deuda"**: este dashboard es de solo lectura sobre un
+  snapshot estático (`data/*.json` vía `fetch`), no hay API para persistir cambios, así que
+  no se portaron `deleteEntry`/`saldarRow` de la legacy.
+
+## Verificación de sintaxis y funcionamiento
+
+El especialista no tenía shell disponible para correr `node --check app.js`; el coordinador
+lo corrió después (`sintaxis OK`) y además sirvió el dashboard local (nunca público) con
+Playwright contra los datos reales del repo: 0 errores de consola/página, navegación entre
+las 4 vistas funcional, filtro de persona y selector de período probados, total de gastos y
+deuda pendiente coincidentes con lo calculado por `db.py`.
+

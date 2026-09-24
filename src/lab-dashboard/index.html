@@ -20,103 +20,246 @@
     <p class="subtitle">Un panorama real de en qué se fue la plata, cuánto entró, y quién le debe a quién.</p>
   </header>
 
+  <nav class="view-tabs" role="tablist" aria-label="Vistas de Finanzas">
+    <button class="tab-btn active" id="tab-gastos" role="tab" aria-selected="true" aria-controls="view-gastos" onclick="switchView('gastos')">🌾 Gastos</button>
+    <button class="tab-btn" id="tab-inversiones" role="tab" aria-selected="false" aria-controls="view-inversiones" onclick="switchView('inversiones')">📈 Inversiones</button>
+    <button class="tab-btn" id="tab-ingresos" role="tab" aria-selected="false" aria-controls="view-ingresos" onclick="switchView('ingresos')">💰 Ingresos</button>
+    <button class="tab-btn" id="tab-presupuesto" role="tab" aria-selected="false" aria-controls="view-presupuesto" onclick="switchView('presupuesto')">📋 Presupuesto</button>
+  </nav>
+
+  <div class="topbar" role="group" aria-label="Selector de período">
+    <span class="topbar-label">Período</span>
+    <div class="period-selector">
+      <button class="period-btn active" data-period="month" aria-pressed="true" onclick="selectPeriodType('month')">Mes</button>
+      <button class="period-btn" data-period="quarter" aria-pressed="false" onclick="selectPeriodType('quarter')">3 meses</button>
+      <button class="period-btn" data-period="semester" aria-pressed="false" onclick="selectPeriodType('semester')">6 meses</button>
+      <button class="period-btn" data-period="year" aria-pressed="false" onclick="selectPeriodType('year')">Año</button>
+      <button class="period-btn" data-period="all" aria-pressed="false" onclick="selectPeriodType('all')">Todo</button>
+      <button class="period-btn" data-period="range" aria-pressed="false" onclick="selectPeriodType('range')">Rango</button>
+    </div>
+    <input type="month" id="month-picker" class="month-input" aria-label="Elegir mes" onchange="onMonthChange(this.value)">
+    <div id="range-pickers" class="range-pickers" hidden>
+      <input type="date" id="range-from" class="month-input" aria-label="Desde" onchange="onRangeChange()">
+      <span class="range-sep">a</span>
+      <input type="date" id="range-to" class="month-input" aria-label="Hasta" onchange="onRangeChange()">
+    </div>
+  </div>
+
   <main>
-    <section class="cards">
-      <div class="card" id="card-total-gastos-wrap">
-        <span class="card-icon" aria-hidden="true">🌾</span>
-        <div class="label">Total gastado (período visible)</div>
-        <div class="value" id="card-total-gastos">—</div>
-      </div>
-      <div class="card" id="card-total-ingresos-wrap">
-        <span class="card-icon" aria-hidden="true">💰</span>
-        <div class="label">Total de ingresos</div>
-        <div class="value" id="card-total-ingresos">—</div>
-      </div>
-      <div class="card" id="card-balance-wrap">
-        <span class="card-icon" aria-hidden="true">⚖️</span>
-        <div class="label">Balance neto</div>
-        <div class="value" id="card-balance">—</div>
-      </div>
-      <div class="card" id="card-proporcion-wrap">
-        <span class="card-icon" aria-hidden="true">🤝</span>
-        <div class="label">Proporción JD / Pinki</div>
-        <div class="value muted" id="card-proporcion">—</div>
-        <div class="value-sub" id="card-proporcion-sub"></div>
-      </div>
-    </section>
 
-    <section class="panel deuda-panel">
-      <h2>Deudas</h2>
-      <div id="deuda-actual">—</div>
-      <div id="deuda-historial"></div>
-    </section>
+    <!-- ── VISTA GASTOS ─────────────────────────────────────────── -->
+    <div class="view active" id="view-gastos" role="tabpanel" aria-labelledby="tab-gastos">
 
-    <section class="charts-grid-main">
-      <div class="panel">
-        <h2>Evolución mensual — gastos vs. ingresos</h2>
-        <canvas id="chart-evolucion"></canvas>
+      <div class="section-header">
+        <h2 class="section-title">Gastos</h2>
+        <div class="persona-filter" role="group" aria-label="Filtro por persona" id="persona-filter-top">
+          <button class="persona-btn active" data-filter="comun" aria-pressed="true" onclick="setPersonaFiltro('comun')">Comunes</button>
+          <button class="persona-btn" data-filter="jd_comun" aria-pressed="false" onclick="setPersonaFiltro('jd_comun')">JD+Común</button>
+          <button class="persona-btn" data-filter="jd" aria-pressed="false" onclick="setPersonaFiltro('jd')">JD</button>
+          <button class="persona-btn" data-filter="pinki_comun" aria-pressed="false" onclick="setPersonaFiltro('pinki_comun')">Pinki+Común</button>
+          <button class="persona-btn" data-filter="pinki" aria-pressed="false" onclick="setPersonaFiltro('pinki')">Pinki</button>
+        </div>
       </div>
-      <div class="panel">
-        <h2>Proporción en el tiempo</h2>
-        <canvas id="chart-proporcion"></canvas>
-      </div>
-    </section>
 
-    <section class="charts-grid">
-      <div class="panel">
-        <h2>Por categoría</h2>
-        <canvas id="chart-categoria"></canvas>
-      </div>
-      <div class="panel">
-        <h2>Quién pagó</h2>
-        <canvas id="chart-persona"></canvas>
-      </div>
-    </section>
+      <section class="cards" id="gastos-cards">
+        <div class="card" id="card-total-gastos-wrap">
+          <span class="card-icon" aria-hidden="true">🌾</span>
+          <div class="label">Total gastos</div>
+          <div class="value" id="g-total">—</div>
+          <div class="value-sub" id="g-total-sub" hidden></div>
+        </div>
+        <button class="card card-clickable" id="card-fijos-wrap" aria-expanded="false" aria-controls="fijos-detail" onclick="toggleDetail('fijos')">
+          <span class="card-icon" aria-hidden="true">🏠</span>
+          <div class="label">Gastos fijos</div>
+          <div class="value" id="g-fijos">—</div>
+          <div class="value-sub" id="g-fijos-count">— ítems · ver detalle</div>
+        </button>
+        <button class="card card-clickable" id="card-cuotas-wrap" aria-expanded="false" aria-controls="cuotas-detail" onclick="toggleDetail('cuotas')">
+          <span class="card-icon" aria-hidden="true">💳</span>
+          <div class="label">En cuotas</div>
+          <div class="value" id="g-cuotas">—</div>
+          <div class="value-sub" id="g-cuotas-count">— cuotas activas · ver detalle</div>
+        </button>
+        <button class="card card-clickable" id="card-credito-wrap" aria-expanded="false" aria-controls="credito-detail" onclick="toggleDetail('credito')">
+          <span class="card-icon" aria-hidden="true">🪪</span>
+          <div class="label">Carga en crédito</div>
+          <div class="value" id="g-credito">—</div>
+          <div class="value-sub" id="g-credito-sub">— ítems · ver detalle</div>
+        </button>
+        <button class="card card-clickable" id="card-deuda-wrap" aria-expanded="false" aria-controls="deuda-detail" onclick="toggleDetail('deuda')">
+          <span class="card-icon" aria-hidden="true">⚖️</span>
+          <div class="label">Deuda neta</div>
+          <div class="value" id="g-deuda">—</div>
+          <div class="value-sub" id="g-deuda-quien">calculando…</div>
+        </button>
+      </section>
 
-    <section class="panel table-panel" id="fijos-panel">
-      <h2>Gastos fijos</h2>
-      <div class="table-scroll">
-        <table id="tabla-fijos">
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Categoría</th>
-              <th>Monto estimado</th>
-              <th>Periodicidad</th>
-            </tr>
-          </thead>
-          <tbody id="fijos-body"></tbody>
-        </table>
+      <div class="detail-panel" id="fijos-detail" hidden>
+        <div class="detail-panel-inner" id="fijos-detail-inner"></div>
       </div>
-      <p class="fijos-total">Total mensual estimado: <strong id="fijos-total">—</strong></p>
-    </section>
+      <div class="detail-panel" id="cuotas-detail" hidden>
+        <div class="detail-panel-inner" id="cuotas-detail-inner"></div>
+      </div>
+      <div class="detail-panel" id="credito-detail" hidden>
+        <div class="detail-panel-inner" id="credito-detail-inner"></div>
+      </div>
+      <div class="detail-panel" id="deuda-detail" hidden>
+        <div class="detail-panel-inner" id="deuda-detail-inner"></div>
+      </div>
 
-    <section class="panel table-panel" id="tabla-panel">
-      <h2>Detalle de gastos</h2>
-      <div class="table-filters" id="filtro-mes-wrap">
-        <label for="filtro-mes-tabla">Mes:
-          <select id="filtro-mes-tabla">
-            <option value="">Todos</option>
-          </select>
-        </label>
-        <span class="table-count" id="tabla-count"></span>
+      <section class="panel composicion-wrap">
+        <h2>Composición del gasto</h2>
+        <div class="composicion-labels-row" id="comp-labels-row"></div>
+        <div class="composicion-bar">
+          <div class="composicion-seg composicion-seg-fijos" id="comp-seg-fijos" style="width:0%"></div>
+          <div class="composicion-seg composicion-seg-var" id="comp-seg-var" style="width:0%"></div>
+          <div class="composicion-seg composicion-seg-cuotas" id="comp-seg-cuotas" style="width:0%"></div>
+        </div>
+        <div class="composicion-legend" id="comp-legend"></div>
+      </section>
+
+      <section class="charts-grid">
+        <div class="panel">
+          <div class="panel-title-row">
+            <h2>Por categoría</h2>
+            <button class="btn-chart-toggle" id="categ-pie-toggle" onclick="toggleGastosCategType()">barras</button>
+          </div>
+          <canvas id="chart-gastos-pie"></canvas>
+          <div class="pie-subtotals" id="gastos-pie-subtotals" hidden></div>
+          <div class="categ-chip-row" id="categ-chip-row" aria-label="Ver subcategorías por categoría"></div>
+        </div>
+        <div class="panel">
+          <h2>Últimos 6 meses</h2>
+          <canvas id="chart-gastos-bar"></canvas>
+        </div>
+      </section>
+
+      <section class="panel drilldown-box" id="gastos-drilldown-box" hidden>
+        <div class="drilldown-header">
+          <button class="drilldown-back" onclick="resetGastosDrilldown()">&#8592; volver</button>
+          <h2 class="drilldown-title">Subcategorías de <em id="drilldown-cat-name"></em></h2>
+          <button class="btn-chart-toggle" id="subcat-toggle" onclick="toggleSubcatType()">barras</button>
+        </div>
+        <canvas id="chart-gastos-subcat"></canvas>
+      </section>
+
+      <section class="panel table-panel" id="tabla-panel">
+        <div class="table-header">
+          <h2>Detalle de gastos</h2>
+          <div class="table-filters">
+            <label for="filtro-cat-tabla">Categoría:
+              <select id="filtro-cat-tabla"></select>
+            </label>
+            <span class="table-count" id="tabla-count"></span>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table id="tabla-gastos">
+            <thead>
+              <tr>
+                <th data-key="fecha">Fecha</th>
+                <th data-key="categoria">Categoría</th>
+                <th data-key="monto_total">Monto</th>
+                <th data-key="medio_pago">Medio de pago</th>
+                <th data-key="pago">Pagado por</th>
+                <th>Cuota</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </div><!-- /view-gastos -->
+
+    <!-- ── VISTA INVERSIONES ────────────────────────────────────── -->
+    <div class="view" id="view-inversiones" role="tabpanel" aria-labelledby="tab-inversiones" hidden>
+      <div class="section-header">
+        <h2 class="section-title">Inversiones</h2>
       </div>
-      <div class="table-scroll">
-        <table id="tabla-gastos">
-          <thead>
-            <tr>
-              <th data-key="fecha">Fecha</th>
-              <th data-key="categoria">Categoría</th>
-              <th data-key="monto">Monto</th>
-              <th data-key="medio_pago">Medio de pago</th>
-              <th data-key="pagado_por">Pagado por</th>
-            </tr>
-          </thead>
-          <tbody id="tabla-body">
-          </tbody>
-        </table>
+      <section class="panel empty-state-panel">
+        <span class="empty-state-icon" aria-hidden="true">📈</span>
+        <p class="empty-state-title">Sin datos de inversiones aún</p>
+        <p class="empty-state-text">
+          Todavía no hay un <code>data/inversiones.json</code> migrado desde la hoja de cálculo.
+          Cuando exista, esta vista va a mostrar el total invertido, la composición por tipo y la
+          evolución acumulada — igual que en la versión legacy.
+        </p>
+      </section>
+    </div><!-- /view-inversiones -->
+
+    <!-- ── VISTA INGRESOS ───────────────────────────────────────── -->
+    <div class="view" id="view-ingresos" role="tabpanel" aria-labelledby="tab-ingresos" hidden>
+      <div class="section-header">
+        <h2 class="section-title">Ingresos</h2>
       </div>
-    </section>
+
+      <section class="cards">
+        <div class="card">
+          <span class="card-icon" aria-hidden="true">💰</span>
+          <div class="label">Total ingresos</div>
+          <div class="value" id="inc-total">—</div>
+        </div>
+        <div class="card">
+          <span class="card-icon" aria-hidden="true">🧑</span>
+          <div class="label" id="inc-p1-label">JD</div>
+          <div class="value" id="inc-p1">—</div>
+        </div>
+        <div class="card">
+          <span class="card-icon" aria-hidden="true">🧑</span>
+          <div class="label" id="inc-p2-label">Pinki</div>
+          <div class="value" id="inc-p2">—</div>
+        </div>
+        <div class="card">
+          <span class="card-icon" aria-hidden="true">🤝</span>
+          <div class="label">Proporción del mes</div>
+          <div class="value muted" id="inc-proporcion">—</div>
+          <div class="value-sub" id="inc-proporcion-source"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Evolución JD vs. Pinki (6 meses)</h2>
+        <canvas id="chart-inc-lines"></canvas>
+      </section>
+
+      <section class="panel table-panel">
+        <h2>Detalle de ingresos</h2>
+        <div class="table-scroll">
+          <table id="tabla-ingresos">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Categoría</th>
+                <th>Descripción</th>
+                <th>Persona</th>
+                <th>Monto</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-ingresos-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </div><!-- /view-ingresos -->
+
+    <!-- ── VISTA PRESUPUESTO ────────────────────────────────────── -->
+    <div class="view" id="view-presupuesto" role="tabpanel" aria-labelledby="tab-presupuesto" hidden>
+      <div class="section-header">
+        <h2 class="section-title">Presupuesto</h2>
+      </div>
+      <section class="panel empty-state-panel">
+        <span class="empty-state-icon" aria-hidden="true">📋</span>
+        <p class="empty-state-title">Sin datos suficientes para Presupuesto</p>
+        <p class="empty-state-text">
+          La versión legacy calculaba disponible y simulaciones a partir de montos objetivo por
+          categoría cargados a mano — esos datos no están migrados a <code>data/*.json</code> todavía,
+          y esta vista de solo lectura no tiene forma de cargarlos. Cuando exista una fuente de
+          presupuesto real, esta vista va a mostrar ingresos, fijos, variables, cuotas y disponible
+          del período, con el split JD/Pinki.
+        </p>
+      </section>
+    </div><!-- /view-presupuesto -->
+
   </main>
 
   <footer>
