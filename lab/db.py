@@ -1,11 +1,22 @@
-"""Capa de acceso a SQLite para el bot Lasso (Fases 1 y 3).
+"""Capa de acceso a SQLite para el bot Lasso (Fases 1, 3 y Finanzas completo).
 
 Tablas (esquema reconciliado con LIFE-lab-propuesta.md sección 3):
     - gastos: registros de gastos ("Log" en el documento aprobado). Extendido
-      en esta tarea con `tarjeta_id`, `tipo_proporcion`, `proporcion_jd` y
-      `proporcion_pinki` — ver README sección "Tarjetas y reparto".
+      con `tarjeta_id`, `tipo_proporcion`, `proporcion_jd`, `proporcion_pinki`
+      (tarjetas/reparto) y `cuotas_total`, `cuota_nro`, `cuota_ref` (cuotas,
+      ver README sección "Cuotas").
     - tarjetas: catálogo de tarjetas (crédito/débito), portado de la hoja
       `Tarjetas` del sistema real (ver README).
+    - categorias: catálogo dinámico de categorías/subcategorías (Gasto /
+      Ingreso / Inversión), sembrado desde `seed_categorias.py` pero
+      extensible en caliente vía `crear_categoria_si_no_existe` (ver README).
+    - gastos_fijos: catálogo de gastos recurrentes (alquiler, expensas, etc.),
+      portado de la hoja `GastosFijos` del sistema real.
+    - ingresos: movimientos de ingreso (Salario/Extra/Freelance/Otro),
+      tabla hermana de `gastos` — separada porque en el laboratorio `gastos`
+      ya es su propia tabla (ver README).
+    - inversiones: movimientos de inversión (Plazo fijo/FCI/Dólar-MEP/
+      Crypto/Otro), misma lógica que `ingresos`.
     - estado_conversacional: estado del flujo multi-turno por chat_id.
     - recetas / receta_ingredientes: recetario de ejemplo (Fase 3).
     - inventario_bienes: bienes del hogar (Fase 3, sin lógica de negocio
@@ -13,10 +24,10 @@ Tablas (esquema reconciliado con LIFE-lab-propuesta.md sección 3):
     - inventario_cocina: stock de ingredientes disponibles (Fase 3).
     - lista_compras: items pendientes de comprar (Fase 3).
 
-Principio no negociable: `insert_gasto` rechaza cualquier intento de
-insertar un registro que no venga marcado como `confirmado=True`. La
-confirmación explícita del usuario se resuelve en `conversation.py`;
-esta capa la vuelve a exigir como segunda barrera.
+Principio no negociable: `insert_gasto`, `insert_ingreso` e `insert_inversion`
+rechazan cualquier intento de insertar un registro que no venga marcado como
+`confirmado=True`. La confirmación explícita del usuario se resuelve en
+`conversation.py`; esta capa la vuelve a exigir como segunda barrera.
 """
 
 import json
@@ -123,6 +134,64 @@ CREATE TABLE IF NOT EXISTS tarjetas (
     es_default_dinamico INTEGER NOT NULL DEFAULT 0,
     uso_compartido INTEGER NOT NULL DEFAULT 0
 );
+
+-- Catálogo dinámico de categorías (portado de la hoja `Categorías`).
+-- La combinación (tipo, categoria, subcategoria) se trata como clave lógica
+-- de idempotencia a nivel aplicación (ver `crear_categoria_si_no_existe`) en
+-- vez de UNIQUE de SQL, porque SQLite no trata NULLs como iguales en un
+-- UNIQUE compuesto y varias categorías (Ingreso/Inversión) no tienen
+-- subcategoría.
+CREATE TABLE IF NOT EXISTS categorias (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo TEXT NOT NULL,
+    categoria TEXT NOT NULL,
+    subcategoria TEXT,
+    creada_por TEXT,
+    creada_en TEXT NOT NULL
+);
+
+-- Gastos recurrentes (portado de la hoja `GastosFijos`).
+CREATE TABLE IF NOT EXISTS gastos_fijos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre TEXT NOT NULL,
+    monto_estimado REAL NOT NULL,
+    periodicidad TEXT NOT NULL,
+    dia_vencimiento INTEGER,
+    categoria TEXT,
+    subcategoria TEXT,
+    activo INTEGER NOT NULL DEFAULT 1,
+    ultima_actualizacion TEXT NOT NULL
+);
+
+-- Ingresos (tabla hermana de `gastos`, separada porque en este laboratorio
+-- `gastos` ya es su propia tabla en vez de un "Log" único con columna tipo).
+CREATE TABLE IF NOT EXISTS ingresos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha TEXT NOT NULL,
+    monto REAL NOT NULL,
+    moneda TEXT NOT NULL DEFAULT 'ARS',
+    categoria TEXT NOT NULL,
+    persona TEXT NOT NULL,
+    descripcion_original TEXT,
+    origen TEXT NOT NULL DEFAULT 'texto',
+    confirmado INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+-- Inversiones (misma lógica que `ingresos`; `persona` es nullable porque
+-- una inversión puede ser conjunta).
+CREATE TABLE IF NOT EXISTS inversiones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha TEXT NOT NULL,
+    monto REAL NOT NULL,
+    moneda TEXT NOT NULL DEFAULT 'ARS',
+    categoria TEXT NOT NULL,
+    persona TEXT,
+    descripcion_original TEXT,
+    origen TEXT NOT NULL DEFAULT 'texto',
+    confirmado INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -151,6 +220,9 @@ def _migrar_columnas_gastos(conn: sqlite3.Connection) -> None:
         ("tipo_proporcion", "TEXT NOT NULL DEFAULT 'dinamico'"),
         ("proporcion_jd", "REAL"),
         ("proporcion_pinki", "REAL"),
+        ("cuotas_total", "INTEGER NOT NULL DEFAULT 1"),
+        ("cuota_nro", "INTEGER NOT NULL DEFAULT 1"),
+        ("cuota_ref", "INTEGER REFERENCES gastos(id)"),
     )
     for columna, definicion in columnas_nuevas:
         if columna not in existentes:
@@ -200,6 +272,13 @@ def insert_gasto(conn: sqlite3.Connection, gasto: dict) -> int:
         - proporcion_jd / proporcion_pinki: sólo válidas (y obligatorias)
           si tipo_proporcion='custom'; deben sumar 100 (±0.01). En modo
           'dinamico' deben venir vacías — el cálculo se hace por fuera.
+
+    Campos de cuotas (retrocompatibles, default = gasto sin cuotas): ver
+    `insert_gasto_con_cuotas` para la generación automática de N filas.
+        - cuotas_total: default 1.
+        - cuota_nro: default 1.
+        - cuota_ref: FK opcional a `gastos.id` (vincula todas las cuotas
+          del mismo gasto original); default None.
     """
     if gasto.get("confirmado") is not True:
         raise ValueError(
@@ -240,8 +319,8 @@ def insert_gasto(conn: sqlite3.Connection, gasto: dict) -> int:
             (fecha, monto, moneda, categoria, subcategoria, medio_pago,
              pagado_por, descripcion_original, origen, chat_id, confirmado,
              created_at, tarjeta_id, tipo_proporcion, proporcion_jd,
-             proporcion_pinki)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             proporcion_pinki, cuotas_total, cuota_nro, cuota_ref)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             gasto.get("fecha") or _now(),
@@ -260,6 +339,9 @@ def insert_gasto(conn: sqlite3.Connection, gasto: dict) -> int:
             tipo_proporcion,
             proporcion_jd,
             proporcion_pinki,
+            gasto.get("cuotas_total") or 1,
+            gasto.get("cuota_nro") or 1,
+            gasto.get("cuota_ref"),
         ),
     )
     conn.commit()
@@ -274,6 +356,63 @@ def get_gastos(conn: sqlite3.Connection, chat_id: Optional[str] = None) -> list:
     else:
         rows = conn.execute("SELECT * FROM gastos ORDER BY id").fetchall()
     return [dict(row) for row in rows]
+
+
+def _sumar_meses(fecha_str: str, meses: int) -> str:
+    """Suma `meses` a una fecha 'YYYY-MM-DD' (o con sufijo de hora, se ignora).
+
+    Clampea el día al último día válido del mes destino (ej. 31 de enero +
+    1 mes -> 28/29 de febrero), evitando `ValueError` de `date()`.
+    """
+    import calendar
+
+    year, month, day = (int(p) for p in fecha_str[:10].split("-"))
+    indice_mes = (month - 1) + meses
+    nuevo_year = year + indice_mes // 12
+    nuevo_mes = indice_mes % 12 + 1
+    ultimo_dia = calendar.monthrange(nuevo_year, nuevo_mes)[1]
+    nuevo_dia = min(day, ultimo_dia)
+    return f"{nuevo_year:04d}-{nuevo_mes:02d}-{nuevo_dia:02d}"
+
+
+def insert_gasto_con_cuotas(conn: sqlite3.Connection, gasto: dict, cuotas_total: int) -> "int | list":
+    """Inserta un gasto, expandiéndolo en N filas si tiene cuotas.
+
+    - `cuotas_total <= 1`: idéntico a `insert_gasto` (devuelve un solo id).
+    - `cuotas_total > 1`: inserta `cuotas_total` filas, una por mes
+      consecutivo a partir de la fecha del gasto. Cada fila tiene
+      `monto = monto_total / cuotas_total`, `cuota_nro` de 1 a N, y
+      `cuota_ref` = id de la primera fila (incluida ella misma). El resto
+      de los campos (categoría, tarjeta, tipo_proporcion, pagado_por, etc.)
+      se hereda igual en todas las cuotas. Devuelve la lista de ids
+      insertados, en orden.
+    """
+    cuotas_total = int(cuotas_total) if cuotas_total else 1
+    if cuotas_total <= 1:
+        return insert_gasto(conn, gasto)
+
+    monto_total = gasto["monto"]
+    monto_cuota = monto_total / cuotas_total
+    fecha_base = (gasto.get("fecha") or _now())[:10]
+
+    ids = []
+    cuota_ref = None
+    for numero in range(1, cuotas_total + 1):
+        gasto_cuota = dict(gasto)
+        gasto_cuota["monto"] = monto_cuota
+        gasto_cuota["fecha"] = _sumar_meses(fecha_base, numero - 1)
+        gasto_cuota["cuotas_total"] = cuotas_total
+        gasto_cuota["cuota_nro"] = numero
+        gasto_cuota["cuota_ref"] = cuota_ref
+        nuevo_id = insert_gasto(conn, gasto_cuota)
+        if cuota_ref is None:
+            cuota_ref = nuevo_id
+            conn.execute(
+                "UPDATE gastos SET cuota_ref = ? WHERE id = ?", (cuota_ref, nuevo_id)
+            )
+            conn.commit()
+        ids.append(nuevo_id)
+    return ids
 
 
 def get_estado(conn: sqlite3.Connection, chat_id: str) -> Optional[dict]:
@@ -658,3 +797,311 @@ def get_tarjeta_default_dinamico(conn: sqlite3.Connection) -> Optional[dict]:
         "SELECT * FROM tarjetas WHERE es_default_dinamico = 1"
     ).fetchone()
     return dict(row) if row is not None else None
+
+
+# --- Categorías (dinámicas) -------------------------------------------------
+
+
+def get_categorias(conn: sqlite3.Connection, tipo: Optional[str] = None) -> list:
+    if tipo is not None:
+        rows = conn.execute(
+            "SELECT * FROM categorias WHERE tipo = ? ORDER BY id", (tipo,)
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM categorias ORDER BY id").fetchall()
+    return [dict(row) for row in rows]
+
+
+def crear_categoria_si_no_existe(
+    conn: sqlite3.Connection,
+    tipo: str,
+    categoria: str,
+    subcategoria: Optional[str] = None,
+    creada_por: Optional[str] = None,
+) -> dict:
+    """Crea (tipo, categoria, subcategoria) si no existe; si existe, la devuelve.
+
+    Idempotente por diseño: es la pieza que le permite al bot crear
+    categorías nuevas sobre la marcha cuando detecta algo no catalogado en
+    una conversación real, sin duplicar si ya fue creada antes (por el bot
+    mismo o por otra conversación).
+    """
+    subcategoria = subcategoria or None
+    if subcategoria is None:
+        existente = conn.execute(
+            "SELECT * FROM categorias WHERE tipo = ? AND categoria = ? "
+            "AND subcategoria IS NULL",
+            (tipo, categoria),
+        ).fetchone()
+    else:
+        existente = conn.execute(
+            "SELECT * FROM categorias WHERE tipo = ? AND categoria = ? "
+            "AND subcategoria = ?",
+            (tipo, categoria, subcategoria),
+        ).fetchone()
+
+    if existente is not None:
+        return dict(existente)
+
+    cursor = conn.execute(
+        """
+        INSERT INTO categorias (tipo, categoria, subcategoria, creada_por, creada_en)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (tipo, categoria, subcategoria, creada_por, _now()),
+    )
+    conn.commit()
+    nueva = conn.execute(
+        "SELECT * FROM categorias WHERE id = ?", (cursor.lastrowid,)
+    ).fetchone()
+    return dict(nueva)
+
+
+# --- Gastos fijos ------------------------------------------------------------
+
+
+def insert_gasto_fijo(conn: sqlite3.Connection, gasto_fijo: dict) -> int:
+    cursor = conn.execute(
+        """
+        INSERT INTO gastos_fijos
+            (nombre, monto_estimado, periodicidad, dia_vencimiento, categoria,
+             subcategoria, activo, ultima_actualizacion)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            gasto_fijo["nombre"],
+            gasto_fijo["monto_estimado"],
+            gasto_fijo["periodicidad"],
+            gasto_fijo.get("dia_vencimiento"),
+            gasto_fijo.get("categoria"),
+            gasto_fijo.get("subcategoria"),
+            1 if gasto_fijo.get("activo", True) else 0,
+            gasto_fijo.get("ultima_actualizacion") or _now(),
+        ),
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+def get_gastos_fijos(conn: sqlite3.Connection, solo_activos: bool = True) -> list:
+    if solo_activos:
+        rows = conn.execute(
+            "SELECT * FROM gastos_fijos WHERE activo = 1 ORDER BY id"
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM gastos_fijos ORDER BY id").fetchall()
+    return [dict(row) for row in rows]
+
+
+def actualizar_monto_fijo(
+    conn: sqlite3.Connection, gasto_fijo_id: int, monto_nuevo: float
+) -> None:
+    conn.execute(
+        "UPDATE gastos_fijos SET monto_estimado = ?, ultima_actualizacion = ? "
+        "WHERE id = ?",
+        (monto_nuevo, _now(), gasto_fijo_id),
+    )
+    conn.commit()
+
+
+# --- Ingresos ----------------------------------------------------------------
+
+
+def insert_ingreso(conn: sqlite3.Connection, ingreso: dict) -> int:
+    """Inserta un ingreso. Exige `ingreso['confirmado'] is True`.
+
+    Mismo principio no negociable que `insert_gasto`.
+    """
+    if ingreso.get("confirmado") is not True:
+        raise ValueError(
+            "No se puede insertar un ingreso sin confirmación explícita "
+            "(confirmado debe ser True)."
+        )
+    cursor = conn.execute(
+        """
+        INSERT INTO ingresos
+            (fecha, monto, moneda, categoria, persona, descripcion_original,
+             origen, confirmado, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            ingreso.get("fecha") or _now(),
+            ingreso["monto"],
+            ingreso.get("moneda") or "ARS",
+            ingreso["categoria"],
+            ingreso["persona"],
+            ingreso.get("descripcion_original"),
+            ingreso.get("origen") or "texto",
+            1,
+            _now(),
+        ),
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+def get_ingresos(conn: sqlite3.Connection, mes: Optional[str] = None) -> list:
+    if mes is not None:
+        rows = conn.execute(
+            "SELECT * FROM ingresos WHERE substr(fecha, 1, 7) = ? ORDER BY id",
+            (mes,),
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM ingresos ORDER BY id").fetchall()
+    return [dict(row) for row in rows]
+
+
+# --- Inversiones ---------------------------------------------------------
+
+
+def insert_inversion(conn: sqlite3.Connection, inversion: dict) -> int:
+    """Inserta una inversión. Exige `inversion['confirmado'] is True`.
+
+    Mismo principio no negociable que `insert_gasto`.
+    """
+    if inversion.get("confirmado") is not True:
+        raise ValueError(
+            "No se puede insertar una inversión sin confirmación explícita "
+            "(confirmado debe ser True)."
+        )
+    cursor = conn.execute(
+        """
+        INSERT INTO inversiones
+            (fecha, monto, moneda, categoria, persona, descripcion_original,
+             origen, confirmado, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            inversion.get("fecha") or _now(),
+            inversion["monto"],
+            inversion.get("moneda") or "ARS",
+            inversion["categoria"],
+            inversion.get("persona"),
+            inversion.get("descripcion_original"),
+            inversion.get("origen") or "texto",
+            1,
+            _now(),
+        ),
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+def get_inversiones(conn: sqlite3.Connection, mes: Optional[str] = None) -> list:
+    if mes is not None:
+        rows = conn.execute(
+            "SELECT * FROM inversiones WHERE substr(fecha, 1, 7) = ? ORDER BY id",
+            (mes,),
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM inversiones ORDER BY id").fetchall()
+    return [dict(row) for row in rows]
+
+
+# --- Proporción dinámica y deudas -----------------------------------------
+
+
+def _proporcion_salarios_mes(conn: sqlite3.Connection, mes: str) -> Optional[dict]:
+    """Devuelve {'JD': pct, 'Pinki': pct} para `mes`, o None si no hay salarios."""
+    rows = conn.execute(
+        "SELECT persona, SUM(monto) AS total FROM ingresos "
+        "WHERE categoria = 'Salario' AND substr(fecha, 1, 7) = ? "
+        "GROUP BY persona",
+        (mes,),
+    ).fetchall()
+    if not rows:
+        return None
+
+    total_general = sum(row["total"] for row in rows)
+    if total_general <= 0:
+        return None
+
+    proporciones = {"JD": 0.0, "Pinki": 0.0}
+    for row in rows:
+        proporciones[row["persona"]] = round((row["total"] / total_general) * 100, 4)
+    return proporciones
+
+
+def calcular_proporcion_mes(conn: sqlite3.Connection, mes: str) -> dict:
+    """Calcula la proporción JD/Pinki (0-100, suman 100) para `mes` ('YYYY-MM').
+
+    Lógica portada tal cual del sistema real (no hay salarios fijos
+    configurados en ningún lado):
+      1. Suma `ingresos` con categoria='Salario' del mes, agrupado por persona.
+      2. Si el mes no tiene salarios cargados, usa la proporción del último
+         mes ANTERIOR que sí tenga (fallback explícito del modelo real).
+      3. Si nunca hubo salarios cargados, devuelve 50/50 como default
+         documentado.
+    """
+    proporciones = _proporcion_salarios_mes(conn, mes)
+    if proporciones is not None:
+        return proporciones
+
+    meses_con_datos = sorted(
+        {
+            row["fecha"][:7]
+            for row in conn.execute(
+                "SELECT fecha FROM ingresos WHERE categoria = 'Salario'"
+            ).fetchall()
+        }
+    )
+    candidatos = [m for m in meses_con_datos if m < mes]
+    if candidatos:
+        return _proporcion_salarios_mes(conn, max(candidatos))
+
+    return {"JD": 50.0, "Pinki": 50.0}
+
+
+def calcular_deudas_mes(conn: sqlite3.Connection, mes: str) -> dict:
+    """Calcula el saldo neto de deudas del mes ('YYYY-MM') entre JD y Pinki.
+
+    Es un cálculo derivado, no una tabla propia: recorre `gastos` del mes
+    con `pagado_por` en ('JD', 'Pinki') (los pagados por 'Común' no generan
+    deuda) y, para cada uno, determina cuánto le correspondía pagar al que
+    NO puso la plata:
+      - `tipo_proporcion='dinamico'`: usa `calcular_proporcion_mes(mes)`
+        (una sola vez por mes, no por gasto — la proporción es la misma
+        para todos los gastos dinámicos de ese mes).
+      - `tipo_proporcion='custom'`: usa la proporción explícita ya guardada
+        en la fila (`proporcion_jd`/`proporcion_pinki`), porque esa es la
+        excepción explícita del gasto y no depende del cálculo del mes.
+    Todos los gastos del mes se acumulan en un único saldo neto (no se
+    evalúa gasto por gasto de forma aislada).
+
+    Devuelve {'deudor': 'JD'|'Pinki'|None, 'acreedor': ..., 'monto': float}.
+    """
+    rows = conn.execute(
+        "SELECT * FROM gastos WHERE substr(fecha, 1, 7) = ? "
+        "AND pagado_por IN ('JD', 'Pinki')",
+        (mes,),
+    ).fetchall()
+
+    proporcion_dinamica = None
+    saldo_a_favor_de_jd = 0.0
+
+    for row in rows:
+        gasto = dict(row)
+        monto = gasto["monto"]
+
+        if gasto["tipo_proporcion"] == "custom":
+            pct_jd = gasto["proporcion_jd"]
+            pct_pinki = gasto["proporcion_pinki"]
+        else:
+            if proporcion_dinamica is None:
+                proporcion_dinamica = calcular_proporcion_mes(conn, mes)
+            pct_jd = proporcion_dinamica["JD"]
+            pct_pinki = proporcion_dinamica["Pinki"]
+
+        corresponde_jd = monto * (pct_jd / 100)
+        corresponde_pinki = monto * (pct_pinki / 100)
+
+        if gasto["pagado_por"] == "JD":
+            saldo_a_favor_de_jd += corresponde_pinki
+        else:  # 'Pinki'
+            saldo_a_favor_de_jd -= corresponde_jd
+
+    if saldo_a_favor_de_jd > 0.0001:
+        return {"deudor": "Pinki", "acreedor": "JD", "monto": round(saldo_a_favor_de_jd, 2)}
+    if saldo_a_favor_de_jd < -0.0001:
+        return {"deudor": "JD", "acreedor": "Pinki", "monto": round(-saldo_a_favor_de_jd, 2)}
+    return {"deudor": None, "acreedor": None, "monto": 0.0}

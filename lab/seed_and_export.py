@@ -42,6 +42,18 @@ GASTOS_EJEMPLO = [
 
 
 def seed(conn) -> None:
+    # Idempotente: borra únicamente los gastos de EJEMPLO ya insertados por este script
+    # (identificados por descripcion_original + origen='texto' + moneda='ARS' coincidiendo
+    # exactamente con GASTOS_EJEMPLO), para no duplicar en corridas repetidas ni tocar
+    # gastos reales cargados conversacionalmente (ej. por Lasso en el chat con Juan).
+    descripciones_ejemplo = {g["descripcion_original"] for g in GASTOS_EJEMPLO}
+    placeholders = ",".join("?" for _ in descripciones_ejemplo)
+    conn.execute(
+        f"DELETE FROM gastos WHERE origen = 'texto' AND descripcion_original IN ({placeholders}) "
+        f"AND chat_id IS NULL AND tarjeta_id IS NULL",
+        tuple(descripciones_ejemplo),
+    )
+    conn.commit()
     for gasto in GASTOS_EJEMPLO:
         db.insert_gasto(conn, {**gasto, "moneda": "ARS", "origen": "texto", "confirmado": True})
 
