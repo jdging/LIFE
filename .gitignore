@@ -22,3 +22,7 @@ lab/data/
 lab/__pycache__/
 lab/tests/__pycache__/
 
+# Datos reales crudos de la migración (sueldos, montos exactos) -- NUNCA a GitHub
+lab/finanzas_raw.json
+lab/inventario_raw.json
+

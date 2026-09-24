@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LIFE · Gastos (dashboard de prueba)</title>
+<title>LIFE · Finanzas — datos reales (laboratorio)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500;1,9..144,600&family=Work+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -14,33 +14,51 @@
   <header class="masthead">
     <div class="masthead-top">
       <span class="eyebrow">LIFE · Finanzas — laboratorio</span>
-      <span class="badge-demo">🌱 Datos de ejemplo, no reales</span>
+      <span class="badge-demo">📂 Datos reales migrados — Finanzas LIFE</span>
     </div>
-    <h1>Gastos</h1>
-    <p class="subtitle">Un vistazo simple a en qué se fue la plata este período.</p>
+    <h1>Finanzas</h1>
+    <p class="subtitle">Un panorama real de en qué se fue la plata, cuánto entró, y quién le debe a quién.</p>
   </header>
 
   <main>
     <section class="cards">
-      <div class="card">
+      <div class="card" id="card-total-gastos-wrap">
         <span class="card-icon" aria-hidden="true">🌾</span>
-        <div class="label">Total del período</div>
-        <div class="value" id="card-total">—</div>
+        <div class="label">Total gastado (período visible)</div>
+        <div class="value" id="card-total-gastos">—</div>
       </div>
-      <div class="card">
-        <span class="card-icon" aria-hidden="true">🧾</span>
-        <div class="label">Cantidad de gastos</div>
-        <div class="value muted" id="card-count">—</div>
+      <div class="card" id="card-total-ingresos-wrap">
+        <span class="card-icon" aria-hidden="true">💰</span>
+        <div class="label">Total de ingresos</div>
+        <div class="value" id="card-total-ingresos">—</div>
       </div>
-      <div class="card">
-        <span class="card-icon" aria-hidden="true">〰️</span>
-        <div class="label">Promedio por gasto</div>
-        <div class="value muted" id="card-avg">—</div>
+      <div class="card" id="card-balance-wrap">
+        <span class="card-icon" aria-hidden="true">⚖️</span>
+        <div class="label">Balance neto</div>
+        <div class="value" id="card-balance">—</div>
       </div>
-      <div class="card">
-        <span class="card-icon" aria-hidden="true" id="card-top-icon">🏷️</span>
-        <div class="label">Categoría con más peso</div>
-        <div class="value muted" id="card-top-cat">—</div>
+      <div class="card" id="card-proporcion-wrap">
+        <span class="card-icon" aria-hidden="true">🤝</span>
+        <div class="label">Proporción JD / Pinki</div>
+        <div class="value muted" id="card-proporcion">—</div>
+        <div class="value-sub" id="card-proporcion-sub"></div>
+      </div>
+    </section>
+
+    <section class="panel deuda-panel">
+      <h2>Deudas</h2>
+      <div id="deuda-actual">—</div>
+      <div id="deuda-historial"></div>
+    </section>
+
+    <section class="charts-grid-main">
+      <div class="panel">
+        <h2>Evolución mensual — gastos vs. ingresos</h2>
+        <canvas id="chart-evolucion"></canvas>
+      </div>
+      <div class="panel">
+        <h2>Proporción en el tiempo</h2>
+        <canvas id="chart-proporcion"></canvas>
       </div>
     </section>
 
@@ -50,17 +68,39 @@
         <canvas id="chart-categoria"></canvas>
       </div>
       <div class="panel">
-        <h2>Por mes</h2>
-        <canvas id="chart-mes"></canvas>
-      </div>
-      <div class="panel">
         <h2>Quién pagó</h2>
         <canvas id="chart-persona"></canvas>
       </div>
     </section>
 
-    <section class="panel table-panel">
+    <section class="panel table-panel" id="fijos-panel">
+      <h2>Gastos fijos</h2>
+      <div class="table-scroll">
+        <table id="tabla-fijos">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Categoría</th>
+              <th>Monto estimado</th>
+              <th>Periodicidad</th>
+            </tr>
+          </thead>
+          <tbody id="fijos-body"></tbody>
+        </table>
+      </div>
+      <p class="fijos-total">Total mensual estimado: <strong id="fijos-total">—</strong></p>
+    </section>
+
+    <section class="panel table-panel" id="tabla-panel">
       <h2>Detalle de gastos</h2>
+      <div class="table-filters" id="filtro-mes-wrap">
+        <label for="filtro-mes-tabla">Mes:
+          <select id="filtro-mes-tabla">
+            <option value="">Todos</option>
+          </select>
+        </label>
+        <span class="table-count" id="tabla-count"></span>
+      </div>
       <div class="table-scroll">
         <table id="tabla-gastos">
           <thead>
@@ -80,7 +120,8 @@
   </main>
 
   <footer>
-    LIFE — Finanzas · rama lab/reinvencion · datos de ejemplo, sin conexión al bot real todavía.
+    LIFE — Finanzas · rama lab/reinvencion · datos reales migrados (snapshot estático), sin
+    conexión en vivo a Google Sheets todavía.
   </footer>
 </div>
 

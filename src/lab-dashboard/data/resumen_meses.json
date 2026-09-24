@@ -1,0 +1,242 @@
+[
+  {
+    "mes": "2026-02",
+    "total_gastos": 33778.0,
+    "total_ingresos": 3131661.0,
+    "proporcion_jd": 80.8408,
+    "proporcion_pinki": 19.1592,
+    "deuda": {
+      "deudor": "Pinki",
+      "acreedor": "JD",
+      "monto": 33778.0
+    }
+  },
+  {
+    "mes": "2026-03",
+    "total_gastos": 48778.0,
+    "total_ingresos": 3670074.0,
+    "proporcion_jd": 64.5784,
+    "proporcion_pinki": 35.4216,
+    "deuda": {
+      "deudor": "Pinki",
+      "acreedor": "JD",
+      "monto": 24091.24
+    }
+  },
+  {
+    "mes": "2026-04",
+    "total_gastos": 1500493.6,
+    "total_ingresos": 3924726.0,
+    "proporcion_jd": 65.0981,
+    "proporcion_pinki": 34.9019,
+    "deuda": {
+      "deudor": "Pinki",
+      "acreedor": "JD",
+      "monto": 64155.33
+    }
+  },
+  {
+    "mes": "2026-05",
+    "total_gastos": 1522446.24,
+    "total_ingresos": 3833994.88,
+    "proporcion_jd": 66.0928,
+    "proporcion_pinki": 33.9072,
+    "deuda": {
+      "deudor": "JD",
+      "acreedor": "Pinki",
+      "monto": 154928.63
+    }
+  },
+  {
+    "mes": "2026-06",
+    "total_gastos": 647212.1599999999,
+    "total_ingresos": 4243265.5600000005,
+    "proporcion_jd": 69.0804,
+    "proporcion_pinki": 30.9196,
+    "deuda": {
+      "deudor": "JD",
+      "acreedor": "Pinki",
+      "monto": 77976.98
+    }
+  },
+  {
+    "mes": "2026-07",
+    "total_gastos": 511782.9,
+    "total_ingresos": 4477517.0,
+    "proporcion_jd": 68.5093,
+    "proporcion_pinki": 31.4907,
+    "deuda": {
+      "deudor": "JD",
+      "acreedor": "Pinki",
+      "monto": 29840.11
+    }
+  },
+  {
+    "mes": "2026-08",
+    "total_gastos": 368405.62,
+    "total_ingresos": 4611784.6,
+    "proporcion_jd": 69.2093,
+    "proporcion_pinki": 30.7907,
+    "deuda": {
+      "deudor": "JD",
+      "acreedor": "Pinki",
+      "monto": 178683.19
+    }
+  },
+  {
+    "mes": "2026-09",
+    "total_gastos": 325255.56,
+    "total_ingresos": 4638511.6,
+    "proporcion_jd": 69.3867,
+    "proporcion_pinki": 30.6133,
+    "deuda": {
+      "deudor": "JD",
+      "acreedor": "Pinki",
+      "monto": 78424.23
+    }
+  },
+  {
+    "mes": "2026-10",
+    "total_gastos": 36555.56,
+    "total_ingresos": 0,
+    "proporcion_jd": 69.3867,
+    "proporcion_pinki": 30.6133,
+    "deuda": {
+      "deudor": null,
+      "acreedor": null,
+      "monto": 0.0
+    }
+  },
+  {
+    "mes": "2026-11",
+    "total_gastos": 36555.56,
+    "total_ingresos": 0,
+    "proporcion_jd": 69.3867,
+    "proporcion_pinki": 30.6133,
+    "deuda": {
+      "deudor": null,
+      "acreedor": null,
+      "monto": 0.0
+    }
+  },
+  {
+    "mes": "2026-12",
+    "total_gastos": 36555.56,
+    "total_ingresos": 0,
+    "proporcion_jd": 69.3867,
+    "proporcion_pinki": 30.6133,
+    "deuda": {
+      "deudor": null,
+      "acreedor": null,
+      "monto": 0.0
+    }
+  },
+  {
+    "mes": "2027-01",
+    "total_gastos": 36555.56,
+    "total_ingresos": 0,
+    "proporcion_jd": 69.3867,
+    "proporcion_pinki": 30.6133,
+    "deuda": {
+      "deudor": null,
+      "acreedor": null,
+      "monto": 0.0
+    }
+  },
+  {
+    "mes": "2027-02",
+    "total_gastos": 36555.56,
+    "total_ingresos": 0,
+    "proporcion_jd": 69.3867,
+    "proporcion_pinki": 30.6133,
+    "deuda": {
+      "deudor": null,
+      "acreedor": null,
+      "monto": 0.0
+    }
+  },
+  {
+    "mes": "2027-03",
+    "total_gastos": 36555.56,
+    "total_ingresos": 0,
+    "proporcion_jd": 69.3867,
+    "proporcion_pinki": 30.6133,
+    "deuda": {
+      "deudor": null,
+      "acreedor": null,
+      "monto": 0.0
+    }
+  },
+  {
+    "mes": "2027-04",
+    "total_gastos": 36555.56,
+    "total_ingresos": 0,
+    "proporcion_jd": 69.3867,
+    "proporcion_pinki": 30.6133,
+    "deuda": {
+      "deudor": null,
+      "acreedor": null,
+      "monto": 0.0
+    }
+  },
+  {
+    "mes": "2027-05",
+    "total_gastos": 36555.56,
+    "total_ingresos": 0,
+    "proporcion_jd": 69.3867,
+    "proporcion_pinki": 30.6133,
+    "deuda": {
+      "deudor": null,
+      "acreedor": null,
+      "monto": 0.0
+    }
+  },
+  {
+    "mes": "2027-06",
+    "total_gastos": 36555.56,
+    "total_ingresos": 0,
+    "proporcion_jd": 69.3867,
+    "proporcion_pinki": 30.6133,
+    "deuda": {
+      "deudor": null,
+      "acreedor": null,
+      "monto": 0.0
+    }
+  },
+  {
+    "mes": "2027-07",
+    "total_gastos": 36555.56,
+    "total_ingresos": 0,
+    "proporcion_jd": 69.3867,
+    "proporcion_pinki": 30.6133,
+    "deuda": {
+      "deudor": null,
+      "acreedor": null,
+      "monto": 0.0
+    }
+  },
+  {
+    "mes": "2027-08",
+    "total_gastos": 36555.56,
+    "total_ingresos": 0,
+    "proporcion_jd": 69.3867,
+    "proporcion_pinki": 30.6133,
+    "deuda": {
+      "deudor": null,
+      "acreedor": null,
+      "monto": 0.0
+    }
+  },
+  {
+    "mes": "2027-09",
+    "total_gastos": 36555.56,
+    "total_ingresos": 0,
+    "proporcion_jd": 69.3867,
+    "proporcion_pinki": 30.6133,
+    "deuda": {
+      "deudor": null,
+      "acreedor": null,
+      "monto": 0.0
+    }
+  }
+]

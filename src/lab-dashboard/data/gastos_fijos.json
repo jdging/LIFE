@@ -1,0 +1,145 @@
+[
+  {
+    "id": 48,
+    "nombre": "Seguro departamento",
+    "monto_estimado": 21335.0,
+    "periodicidad": "mensual",
+    "dia_vencimiento": null,
+    "categoria": "Hogar",
+    "subcategoria": "Mantenimiento",
+    "activo": 1,
+    "ultima_actualizacion": "2026-03-01"
+  },
+  {
+    "id": 49,
+    "nombre": "Seguro departamento",
+    "monto_estimado": 21335.0,
+    "periodicidad": "mensual",
+    "dia_vencimiento": null,
+    "categoria": "Hogar",
+    "subcategoria": "Mantenimiento",
+    "activo": 1,
+    "ultima_actualizacion": "2026-04-01"
+  },
+  {
+    "id": 50,
+    "nombre": "Alquiler 1er Aumento",
+    "monto_estimado": 1329471.0,
+    "periodicidad": "mensual",
+    "dia_vencimiento": null,
+    "categoria": "Hogar",
+    "subcategoria": "Alquiler",
+    "activo": 1,
+    "ultima_actualizacion": "2026-07-06"
+  },
+  {
+    "id": 52,
+    "nombre": "Silvi (Pelo)",
+    "monto_estimado": 35000.0,
+    "periodicidad": "bimestral",
+    "dia_vencimiento": null,
+    "categoria": "Personal",
+    "subcategoria": "Cuidado personal",
+    "activo": 1,
+    "ultima_actualizacion": "2026-05-08"
+  },
+  {
+    "id": 53,
+    "nombre": "Apple",
+    "monto_estimado": 5555.0,
+    "periodicidad": "mensual",
+    "dia_vencimiento": null,
+    "categoria": "Personal",
+    "subcategoria": "Nube",
+    "activo": 1,
+    "ultima_actualizacion": "2026-04-01"
+  },
+  {
+    "id": 54,
+    "nombre": "Monotributo",
+    "monto_estimado": 4780.0,
+    "periodicidad": "mensual",
+    "dia_vencimiento": null,
+    "categoria": "Personal",
+    "subcategoria": "Otros (Gastos)",
+    "activo": 1,
+    "ultima_actualizacion": "2026-04-16"
+  },
+  {
+    "id": 55,
+    "nombre": "Ingresos brutos",
+    "monto_estimado": 10500.0,
+    "periodicidad": "mensual",
+    "dia_vencimiento": null,
+    "categoria": "Personal",
+    "subcategoria": "Otros (Gastos)",
+    "activo": 1,
+    "ultima_actualizacion": "2026-04-16"
+  },
+  {
+    "id": 56,
+    "nombre": "5 Veces Abril",
+    "monto_estimado": 120000.0,
+    "periodicidad": "mensual",
+    "dia_vencimiento": null,
+    "categoria": "Salud",
+    "subcategoria": "Psicologo",
+    "activo": 1,
+    "ultima_actualizacion": "2026-04-01"
+  },
+  {
+    "id": 57,
+    "nombre": "4 Veces Mayo",
+    "monto_estimado": 160000.0,
+    "periodicidad": "mensual",
+    "dia_vencimiento": null,
+    "categoria": "Salud",
+    "subcategoria": "Psicologo",
+    "activo": 1,
+    "ultima_actualizacion": "2026-05-01"
+  },
+  {
+    "id": 58,
+    "nombre": "Pilates",
+    "monto_estimado": 56000.0,
+    "periodicidad": "mensual",
+    "dia_vencimiento": null,
+    "categoria": "Personal",
+    "subcategoria": "Actividades físicas",
+    "activo": 1,
+    "ultima_actualizacion": "2026-04-08"
+  },
+  {
+    "id": 59,
+    "nombre": "Psicologo",
+    "monto_estimado": 80000.0,
+    "periodicidad": "mensual",
+    "dia_vencimiento": null,
+    "categoria": "Salud",
+    "subcategoria": "Psicologo",
+    "activo": 1,
+    "ultima_actualizacion": "2026-04-08"
+  },
+  {
+    "id": 61,
+    "nombre": "Julio Internet",
+    "monto_estimado": 21270.0,
+    "periodicidad": "mensual",
+    "dia_vencimiento": null,
+    "categoria": "Hogar",
+    "subcategoria": "Internet",
+    "activo": 1,
+    "ultima_actualizacion": "2026-08-03"
+  },
+  {
+    "id": 62,
+    "nombre": "Agosto",
+    "monto_estimado": 111123.0,
+    "periodicidad": "mensual",
+    "dia_vencimiento": null,
+    "categoria": "Hogar",
+    "subcategoria": "Expensas",
+    "activo": 1,
+    "ultima_actualizacion": "2026-09-03"
+  }
+]
