@@ -160,7 +160,11 @@ CREATE TABLE IF NOT EXISTS gastos_fijos (
     categoria TEXT,
     subcategoria TEXT,
     activo INTEGER NOT NULL DEFAULT 1,
-    ultima_actualizacion TEXT NOT NULL
+    ultima_actualizacion TEXT NOT NULL,
+    responsable TEXT,
+    tipo_proporcion TEXT,
+    proporcion_jd REAL,
+    medio_pago TEXT
 );
 
 -- Ingresos (tabla hermana de `gastos`, separada porque en este laboratorio
@@ -223,6 +227,10 @@ def _migrar_columnas_gastos(conn: sqlite3.Connection) -> None:
         ("cuotas_total", "INTEGER NOT NULL DEFAULT 1"),
         ("cuota_nro", "INTEGER NOT NULL DEFAULT 1"),
         ("cuota_ref", "INTEGER REFERENCES gastos(id)"),
+        # Fecha ISO en la que ese gasto individual fue saldado/compensado
+        # entre JD y Pinki, o NULL si sigue pendiente (ver README, mapeado
+        # desde la columna `saldado` del Log real de Sheets).
+        ("saldado", "TEXT"),
     )
     for columna, definicion in columnas_nuevas:
         if columna not in existentes:
@@ -251,6 +259,26 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.commit()
     _migrar_columnas_gastos(conn)
     _migrar_columnas_tarjetas(conn)
+    _migrar_columnas_gastos_fijos(conn)
+
+
+def _migrar_columnas_gastos_fijos(conn: sqlite3.Connection) -> None:
+    """Agrega a `gastos_fijos` las columnas de responsable/reparto si faltan.
+
+    Mismo patrón que `_migrar_columnas_gastos`: ALTER TABLE ADD COLUMN en
+    vez de recrear la tabla, para no perder datos en bases ya inicializadas.
+    """
+    existentes = _column_names(conn, "gastos_fijos")
+    columnas_nuevas = (
+        ("responsable", "TEXT"),
+        ("tipo_proporcion", "TEXT"),
+        ("proporcion_jd", "REAL"),
+        ("medio_pago", "TEXT"),
+    )
+    for columna, definicion in columnas_nuevas:
+        if columna not in existentes:
+            conn.execute(f"ALTER TABLE gastos_fijos ADD COLUMN {columna} {definicion}")
+    conn.commit()
 
 
 def _now() -> str:
@@ -279,6 +307,11 @@ def insert_gasto(conn: sqlite3.Connection, gasto: dict) -> int:
         - cuota_nro: default 1.
         - cuota_ref: FK opcional a `gastos.id` (vincula todas las cuotas
           del mismo gasto original); default None.
+
+    Campo de saldado (retrocompatible, default None = pendiente):
+        - saldado: fecha ISO ('YYYY-MM-DD') en la que este gasto individual
+          fue saldado/compensado entre JD y Pinki, o None si sigue
+          pendiente. Ver `calcular_deudas_pendientes`.
     """
     if gasto.get("confirmado") is not True:
         raise ValueError(
@@ -319,8 +352,8 @@ def insert_gasto(conn: sqlite3.Connection, gasto: dict) -> int:
             (fecha, monto, moneda, categoria, subcategoria, medio_pago,
              pagado_por, descripcion_original, origen, chat_id, confirmado,
              created_at, tarjeta_id, tipo_proporcion, proporcion_jd,
-             proporcion_pinki, cuotas_total, cuota_nro, cuota_ref)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             proporcion_pinki, cuotas_total, cuota_nro, cuota_ref, saldado)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             gasto.get("fecha") or _now(),
@@ -342,6 +375,7 @@ def insert_gasto(conn: sqlite3.Connection, gasto: dict) -> int:
             gasto.get("cuotas_total") or 1,
             gasto.get("cuota_nro") or 1,
             gasto.get("cuota_ref"),
+            gasto.get("saldado"),
         ),
     )
     conn.commit()
@@ -861,12 +895,23 @@ def crear_categoria_si_no_existe(
 
 
 def insert_gasto_fijo(conn: sqlite3.Connection, gasto_fijo: dict) -> int:
+    """Inserta un gasto fijo.
+
+    Campos de responsable/reparto (retrocompatibles — default NULL si no se
+    pasan, igual que antes de esta extensión):
+        - responsable: 'Común' / 'JD' / 'Pinki', tal cual viene del Excel.
+        - tipo_proporcion: 'dinamica' / 'custom' / None; solo relevante si
+          responsable='Común'.
+        - proporcion_jd: solo si tipo_proporcion='custom'.
+        - medio_pago: informativo.
+    """
     cursor = conn.execute(
         """
         INSERT INTO gastos_fijos
             (nombre, monto_estimado, periodicidad, dia_vencimiento, categoria,
-             subcategoria, activo, ultima_actualizacion)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             subcategoria, activo, ultima_actualizacion, responsable,
+             tipo_proporcion, proporcion_jd, medio_pago)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             gasto_fijo["nombre"],
@@ -877,6 +922,10 @@ def insert_gasto_fijo(conn: sqlite3.Connection, gasto_fijo: dict) -> int:
             gasto_fijo.get("subcategoria"),
             1 if gasto_fijo.get("activo", True) else 0,
             gasto_fijo.get("ultima_actualizacion") or _now(),
+            gasto_fijo.get("responsable"),
+            gasto_fijo.get("tipo_proporcion"),
+            gasto_fijo.get("proporcion_jd"),
+            gasto_fijo.get("medio_pago"),
         ),
     )
     conn.commit()
@@ -1091,6 +1140,87 @@ def calcular_deudas_mes(conn: sqlite3.Connection, mes: str) -> dict:
                 proporcion_dinamica = calcular_proporcion_mes(conn, mes)
             pct_jd = proporcion_dinamica["JD"]
             pct_pinki = proporcion_dinamica["Pinki"]
+
+        corresponde_jd = monto * (pct_jd / 100)
+        corresponde_pinki = monto * (pct_pinki / 100)
+
+        if gasto["pagado_por"] == "JD":
+            saldo_a_favor_de_jd += corresponde_pinki
+        else:  # 'Pinki'
+            saldo_a_favor_de_jd -= corresponde_jd
+
+    if saldo_a_favor_de_jd > 0.0001:
+        return {"deudor": "Pinki", "acreedor": "JD", "monto": round(saldo_a_favor_de_jd, 2)}
+    if saldo_a_favor_de_jd < -0.0001:
+        return {"deudor": "JD", "acreedor": "Pinki", "monto": round(-saldo_a_favor_de_jd, 2)}
+    return {"deudor": None, "acreedor": None, "monto": 0.0}
+
+
+def _ultimo_dia_mes(mes: str) -> str:
+    """Devuelve 'YYYY-MM-DD' del último día de `mes` ('YYYY-MM')."""
+    import calendar
+
+    year, month = (int(p) for p in mes.split("-"))
+    ultimo_dia = calendar.monthrange(year, month)[1]
+    return f"{year:04d}-{month:02d}-{ultimo_dia:02d}"
+
+
+def calcular_deudas_pendientes(conn: sqlite3.Connection, hasta_mes: Optional[str] = None) -> dict:
+    """Calcula el saldo neto de deudas PENDIENTES (no saldadas) entre JD y Pinki.
+
+    A diferencia de `calcular_deudas_mes` (que arma el saldo de un mes
+    puntual), esta función recorre TODOS los gastos con `pagado_por` en
+    ('JD', 'Pinki') que tengan `saldado IS NULL` — sin importar de qué mes
+    sean — porque a Juan solo le interesa la deuda pendiente real, no el
+    histórico ya saldado (ver brief). `gastos` no tiene columna `borrado`
+    (los borrados ya se excluyen en la migración), así que no hace falta
+    filtrarlos acá.
+
+    Decisión de diseño (documentada en README): para gastos
+    `tipo_proporcion='dinamico'`, la proporción se calcula con
+    `calcular_proporcion_mes` del mes DEL GASTO (no del mes en que se
+    saldó), igual criterio que `calcular_deudas_mes`.
+
+    `hasta_mes` ('YYYY-MM') opcional: si se pasa, solo considera gastos con
+    `fecha <= último día de ese mes` (para consultas históricas bajo
+    demanda). Sin `hasta_mes`, considera todos los gastos sin filtro de
+    fecha.
+
+    Devuelve {'deudor': 'JD'|'Pinki'|None, 'acreedor': ..., 'monto': float},
+    igual forma que `calcular_deudas_mes`. Si no hay ninguna deuda
+    pendiente, devuelve {'deudor': None, 'acreedor': None, 'monto': 0.0}
+    (no None, para que el caller no tenga que manejar dos formas distintas
+    de "sin deuda").
+    """
+    if hasta_mes is not None:
+        rows = conn.execute(
+            "SELECT * FROM gastos WHERE pagado_por IN ('JD', 'Pinki') "
+            "AND saldado IS NULL AND fecha <= ?",
+            (_ultimo_dia_mes(hasta_mes),),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM gastos WHERE pagado_por IN ('JD', 'Pinki') "
+            "AND saldado IS NULL"
+        ).fetchall()
+
+    proporciones_por_mes: dict = {}
+    saldo_a_favor_de_jd = 0.0
+
+    for row in rows:
+        gasto = dict(row)
+        monto = gasto["monto"]
+
+        if gasto["tipo_proporcion"] == "custom":
+            pct_jd = gasto["proporcion_jd"]
+            pct_pinki = gasto["proporcion_pinki"]
+        else:
+            mes_gasto = gasto["fecha"][:7]
+            if mes_gasto not in proporciones_por_mes:
+                proporciones_por_mes[mes_gasto] = calcular_proporcion_mes(conn, mes_gasto)
+            proporcion = proporciones_por_mes[mes_gasto]
+            pct_jd = proporcion["JD"]
+            pct_pinki = proporcion["Pinki"]
 
         corresponde_jd = monto * (pct_jd / 100)
         corresponde_pinki = monto * (pct_pinki / 100)

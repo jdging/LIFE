@@ -59,6 +59,20 @@ class TestMapeoTipoProporcion(unittest.TestCase):
             migracion.mapear_tipo_proporcion("no existe", None)
 
 
+class TestMapeoSaldado(unittest.TestCase):
+    def test_fecha_string_se_conserva(self):
+        self.assertEqual(migracion.mapear_saldado("2026-04-29"), "2026-04-29")
+
+    def test_none_o_false_o_vacio_da_none(self):
+        for raw in (None, False, ""):
+            with self.subTest(raw=raw):
+                self.assertIsNone(migracion.mapear_saldado(raw))
+
+    def test_tipo_inesperado_lanza_error(self):
+        with self.assertRaises(ValueError):
+            migracion.mapear_saldado(20260429)
+
+
 def _finanzas_ejemplo():
     """Dataset chico: 1 tarjeta, 1 categoría, 1 gasto fijo, un gasto en 3
     cuotas (autorreferenciado como en el Excel real) y un ingreso.
@@ -82,6 +96,20 @@ def _finanzas_ejemplo():
                 "medio_pago": "Transferencia", "tarjeta": None, "es_bimestral": False,
                 "vigente_desde": "2026-02-01", "activo": True,
                 "tipo_proporcion": "dinamica", "proporcion_jd": None,
+            },
+            {
+                "id": "GF-002", "categoria": "Personal", "subcategoria": "Nube",
+                "descripcion": "Apple", "monto": 5555.0, "responsable": "JD",
+                "medio_pago": "Crédito", "tarjeta": "TC1", "es_bimestral": False,
+                "vigente_desde": "2026-04-01", "activo": True,
+                "tipo_proporcion": "custom", "proporcion_jd": 100.0,
+            },
+            {
+                "id": "GF-003", "categoria": "Personal", "subcategoria": "Actividades físicas",
+                "descripcion": "Pilates", "monto": 56000.0, "responsable": "Pinki",
+                "medio_pago": "Transferencia", "tarjeta": None, "es_bimestral": False,
+                "vigente_desde": "2026-04-08", "activo": True,
+                "tipo_proporcion": "custom", "proporcion_jd": 0.0,
             },
         ],
         "Log": [
@@ -110,7 +138,7 @@ def _finanzas_ejemplo():
                 "cuota_nro": 2.0, "cuota_ref": "LOG-00011", "medio_pago": "Crédito",
                 "tarjeta": "TC1", "pago": "Común", "es_fijo": False, "notas": None,
                 "borrado": False, "tipo_proporcion": "50/50", "proporcion_jd": None,
-                "corresponde_a": None, "saldado": None,
+                "corresponde_a": None, "saldado": "2026-05-10",
             },
             {
                 "id": "LOG-00013", "fecha": "2026-06-04", "tipo": "Gasto",
@@ -187,6 +215,16 @@ class TestMigracionCuotas(unittest.TestCase):
         descripciones = [g["descripcion_original"] for g in gastos]
         self.assertNotIn("Verdura borrada", descripciones)
 
+    def test_saldado_se_migra_por_fila(self):
+        migracion.migrar_todo(self.conn, _finanzas_ejemplo(), _inventario_ejemplo())
+
+        gastos = db.get_gastos(self.conn)
+        lavarropa = {g["cuota_nro"]: g for g in gastos if g["descripcion_original"] == "Lavarropa"}
+
+        self.assertIsNone(lavarropa[1]["saldado"])
+        self.assertEqual(lavarropa[2]["saldado"], "2026-05-10")
+        self.assertIsNone(lavarropa[3]["saldado"])
+
     def test_ingreso_usa_subcategoria_como_categoria(self):
         migracion.migrar_todo(self.conn, _finanzas_ejemplo(), _inventario_ejemplo())
         ingresos = db.get_ingresos(self.conn)
@@ -245,6 +283,78 @@ class TestMigracionIdempotente(unittest.TestCase):
         gastos_texto = [g for g in db.get_gastos(self.conn) if g["origen"] == "texto"]
         self.assertEqual(len(gastos_texto), 1)
         self.assertEqual(gastos_texto[0]["descripcion_original"], "cine con pinki")
+
+
+class TestGastosFijosResponsable(unittest.TestCase):
+    """Cubre el bug reportado por Juan: los gastos fijos quedaban mezclados
+    sin distinguir si son Común, de JD o de Pinki (ver README)."""
+
+    def setUp(self):
+        self.conn = db.get_connection(":memory:")
+        db.init_db(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_migracion_puebla_responsable_por_cada_caso(self):
+        migracion.migrar_todo(self.conn, _finanzas_ejemplo(), _inventario_ejemplo())
+        fijos = {f["nombre"]: f for f in db.get_gastos_fijos(self.conn, solo_activos=False)}
+
+        self.assertEqual(fijos["Alquiler"]["responsable"], "Común")
+        self.assertEqual(fijos["Alquiler"]["tipo_proporcion"], "dinamica")
+        self.assertIsNone(fijos["Alquiler"]["proporcion_jd"])
+        self.assertEqual(fijos["Alquiler"]["medio_pago"], "Transferencia")
+
+        self.assertEqual(fijos["Apple"]["responsable"], "JD")
+        self.assertEqual(fijos["Apple"]["tipo_proporcion"], "custom")
+        self.assertEqual(fijos["Apple"]["proporcion_jd"], 100.0)
+
+        self.assertEqual(fijos["Pilates"]["responsable"], "Pinki")
+        self.assertEqual(fijos["Pilates"]["tipo_proporcion"], "custom")
+        self.assertEqual(fijos["Pilates"]["proporcion_jd"], 0.0)
+
+    def test_filtrar_por_responsable_no_mezcla_comun_jd_pinki(self):
+        migracion.migrar_todo(self.conn, _finanzas_ejemplo(), _inventario_ejemplo())
+        fijos = db.get_gastos_fijos(self.conn, solo_activos=True)
+
+        por_responsable = {"Común": 0, "JD": 0, "Pinki": 0}
+        for f in fijos:
+            por_responsable[f["responsable"]] += 1
+
+        self.assertEqual(por_responsable, {"Común": 1, "JD": 1, "Pinki": 1})
+
+
+class TestSanityCheckDatasetReal(unittest.TestCase):
+    """Sanity check explícito contra `finanzas_raw.json` (el Excel real de
+    Juan): sobre las 13 filas activas de GastosFijos, la migración debe
+    dejar JD=6, Común=5, Pinki=2 — verificado a mano contra el JSON antes
+    de escribir este test (ver README, sección "Sanity check")."""
+
+    def setUp(self):
+        self.conn = db.get_connection(":memory:")
+        db.init_db(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_conteo_activos_por_responsable_coincide_con_excel_real(self):
+        import json as _json
+        from pathlib import Path as _Path
+
+        finanzas_path = _Path(__file__).resolve().parent.parent / "finanzas_raw.json"
+        with open(finanzas_path, "r", encoding="utf-8") as f:
+            finanzas_raw = _json.load(f)
+
+        migracion.migrar_gastos_fijos(self.conn, finanzas_raw["GastosFijos"])
+
+        activos = db.get_gastos_fijos(self.conn, solo_activos=True)
+        self.assertEqual(len(activos), 13)
+
+        conteo = {"Común": 0, "JD": 0, "Pinki": 0}
+        for f in activos:
+            conteo[f["responsable"]] += 1
+
+        self.assertEqual(conteo, {"Común": 5, "JD": 6, "Pinki": 2})
 
 
 if __name__ == "__main__":

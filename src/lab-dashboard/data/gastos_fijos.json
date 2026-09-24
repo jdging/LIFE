@@ -1,6 +1,6 @@
 [
   {
-    "id": 48,
+    "id": 110,
     "nombre": "Seguro departamento",
     "monto_estimado": 21335.0,
     "periodicidad": "mensual",
@@ -8,10 +8,14 @@
     "categoria": "Hogar",
     "subcategoria": "Mantenimiento",
     "activo": 1,
-    "ultima_actualizacion": "2026-03-01"
+    "ultima_actualizacion": "2026-03-01",
+    "responsable": "Común",
+    "tipo_proporcion": "dinamica",
+    "proporcion_jd": null,
+    "medio_pago": "Transferencia"
   },
   {
-    "id": 49,
+    "id": 111,
     "nombre": "Seguro departamento",
     "monto_estimado": 21335.0,
     "periodicidad": "mensual",
@@ -19,10 +23,14 @@
     "categoria": "Hogar",
     "subcategoria": "Mantenimiento",
     "activo": 1,
-    "ultima_actualizacion": "2026-04-01"
+    "ultima_actualizacion": "2026-04-01",
+    "responsable": "Común",
+    "tipo_proporcion": "dinamica",
+    "proporcion_jd": null,
+    "medio_pago": "Transferencia"
   },
   {
-    "id": 50,
+    "id": 112,
     "nombre": "Alquiler 1er Aumento",
     "monto_estimado": 1329471.0,
     "periodicidad": "mensual",
@@ -30,10 +38,14 @@
     "categoria": "Hogar",
     "subcategoria": "Alquiler",
     "activo": 1,
-    "ultima_actualizacion": "2026-07-06"
+    "ultima_actualizacion": "2026-07-06",
+    "responsable": "Común",
+    "tipo_proporcion": "dinamica",
+    "proporcion_jd": null,
+    "medio_pago": "Transferencia"
   },
   {
-    "id": 52,
+    "id": 114,
     "nombre": "Silvi (Pelo)",
     "monto_estimado": 35000.0,
     "periodicidad": "bimestral",
@@ -41,10 +53,14 @@
     "categoria": "Personal",
     "subcategoria": "Cuidado personal",
     "activo": 1,
-    "ultima_actualizacion": "2026-05-08"
+    "ultima_actualizacion": "2026-05-08",
+    "responsable": "JD",
+    "tipo_proporcion": "custom",
+    "proporcion_jd": 100.0,
+    "medio_pago": "Transferencia"
   },
   {
-    "id": 53,
+    "id": 115,
     "nombre": "Apple",
     "monto_estimado": 5555.0,
     "periodicidad": "mensual",
@@ -52,10 +68,14 @@
     "categoria": "Personal",
     "subcategoria": "Nube",
     "activo": 1,
-    "ultima_actualizacion": "2026-04-01"
+    "ultima_actualizacion": "2026-04-01",
+    "responsable": "JD",
+    "tipo_proporcion": "custom",
+    "proporcion_jd": 100.0,
+    "medio_pago": "Crédito"
   },
   {
-    "id": 54,
+    "id": 116,
     "nombre": "Monotributo",
     "monto_estimado": 4780.0,
     "periodicidad": "mensual",
@@ -63,10 +83,14 @@
     "categoria": "Personal",
     "subcategoria": "Otros (Gastos)",
     "activo": 1,
-    "ultima_actualizacion": "2026-04-16"
+    "ultima_actualizacion": "2026-04-16",
+    "responsable": "JD",
+    "tipo_proporcion": "custom",
+    "proporcion_jd": 100.0,
+    "medio_pago": "Transferencia"
   },
   {
-    "id": 55,
+    "id": 117,
     "nombre": "Ingresos brutos",
     "monto_estimado": 10500.0,
     "periodicidad": "mensual",
@@ -74,10 +98,14 @@
     "categoria": "Personal",
     "subcategoria": "Otros (Gastos)",
     "activo": 1,
-    "ultima_actualizacion": "2026-04-16"
+    "ultima_actualizacion": "2026-04-16",
+    "responsable": "JD",
+    "tipo_proporcion": "custom",
+    "proporcion_jd": 100.0,
+    "medio_pago": "Transferencia"
   },
   {
-    "id": 56,
+    "id": 118,
     "nombre": "5 Veces Abril",
     "monto_estimado": 120000.0,
     "periodicidad": "mensual",
@@ -85,10 +113,14 @@
     "categoria": "Salud",
     "subcategoria": "Psicologo",
     "activo": 1,
-    "ultima_actualizacion": "2026-04-01"
+    "ultima_actualizacion": "2026-04-01",
+    "responsable": "JD",
+    "tipo_proporcion": "custom",
+    "proporcion_jd": 100.0,
+    "medio_pago": "Transferencia"
   },
   {
-    "id": 57,
+    "id": 119,
     "nombre": "4 Veces Mayo",
     "monto_estimado": 160000.0,
     "periodicidad": "mensual",
@@ -96,10 +128,14 @@
     "categoria": "Salud",
     "subcategoria": "Psicologo",
     "activo": 1,
-    "ultima_actualizacion": "2026-05-01"
+    "ultima_actualizacion": "2026-05-01",
+    "responsable": "JD",
+    "tipo_proporcion": "custom",
+    "proporcion_jd": 100.0,
+    "medio_pago": "Transferencia"
   },
   {
-    "id": 58,
+    "id": 120,
     "nombre": "Pilates",
     "monto_estimado": 56000.0,
     "periodicidad": "mensual",
@@ -107,10 +143,14 @@
     "categoria": "Personal",
     "subcategoria": "Actividades físicas",
     "activo": 1,
-    "ultima_actualizacion": "2026-04-08"
+    "ultima_actualizacion": "2026-04-08",
+    "responsable": "Pinki",
+    "tipo_proporcion": "custom",
+    "proporcion_jd": 0.0,
+    "medio_pago": "Transferencia"
   },
   {
-    "id": 59,
+    "id": 121,
     "nombre": "Psicologo",
     "monto_estimado": 80000.0,
     "periodicidad": "mensual",
@@ -118,10 +158,14 @@
     "categoria": "Salud",
     "subcategoria": "Psicologo",
     "activo": 1,
-    "ultima_actualizacion": "2026-04-08"
+    "ultima_actualizacion": "2026-04-08",
+    "responsable": "Pinki",
+    "tipo_proporcion": "custom",
+    "proporcion_jd": 0.0,
+    "medio_pago": "Transferencia"
   },
   {
-    "id": 61,
+    "id": 123,
     "nombre": "Julio Internet",
     "monto_estimado": 21270.0,
     "periodicidad": "mensual",
@@ -129,10 +173,14 @@
     "categoria": "Hogar",
     "subcategoria": "Internet",
     "activo": 1,
-    "ultima_actualizacion": "2026-08-03"
+    "ultima_actualizacion": "2026-08-03",
+    "responsable": "Común",
+    "tipo_proporcion": "dinamica",
+    "proporcion_jd": null,
+    "medio_pago": "Crédito"
   },
   {
-    "id": 62,
+    "id": 124,
     "nombre": "Agosto",
     "monto_estimado": 111123.0,
     "periodicidad": "mensual",
@@ -140,6 +188,10 @@
     "categoria": "Hogar",
     "subcategoria": "Expensas",
     "activo": 1,
-    "ultima_actualizacion": "2026-09-03"
+    "ultima_actualizacion": "2026-09-03",
+    "responsable": "Común",
+    "tipo_proporcion": "dinamica",
+    "proporcion_jd": null,
+    "medio_pago": "Transferencia"
   }
 ]

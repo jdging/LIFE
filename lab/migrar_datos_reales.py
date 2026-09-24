@@ -84,6 +84,9 @@ def migrar_gastos_fijos(conn, filas: list) -> int:
     insertar, borramos cualquier fila previa con esa misma clave y volvemos a
     insertar. Correr el script dos veces reemplaza cada fila por una idéntica
     en vez de duplicarla (ver README).
+    Mapea también `responsable` ('Común'/'JD'/'Pinki', tal cual viene del
+    Excel, sin normalizar), `tipo_proporcion`, `proporcion_jd` y `medio_pago`
+    (ver README: antes de esto quedaban todos mezclados sin distinción).
     """
     migrados = 0
     for fila in filas:
@@ -108,6 +111,10 @@ def migrar_gastos_fijos(conn, filas: list) -> int:
                 "subcategoria": subcategoria,
                 "activo": bool(fila.get("activo")),
                 "ultima_actualizacion": ultima_actualizacion,
+                "responsable": fila.get("responsable"),
+                "tipo_proporcion": fila.get("tipo_proporcion"),
+                "proporcion_jd": fila.get("proporcion_jd"),
+                "medio_pago": fila.get("medio_pago"),
             },
         )
         migrados += 1
@@ -143,6 +150,22 @@ def mapear_tipo_proporcion(raw_tipo_proporcion, raw_proporcion_jd):
         proporcion_jd = float(raw_proporcion_jd)
         return "custom", proporcion_jd, 100.0 - proporcion_jd
     raise ValueError(f"tipo_proporcion desconocido en el Excel: {raw_tipo_proporcion!r}")
+
+
+def mapear_saldado(raw_saldado):
+    """Traduce el campo `saldado` del Excel al esquema del laboratorio.
+
+    En el Excel, `saldado` es una fecha ISO (ej. "2026-04-29") si ese gasto
+    específico ya fue saldado/compensado entre JD y Pinki, o `None`/`False`/
+    vacío si sigue pendiente. Cualquier valor "truthy" que no sea una fecha
+    válida se trata como error explícito, para no esconder datos raros del
+    Excel silenciosamente.
+    """
+    if not raw_saldado:
+        return None
+    if not isinstance(raw_saldado, str):
+        raise ValueError(f"saldado con tipo inesperado en el Excel: {raw_saldado!r}")
+    return raw_saldado
 
 
 def migrar_log(conn, filas: list) -> dict:
@@ -231,6 +254,7 @@ def migrar_log(conn, filas: list) -> dict:
                 "cuotas_total": int(fila.get("cuotas_total") or 1),
                 "cuota_nro": int(fila.get("cuota_nro") or 1),
                 "cuota_ref": cuota_ref_sqlite,
+                "saldado": mapear_saldado(fila.get("saldado")),
             },
         )
 

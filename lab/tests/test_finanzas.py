@@ -136,6 +136,36 @@ class TestGastosFijos(unittest.TestCase):
         fijos = db.get_gastos_fijos(self.conn)
         self.assertEqual(fijos[0]["monto_estimado"], 9500.0)
 
+    def test_insert_gasto_fijo_con_responsable_y_reparto(self):
+        db.insert_gasto_fijo(
+            self.conn,
+            {
+                "nombre": "Pilates",
+                "monto_estimado": 56000.0,
+                "periodicidad": "mensual",
+                "responsable": "Pinki",
+                "tipo_proporcion": "custom",
+                "proporcion_jd": 0.0,
+                "medio_pago": "Transferencia",
+            },
+        )
+        fijo = db.get_gastos_fijos(self.conn)[0]
+        self.assertEqual(fijo["responsable"], "Pinki")
+        self.assertEqual(fijo["tipo_proporcion"], "custom")
+        self.assertEqual(fijo["proporcion_jd"], 0.0)
+        self.assertEqual(fijo["medio_pago"], "Transferencia")
+
+    def test_insert_gasto_fijo_sin_responsable_queda_null(self):
+        db.insert_gasto_fijo(
+            self.conn,
+            {"nombre": "Internet", "monto_estimado": 8000.0, "periodicidad": "mensual"},
+        )
+        fijo = db.get_gastos_fijos(self.conn)[0]
+        self.assertIsNone(fijo["responsable"])
+        self.assertIsNone(fijo["tipo_proporcion"])
+        self.assertIsNone(fijo["proporcion_jd"])
+        self.assertIsNone(fijo["medio_pago"])
+
 
 class TestIngresos(unittest.TestCase):
     def setUp(self):

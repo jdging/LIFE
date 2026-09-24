@@ -9,7 +9,13 @@ Genera:
 - data/resumen_meses.json: por cada mes con datos, total de gastos, total de ingresos,
   proporción JD/Pinki calculada (db.calcular_proporcion_mes) y deuda neta del mes
   (db.calcular_deudas_mes).
-- data/gastos_fijos.json: gastos fijos activos.
+- data/gastos_fijos.json: gastos fijos activos, incluyendo `responsable`
+  ('Común'/'JD'/'Pinki') y `tipo_proporcion`/`proporcion_jd`/`medio_pago`,
+  para que el dashboard pueda separar "Fijos comunes" de "Fijos míos" y
+  "Fijos de Pinki" en vez de sumarlos todos juntos (ver README).
+- data/deuda_pendiente.json: deuda neta PENDIENTE actual (db.calcular_deudas_pendientes,
+  sin filtro de mes) — solo gastos con saldado=NULL, sin importar de qué mes sean. Es lo
+  que Juan pidió ver (no el histórico mes a mes, que ya está saldado en su mayoría).
 """
 
 import json
@@ -28,6 +34,7 @@ def main() -> None:
     gastos = [g for g in db.get_gastos(conn) if g["origen"] == "migracion" or g["id"] == 21]
     ingresos = db.get_ingresos(conn)
     gastos_fijos = db.get_gastos_fijos(conn, solo_activos=True)
+    deuda_pendiente = db.calcular_deudas_pendientes(conn)
 
     meses = sorted({g["fecha"][:7] for g in gastos} | {i["fecha"][:7] for i in ingresos})
     resumen_meses = []
@@ -54,9 +61,18 @@ def main() -> None:
         json.dump(gastos_fijos, f, ensure_ascii=False, indent=2)
     with open(OUT_DIR / "resumen_meses.json", "w", encoding="utf-8") as f:
         json.dump(resumen_meses, f, ensure_ascii=False, indent=2)
+    with open(OUT_DIR / "deuda_pendiente.json", "w", encoding="utf-8") as f:
+        json.dump(deuda_pendiente, f, ensure_ascii=False, indent=2)
+
+    por_responsable = {}
+    for gf in gastos_fijos:
+        clave = gf.get("responsable") or "(sin responsable)"
+        por_responsable[clave] = por_responsable.get(clave, 0) + 1
 
     print(f"Exportados: {len(gastos)} gastos, {len(ingresos)} ingresos, "
-          f"{len(gastos_fijos)} gastos fijos, {len(resumen_meses)} meses con resumen.")
+          f"{len(gastos_fijos)} gastos fijos, {len(resumen_meses)} meses con resumen, "
+          f"deuda pendiente: {deuda_pendiente}.")
+    print(f"Gastos fijos por responsable: {por_responsable}")
     conn.close()
 
 
