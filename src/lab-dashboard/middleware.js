@@ -104,13 +104,16 @@ export default async function middleware(request) {
     }
 
     const cookieValue = await createSessionCookieValue(secret);
-    const response = Response.redirect(new URL('/', url), 303);
-    response.headers.append(
+    // Response.redirect(...) devuelve headers inmutables en el runtime de Vercel
+    // (TypeError: immutable al intentar .append()) -- hay que construir la
+    // respuesta a mano con un Headers propio (mutable) desde el arranque.
+    const headers = new Headers({ Location: new URL('/', url).toString() });
+    headers.append(
       'Set-Cookie',
       `${COOKIE_NAME}=${cookieValue}; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}; ` +
         'HttpOnly; Secure; SameSite=Lax'
     );
-    return response;
+    return new Response(null, { status: 303, headers });
   }
 
   if (isLoginPath) {
