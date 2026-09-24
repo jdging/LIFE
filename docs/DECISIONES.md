@@ -319,6 +319,16 @@
 - **Razón:** No introducir lógica para un caso que no se da. La data se mantiene limpia cargando ingresos siempre a una persona.
 - **Consecuencias:** Si alguien carga un ingreso "Común", el desglose JD/Pinki no cerrará con el total. Es un error de carga conocido, no un bug del sistema.
 
+### DEC-LAB-001: Rama `lab/reinvencion` — modo laboratorio, regla de consulta relevada para código nuevo
+- **Fecha:** 2026-09-24
+- **Contexto:** Juan pidió explícitamente (Telegram, vía Viktor) "libertad total" para reinventar LIFE en una rama nueva: duplicar datos/bases, probar tecnología distinta, iterar sin pedir OK en cada paso, con el objetivo de integrar el bot Lasso (carga de gastos/recetas por audio) y evaluar si conviene reemplazar Sheets+Apps Script por algo más apto para escritura conversacional. Pidió textualmente borrar la regla de oro #1.
+- **Decisión:** Se crea la rama `git branch lab/reinvencion` (sin push, sin tocar `main`). Dentro de esa rama, la regla de oro #1 (consultar antes de escribir código) se releva para código y estructuras de datos NUEVAS/duplicadas. Se mantienen sin excepción: (a) nunca tocar datos reales de producción (Sheets en uso, Log de Finanzas real, etc.) — solo se trabaja sobre copias/duplicados que Juan autorice explícitamente; (b) nunca hacer `git push`/merge de esta rama a `main` sin que Juan lo pida para ese hito puntual; (c) cualquier operación irreversible (borrar un Spreadsheet, revocar un deployment en uso) sigue requiriendo confirmación explícita porque no es "código", es infraestructura externa de Juan.
+- **Alternativas descartadas:** Mantener la regla de consulta paso a paso también en el lab (reduce la velocidad de iteración que Juan pidió expresamente); eliminar la regla también en main (Juan no lo pidió para producción, y arriesgaría el sistema financiero real que usa a diario).
+- **Razón:** Separar "puedo romper esto porque es un experimento descartable" de "esto es plata real de todos los días". La regla de oro nació para proteger datos reales; en una rama de laboratorio con datos duplicados no hay nada real que proteger, así que la razón de la regla no aplica ahí.
+- **Consecuencias:** Todo lo que se construya en `lab/reinvencion` se documenta igual (BITACORA/CONTEXTO/DECISIONES) para que Juan pueda revisar el resumen cuando quiera, aunque no se le pida OK previo por cada línea. Antes de cualquier merge a main, sí aplica la regla completa de nuevo.
+
+---
+
 ### DEC-030: Gasto variable en mes con proporción 100/0 — se mantiene el comportamiento dinámico
 - **Fecha:** 2026-06-02
 - **Contexto:** A diferencia de los fijos (donde se desacopló la visibilidad de la proporción del mes, ver LEC-032), un gasto variable común cargado en un mes donde una persona no tuvo ingresos (proporción 100/0) se reparte 100% a quien ganó, y sale de la vista Común.

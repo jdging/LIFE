@@ -9,7 +9,7 @@
 
 ## Reglas de Oro (no negociables)
 
-1. **NUNCA escribas código sin antes consultarme.** Mostrá un resumen de lo que entendiste, qué vas a hacer, y esperá mi OK.
+1. **[SOLO EN main/producción] NUNCA escribas código sin antes consultarme.** Mostrá un resumen de lo que entendiste, qué vas a hacer, y esperá mi OK. En la rama `lab/reinvencion` (ver docs/DECISIONES.md → DEC-LAB-001) esta regla se releva para código nuevo y datos duplicados: se puede iterar libre. Sigue vigente sin excepción para: tocar `main`, borrar/mutar datos reales de producción, o cualquier `git push`/merge hacia `main`.
 2. **Actualizá el contexto del proyecto** después de cada cambio significativo (ver `docs/BITACORA.md` y `docs/CONTEXTO.md`).
 3. **Herramientas gratuitas primero.** Siempre priorizá soluciones gratuitas y de código abierto.
 4. **Ecosistema Google preferido:** Google Sheets, Apps Script, Firebase, AppSheet, Looker Studio, Drive.
