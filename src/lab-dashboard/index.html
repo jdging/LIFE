@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LIFE · Gastos (dashboard de prueba)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500;1,9..144,600&family=Work+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+  <header class="masthead">
+    <div class="masthead-top">
+      <span class="eyebrow">LIFE · Finanzas — laboratorio</span>
+      <span class="badge-demo">🌱 Datos de ejemplo, no reales</span>
+    </div>
+    <h1>Gastos</h1>
+    <p class="subtitle">Un vistazo simple a en qué se fue la plata este período.</p>
+  </header>
+
+  <main>
+    <section class="cards">
+      <div class="card">
+        <span class="card-icon" aria-hidden="true">🌾</span>
+        <div class="label">Total del período</div>
+        <div class="value" id="card-total">—</div>
+      </div>
+      <div class="card">
+        <span class="card-icon" aria-hidden="true">🧾</span>
+        <div class="label">Cantidad de gastos</div>
+        <div class="value muted" id="card-count">—</div>
+      </div>
+      <div class="card">
+        <span class="card-icon" aria-hidden="true">〰️</span>
+        <div class="label">Promedio por gasto</div>
+        <div class="value muted" id="card-avg">—</div>
+      </div>
+      <div class="card">
+        <span class="card-icon" aria-hidden="true" id="card-top-icon">🏷️</span>
+        <div class="label">Categoría con más peso</div>
+        <div class="value muted" id="card-top-cat">—</div>
+      </div>
+    </section>
+
+    <section class="charts-grid">
+      <div class="panel">
+        <h2>Por categoría</h2>
+        <canvas id="chart-categoria"></canvas>
+      </div>
+      <div class="panel">
+        <h2>Por mes</h2>
+        <canvas id="chart-mes"></canvas>
+      </div>
+      <div class="panel">
+        <h2>Quién pagó</h2>
+        <canvas id="chart-persona"></canvas>
+      </div>
+    </section>
+
+    <section class="panel table-panel">
+      <h2>Detalle de gastos</h2>
+      <div class="table-scroll">
+        <table id="tabla-gastos">
+          <thead>
+            <tr>
+              <th data-key="fecha">Fecha</th>
+              <th data-key="categoria">Categoría</th>
+              <th data-key="monto">Monto</th>
+              <th data-key="medio_pago">Medio de pago</th>
+              <th data-key="pagado_por">Pagado por</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-body">
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    LIFE — Finanzas · rama lab/reinvencion · datos de ejemplo, sin conexión al bot real todavía.
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -16,3 +16,9 @@ desktop.ini
 .vscode/
 .idea/
 *.swp
+
+# LIFE Lab (rama lab/reinvencion) — base SQLite generada por scripts, no versionar
+lab/data/
+lab/__pycache__/
+lab/tests/__pycache__/
+
