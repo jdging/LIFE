@@ -9,7 +9,8 @@
       "deudor": "Pinki",
       "acreedor": "JD",
       "monto": 33778.0
-    }
+    },
+    "estado_deuda": "saldado"
   },
   {
     "mes": "2026-03",
@@ -21,7 +22,8 @@
       "deudor": "Pinki",
       "acreedor": "JD",
       "monto": 24091.24
-    }
+    },
+    "estado_deuda": "saldado"
   },
   {
     "mes": "2026-04",
@@ -33,7 +35,8 @@
       "deudor": "Pinki",
       "acreedor": "JD",
       "monto": 64155.33
-    }
+    },
+    "estado_deuda": "parcial"
   },
   {
     "mes": "2026-05",
@@ -45,7 +48,8 @@
       "deudor": "JD",
       "acreedor": "Pinki",
       "monto": 154928.63
-    }
+    },
+    "estado_deuda": "parcial"
   },
   {
     "mes": "2026-06",
@@ -57,7 +61,8 @@
       "deudor": "JD",
       "acreedor": "Pinki",
       "monto": 77976.98
-    }
+    },
+    "estado_deuda": "parcial"
   },
   {
     "mes": "2026-07",
@@ -69,7 +74,8 @@
       "deudor": "JD",
       "acreedor": "Pinki",
       "monto": 29840.11
-    }
+    },
+    "estado_deuda": "parcial"
   },
   {
     "mes": "2026-08",
@@ -81,19 +87,21 @@
       "deudor": "JD",
       "acreedor": "Pinki",
       "monto": 178683.19
-    }
+    },
+    "estado_deuda": "parcial"
   },
   {
     "mes": "2026-09",
-    "total_gastos": 325255.56,
+    "total_gastos": 308255.56,
     "total_ingresos": 4638511.6,
     "proporcion_jd": 69.3867,
     "proporcion_pinki": 30.6133,
     "deuda": {
       "deudor": "JD",
       "acreedor": "Pinki",
-      "monto": 78424.23
-    }
+      "monto": 86924.23
+    },
+    "estado_deuda": "parcial"
   },
   {
     "mes": "2026-10",
@@ -105,7 +113,8 @@
       "deudor": null,
       "acreedor": null,
       "monto": 0.0
-    }
+    },
+    "estado_deuda": "sin_deuda"
   },
   {
     "mes": "2026-11",
@@ -117,7 +126,8 @@
       "deudor": null,
       "acreedor": null,
       "monto": 0.0
-    }
+    },
+    "estado_deuda": "sin_deuda"
   },
   {
     "mes": "2026-12",
@@ -129,7 +139,8 @@
       "deudor": null,
       "acreedor": null,
       "monto": 0.0
-    }
+    },
+    "estado_deuda": "sin_deuda"
   },
   {
     "mes": "2027-01",
@@ -141,7 +152,8 @@
       "deudor": null,
       "acreedor": null,
       "monto": 0.0
-    }
+    },
+    "estado_deuda": "sin_deuda"
   },
   {
     "mes": "2027-02",
@@ -153,7 +165,8 @@
       "deudor": null,
       "acreedor": null,
       "monto": 0.0
-    }
+    },
+    "estado_deuda": "sin_deuda"
   },
   {
     "mes": "2027-03",
@@ -165,7 +178,8 @@
       "deudor": null,
       "acreedor": null,
       "monto": 0.0
-    }
+    },
+    "estado_deuda": "sin_deuda"
   },
   {
     "mes": "2027-04",
@@ -177,7 +191,8 @@
       "deudor": null,
       "acreedor": null,
       "monto": 0.0
-    }
+    },
+    "estado_deuda": "sin_deuda"
   },
   {
     "mes": "2027-05",
@@ -189,7 +204,8 @@
       "deudor": null,
       "acreedor": null,
       "monto": 0.0
-    }
+    },
+    "estado_deuda": "sin_deuda"
   },
   {
     "mes": "2027-06",
@@ -201,7 +217,8 @@
       "deudor": null,
       "acreedor": null,
       "monto": 0.0
-    }
+    },
+    "estado_deuda": "sin_deuda"
   },
   {
     "mes": "2027-07",
@@ -213,7 +230,8 @@
       "deudor": null,
       "acreedor": null,
       "monto": 0.0
-    }
+    },
+    "estado_deuda": "sin_deuda"
   },
   {
     "mes": "2027-08",
@@ -225,7 +243,8 @@
       "deudor": null,
       "acreedor": null,
       "monto": 0.0
-    }
+    },
+    "estado_deuda": "sin_deuda"
   },
   {
     "mes": "2027-09",
@@ -237,6 +256,7 @@
       "deudor": null,
       "acreedor": null,
       "monto": 0.0
-    }
+    },
+    "estado_deuda": "sin_deuda"
   }
 ]

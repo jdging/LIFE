@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LIFE · Finanzas — datos reales (laboratorio)</title>
+<title>LIFE · Finanzas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500;1,9..144,600&family=Work+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -13,21 +13,20 @@
 <div class="page">
   <header class="masthead">
     <div class="masthead-top">
-      <span class="eyebrow">LIFE · Finanzas — laboratorio</span>
-      <span class="badge-demo">📂 Datos reales migrados — Finanzas LIFE</span>
+      <span class="eyebrow">LIFE · Finanzas</span>
     </div>
     <h1>Finanzas</h1>
     <p class="subtitle">Un panorama real de en qué se fue la plata, cuánto entró, y quién le debe a quién.</p>
   </header>
 
-  <nav class="view-tabs" role="tablist" aria-label="Vistas de Finanzas">
+  <nav class="view-tabs" role="tablist" aria-label="Destinos de LIFE">
     <button class="tab-btn active" id="tab-gastos" role="tab" aria-selected="true" aria-controls="view-gastos" onclick="switchView('gastos')">🌾 Gastos</button>
-    <button class="tab-btn" id="tab-inversiones" role="tab" aria-selected="false" aria-controls="view-inversiones" onclick="switchView('inversiones')">📈 Inversiones</button>
     <button class="tab-btn" id="tab-ingresos" role="tab" aria-selected="false" aria-controls="view-ingresos" onclick="switchView('ingresos')">💰 Ingresos</button>
-    <button class="tab-btn" id="tab-presupuesto" role="tab" aria-selected="false" aria-controls="view-presupuesto" onclick="switchView('presupuesto')">📋 Presupuesto</button>
+    <button class="tab-btn" id="tab-supermercado" role="tab" aria-selected="false" aria-controls="view-supermercado" onclick="switchView('supermercado')">🛒 Supermercado</button>
+    <button class="tab-btn" id="tab-recetas" role="tab" aria-selected="false" aria-controls="view-recetas" onclick="switchView('recetas')">🍲 Recetas</button>
   </nav>
 
-  <div class="topbar" role="group" aria-label="Selector de período">
+  <div class="topbar" id="finanzas-topbar" role="group" aria-label="Selector de período">
     <span class="topbar-label">Período</span>
     <div class="period-selector">
       <button class="period-btn active" data-period="month" aria-pressed="true" onclick="selectPeriodType('month')">Mes</button>
@@ -52,12 +51,15 @@
 
       <div class="section-header">
         <h2 class="section-title">Gastos</h2>
-        <div class="persona-filter" role="group" aria-label="Filtro por persona" id="persona-filter-top">
-          <button class="persona-btn active" data-filter="comun" aria-pressed="true" onclick="setPersonaFiltro('comun')">Comunes</button>
-          <button class="persona-btn" data-filter="jd_comun" aria-pressed="false" onclick="setPersonaFiltro('jd_comun')">JD+Común</button>
-          <button class="persona-btn" data-filter="jd" aria-pressed="false" onclick="setPersonaFiltro('jd')">JD</button>
-          <button class="persona-btn" data-filter="pinki_comun" aria-pressed="false" onclick="setPersonaFiltro('pinki_comun')">Pinki+Común</button>
-          <button class="persona-btn" data-filter="pinki" aria-pressed="false" onclick="setPersonaFiltro('pinki')">Pinki</button>
+        <div class="section-header-actions">
+          <button type="button" class="btn-print" onclick="printGastosResumen()">🖨️ Imprimir / Guardar PDF</button>
+          <div class="persona-filter" role="group" aria-label="Filtro por persona" id="persona-filter-top">
+            <button class="persona-btn active" data-filter="comun" aria-pressed="true" onclick="setPersonaFiltro('comun')">Comunes</button>
+            <button class="persona-btn" data-filter="jd_comun" aria-pressed="false" onclick="setPersonaFiltro('jd_comun')">JD+Común</button>
+            <button class="persona-btn" data-filter="jd" aria-pressed="false" onclick="setPersonaFiltro('jd')">JD</button>
+            <button class="persona-btn" data-filter="pinki_comun" aria-pressed="false" onclick="setPersonaFiltro('pinki_comun')">Pinki+Común</button>
+            <button class="persona-btn" data-filter="pinki" aria-pressed="false" onclick="setPersonaFiltro('pinki')">Pinki</button>
+          </div>
         </div>
       </div>
 
@@ -173,7 +175,7 @@
     </div><!-- /view-gastos -->
 
     <!-- ── VISTA INVERSIONES ────────────────────────────────────── -->
-    <div class="view" id="view-inversiones" role="tabpanel" aria-labelledby="tab-inversiones" hidden>
+    <div class="view" id="view-inversiones" role="tabpanel" aria-label="Inversiones (sin destino visible por ahora)" hidden>
       <div class="section-header">
         <h2 class="section-title">Inversiones</h2>
       </div>
@@ -242,8 +244,28 @@
       </section>
     </div><!-- /view-ingresos -->
 
+    <!-- ── VISTA SUPERMERCADO ───────────────────────────────────── -->
+    <div class="view" id="view-supermercado" role="tabpanel" aria-labelledby="tab-supermercado" hidden>
+      <div class="section-header">
+        <h2 class="section-title">Supermercado</h2>
+        <input type="search" id="supermercado-search" class="search-input" placeholder="Buscar ítem…" aria-label="Buscar ítem" oninput="renderSupermercadoList()">
+      </div>
+      <section class="panel" id="supermercado-panel">
+        <div id="supermercado-content">Cargando…</div>
+      </section>
+    </div><!-- /view-supermercado -->
+
+    <!-- ── VISTA RECETAS ────────────────────────────────────────── -->
+    <div class="view" id="view-recetas" role="tabpanel" aria-labelledby="tab-recetas" hidden>
+      <div class="section-header">
+        <h2 class="section-title">Recetas</h2>
+        <input type="search" id="recetas-search" class="search-input" placeholder="Buscar receta…" aria-label="Buscar receta" oninput="renderRecetasList()">
+      </div>
+      <div id="recetas-content">Cargando…</div>
+    </div><!-- /view-recetas -->
+
     <!-- ── VISTA PRESUPUESTO ────────────────────────────────────── -->
-    <div class="view" id="view-presupuesto" role="tabpanel" aria-labelledby="tab-presupuesto" hidden>
+    <div class="view" id="view-presupuesto" role="tabpanel" aria-label="Presupuesto (sin destino visible por ahora)" hidden>
       <div class="section-header">
         <h2 class="section-title">Presupuesto</h2>
       </div>
@@ -262,9 +284,10 @@
 
   </main>
 
+  <div class="print-summary" id="print-summary" aria-hidden="true"></div>
+
   <footer>
-    LIFE — Finanzas · rama lab/reinvencion · datos reales migrados (snapshot estático), sin
-    conexión en vivo a Google Sheets todavía.
+    LIFE — Finanzas · sin conexión en vivo a Google Sheets todavía.
   </footer>
 </div>
 

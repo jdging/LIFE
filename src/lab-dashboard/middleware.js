@@ -8,7 +8,9 @@
 // - Every request is intercepted before any static file (index.html, app.js,
 //   style.css, data/*.json) is served.
 // - A valid `dashboard_session` cookie lets the request continue unchanged.
-// - Anything else is redirected to /login.
+// - Anything else is redirected to /login, EXCEPT requests under /api/,
+//   which get a JSON 401 `{"error":"unauthorized"}` instead (no HTML
+//   redirect makes sense for a JSON API consumed via fetch()).
 // - POST /login verifies the submitted password against DASHBOARD_PASSWORD
 //   (an env var configured in the Vercel dashboard, see README.md) and, if
 //   correct, sets a signed, long-lived session cookie ("remember me").
@@ -128,7 +130,22 @@ export default async function middleware(request) {
   }
 
   const cookieValue = getCookie(request, COOKIE_NAME);
-  if (!(await isValidSessionCookie(cookieValue, secret))) {
+  const sessionValid = await isValidSessionCookie(cookieValue, secret);
+
+  // API routes never redirect to /login (there's no browser navigation to
+  // redirect): missing/expired session means a JSON 401 so fetch() callers
+  // can handle it programmatically instead of following an HTML redirect.
+  if (pathname.startsWith('/api/')) {
+    if (!sessionValid) {
+      return new Response(JSON.stringify({ error: 'unauthorized' }), {
+        status: 401,
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+      });
+    }
+    return undefined; // valid session: continue to the API route
+  }
+
+  if (!sessionValid) {
     return Response.redirect(new URL('/login', url), 303);
   }
 

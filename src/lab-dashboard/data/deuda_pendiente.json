@@ -1,5 +1,6 @@
 {
   "deudor": "JD",
   "acreedor": "Pinki",
-  "monto": 81986.12
+  "monto": 90486.12,
+  "estado_deuda": "pendiente"
 }

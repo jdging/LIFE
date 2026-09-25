@@ -1,0 +1,2001 @@
+[
+  {
+    "id": 44,
+    "nombre": "Salmorejo cordobés",
+    "porciones": 4,
+    "tiempo_preparacion_min": null,
+    "notas": "Texto original de Juan: 'Agarré 4 tomates, como 4 panes de 6/7 cm de largo y 4 de diámetro. 2 ajitos (1 grande y otro chico, a lo mejor era 1 grande nada más). Medio vasito de café de Regi tipo expreso de aceite de oliva. Sal. 2 huevos, jamón crudo y perejil.' Nota de mejora de Juan: 'Era mejor con solo un ajito chiquito y menos sal.'",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 324,
+        "receta_id": 44,
+        "ingrediente_nombre": "tomate",
+        "cantidad": 4.0,
+        "unidad": "unidad"
+      },
+      {
+        "id": 325,
+        "receta_id": 44,
+        "ingrediente_nombre": "pan",
+        "cantidad": 4.0,
+        "unidad": "unidad (~6-7cm de largo y diámetro)"
+      },
+      {
+        "id": 326,
+        "receta_id": 44,
+        "ingrediente_nombre": "ajo",
+        "cantidad": null,
+        "unidad": "1-2 dientes (Juan dice: mejor con solo un ajito chiquito)"
+      },
+      {
+        "id": 327,
+        "receta_id": 44,
+        "ingrediente_nombre": "aceite de oliva",
+        "cantidad": 0.5,
+        "unidad": "vaso tipo café expreso"
+      },
+      {
+        "id": 328,
+        "receta_id": 44,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto (Juan dice: mejor con menos sal)"
+      },
+      {
+        "id": 329,
+        "receta_id": 44,
+        "ingrediente_nombre": "huevo",
+        "cantidad": 2.0,
+        "unidad": "unidad"
+      },
+      {
+        "id": 330,
+        "receta_id": 44,
+        "ingrediente_nombre": "jamón crudo",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 331,
+        "receta_id": 44,
+        "ingrediente_nombre": "perejil",
+        "cantidad": null,
+        "unidad": "a gusto"
+      }
+    ]
+  },
+  {
+    "id": 45,
+    "nombre": "Salsa Pinki",
+    "porciones": 5,
+    "tiempo_preparacion_min": null,
+    "notas": "Rinde 500-600g de pasta seca (5 personas). Preparación: sofrito de cebolla+ajo, sumar zanahoria+apio 5min, sumar pimientos 5-7min, agregar tomates+laurel+orégano+sal+pimienta, cocinar 45min-1h a fuego bajo semitapado, ajustar sazón, opcional procesar, agregar albahaca al final.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 332,
+        "receta_id": 45,
+        "ingrediente_nombre": "zanahoria",
+        "cantidad": 2.0,
+        "unidad": "mediana, en cubos pequeños"
+      },
+      {
+        "id": 333,
+        "receta_id": 45,
+        "ingrediente_nombre": "pimiento (rojo y/o verde)",
+        "cantidad": 2.0,
+        "unidad": "mediano, en cubos"
+      },
+      {
+        "id": 334,
+        "receta_id": 45,
+        "ingrediente_nombre": "apio",
+        "cantidad": 2.5,
+        "unidad": "rama, en rodajitas finas (2-3)"
+      },
+      {
+        "id": 335,
+        "receta_id": 45,
+        "ingrediente_nombre": "cebolla",
+        "cantidad": 1.0,
+        "unidad": "grande"
+      },
+      {
+        "id": 336,
+        "receta_id": 45,
+        "ingrediente_nombre": "ajo",
+        "cantidad": 2.5,
+        "unidad": "diente, picado (2-3)"
+      },
+      {
+        "id": 337,
+        "receta_id": 45,
+        "ingrediente_nombre": "tomate maduro",
+        "cantidad": 11.0,
+        "unidad": "unidad (10-12, o 1.5-2 kg)"
+      },
+      {
+        "id": 338,
+        "receta_id": 45,
+        "ingrediente_nombre": "aceite de oliva",
+        "cantidad": 3.5,
+        "unidad": "cucharada (3-4)"
+      },
+      {
+        "id": 339,
+        "receta_id": 45,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 340,
+        "receta_id": 45,
+        "ingrediente_nombre": "pimienta",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 341,
+        "receta_id": 45,
+        "ingrediente_nombre": "laurel",
+        "cantidad": 1.0,
+        "unidad": "hoja (opcional)"
+      },
+      {
+        "id": 342,
+        "receta_id": 45,
+        "ingrediente_nombre": "orégano seco o tomillo",
+        "cantidad": 1.0,
+        "unidad": "cucharadita"
+      },
+      {
+        "id": 343,
+        "receta_id": 45,
+        "ingrediente_nombre": "albahaca fresca o seca",
+        "cantidad": null,
+        "unidad": "un puñadito (opcional, al final)"
+      },
+      {
+        "id": 344,
+        "receta_id": 45,
+        "ingrediente_nombre": "azúcar o miel",
+        "cantidad": 1.0,
+        "unidad": "cucharadita (opcional, para balancear acidez)"
+      }
+    ]
+  },
+  {
+    "id": 46,
+    "nombre": "Salsita de hojas de apio",
+    "porciones": 1,
+    "tiempo_preparacion_min": null,
+    "notas": "Preparación: lavar hojas de apio, picar ajo fino, triturar (mortero o procesador) apio+ajo+ralladura+jugo limón+sal, incorporar aceite de a poco emulsionando, ajustar acidez. Nota de mejora real de Juan (variante mencionada por él, texto parcialmente ambiguo en el original — 'lote en Polo polvo' — se guarda tal cual): 'La receta quedó mucho mejor cuando puse hojas de apio, limón, jengibre, un poquito de ajo, lo trituré todo, un chorrito o dos de aceite de oliva y finalmente le tiré miel y un toque de polvo de oro/algo (lote en Polo polvo).'",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 345,
+        "receta_id": 46,
+        "ingrediente_nombre": "hojas de apio frescas",
+        "cantidad": null,
+        "unidad": "un buen puñado"
+      },
+      {
+        "id": 346,
+        "receta_id": 46,
+        "ingrediente_nombre": "ajo",
+        "cantidad": 1.0,
+        "unidad": "diente"
+      },
+      {
+        "id": 347,
+        "receta_id": 46,
+        "ingrediente_nombre": "ralladura y jugo de limón",
+        "cantidad": 0.5,
+        "unidad": "limón"
+      },
+      {
+        "id": 348,
+        "receta_id": 46,
+        "ingrediente_nombre": "aceite de oliva",
+        "cantidad": 3.5,
+        "unidad": "cucharada (3-4)"
+      },
+      {
+        "id": 349,
+        "receta_id": 46,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 350,
+        "receta_id": 46,
+        "ingrediente_nombre": "pimienta",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 351,
+        "receta_id": 46,
+        "ingrediente_nombre": "perejil o albahaca",
+        "cantidad": null,
+        "unidad": "opcional"
+      }
+    ]
+  },
+  {
+    "id": 47,
+    "nombre": "Sopa de calabaza",
+    "porciones": 4,
+    "tiempo_preparacion_min": null,
+    "notas": "Preparación: dorar cebolla con manteca, hervir zapallo y pelarlo, agregar agua+leche de coco hasta consistencia crema, agregar jengibre y curry, procesar, servir con cebolla de verdeo y queso crema arriba.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 352,
+        "receta_id": 47,
+        "ingrediente_nombre": "cebolla",
+        "cantidad": 1.0,
+        "unidad": "grande, cortada"
+      },
+      {
+        "id": 353,
+        "receta_id": 47,
+        "ingrediente_nombre": "manteca",
+        "cantidad": null,
+        "unidad": "para dorar"
+      },
+      {
+        "id": 354,
+        "receta_id": 47,
+        "ingrediente_nombre": "zapallo",
+        "cantidad": null,
+        "unidad": "para cortar y hervir (pelar después de hervido)"
+      },
+      {
+        "id": 355,
+        "receta_id": 47,
+        "ingrediente_nombre": "agua",
+        "cantidad": null,
+        "unidad": "hasta consistencia de crema"
+      },
+      {
+        "id": 356,
+        "receta_id": 47,
+        "ingrediente_nombre": "leche de coco",
+        "cantidad": null,
+        "unidad": "hasta consistencia de crema"
+      },
+      {
+        "id": 357,
+        "receta_id": 47,
+        "ingrediente_nombre": "jengibre",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 358,
+        "receta_id": 47,
+        "ingrediente_nombre": "curry",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 359,
+        "receta_id": 47,
+        "ingrediente_nombre": "cebolla de verdeo",
+        "cantidad": null,
+        "unidad": "para servir arriba"
+      },
+      {
+        "id": 360,
+        "receta_id": 47,
+        "ingrediente_nombre": "queso crema",
+        "cantidad": null,
+        "unidad": "para servir arriba"
+      }
+    ]
+  },
+  {
+    "id": 48,
+    "nombre": "Tutancamón",
+    "porciones": 8,
+    "tiempo_preparacion_min": null,
+    "notas": "Receta de Lula. Preparación: calentar 1.5L de leche, mezclar maicena con leche restante sin grumos, volcar a la olla revolviendo, agregar yemas mezcladas, agregar azúcar+vainilla+colorante, mezclar hasta que espese más que mayonesa, hervir 5 minutos más.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 361,
+        "receta_id": 48,
+        "ingrediente_nombre": "leche",
+        "cantidad": 2.0,
+        "unidad": "litro"
+      },
+      {
+        "id": 362,
+        "receta_id": 48,
+        "ingrediente_nombre": "yema de huevo",
+        "cantidad": 5.0,
+        "unidad": "unidad"
+      },
+      {
+        "id": 363,
+        "receta_id": 48,
+        "ingrediente_nombre": "clara de huevo",
+        "cantidad": 5.0,
+        "unidad": "unidad"
+      },
+      {
+        "id": 364,
+        "receta_id": 48,
+        "ingrediente_nombre": "maicena",
+        "cantidad": 10.0,
+        "unidad": "cucharada"
+      },
+      {
+        "id": 365,
+        "receta_id": 48,
+        "ingrediente_nombre": "azúcar",
+        "cantidad": 10.0,
+        "unidad": "cucharada"
+      },
+      {
+        "id": 366,
+        "receta_id": 48,
+        "ingrediente_nombre": "esencia de vainilla",
+        "cantidad": 2.0,
+        "unidad": "cucharada de té"
+      },
+      {
+        "id": 367,
+        "receta_id": 48,
+        "ingrediente_nombre": "colorante amarillo",
+        "cantidad": 1.0,
+        "unidad": "cucharada de té"
+      }
+    ]
+  },
+  {
+    "id": 49,
+    "nombre": "Corazones de alcaucil",
+    "porciones": 4,
+    "tiempo_preparacion_min": null,
+    "notas": "Preparación: rehogar cebolla a fuego mínimo sin dorar, agregar panceta hasta cebolla blanda, incorporar corazones de alcaucil cortados por mitad, espolvorear con maicena, verter vino blanco revolviendo constantemente hasta espesar.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 368,
+        "receta_id": 49,
+        "ingrediente_nombre": "corazones de alcaucil",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 369,
+        "receta_id": 49,
+        "ingrediente_nombre": "cebolla blanca",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 370,
+        "receta_id": 49,
+        "ingrediente_nombre": "panceta ahumada",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 371,
+        "receta_id": 49,
+        "ingrediente_nombre": "vino blanco",
+        "cantidad": 1.0,
+        "unidad": "vaso, aprox"
+      },
+      {
+        "id": 372,
+        "receta_id": 49,
+        "ingrediente_nombre": "maicena",
+        "cantidad": 2.0,
+        "unidad": "cucharada"
+      },
+      {
+        "id": 373,
+        "receta_id": 49,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto"
+      }
+    ]
+  },
+  {
+    "id": 50,
+    "nombre": "Crema de alcaparras",
+    "porciones": 1,
+    "tiempo_preparacion_min": null,
+    "notas": "Texto original literal de Juan (prosa): 'alcaparras ajo jengibre hierba de la Provenza chorrito de limón y aceite y obviamente crema'.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 374,
+        "receta_id": 50,
+        "ingrediente_nombre": "alcaparras",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 375,
+        "receta_id": 50,
+        "ingrediente_nombre": "ajo",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 376,
+        "receta_id": 50,
+        "ingrediente_nombre": "jengibre",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 377,
+        "receta_id": 50,
+        "ingrediente_nombre": "hierbas de Provenza",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 378,
+        "receta_id": 50,
+        "ingrediente_nombre": "limón (jugo)",
+        "cantidad": null,
+        "unidad": "chorrito"
+      },
+      {
+        "id": 379,
+        "receta_id": 50,
+        "ingrediente_nombre": "aceite de oliva",
+        "cantidad": null,
+        "unidad": "chorrito"
+      },
+      {
+        "id": 380,
+        "receta_id": 50,
+        "ingrediente_nombre": "crema de leche",
+        "cantidad": null,
+        "unidad": "a gusto"
+      }
+    ]
+  },
+  {
+    "id": 51,
+    "nombre": "Ensalada Pinki",
+    "porciones": 4,
+    "tiempo_preparacion_min": null,
+    "notas": "Ensalada keppe. Nota original de Juan (así, tal cual, aparenta referirse a 'el pollo' pero podría ser un error de dictado/transcripción por 'la cebolla'; se guarda literal): 'El pollo, la cebolla y la manzana ralladas.'",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 381,
+        "receta_id": 51,
+        "ingrediente_nombre": "repollo morado",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 382,
+        "receta_id": 51,
+        "ingrediente_nombre": "cebolla morada",
+        "cantidad": null,
+        "unidad": "rallada, a gusto"
+      },
+      {
+        "id": 383,
+        "receta_id": 51,
+        "ingrediente_nombre": "manzana",
+        "cantidad": null,
+        "unidad": "rallada, a gusto"
+      },
+      {
+        "id": 384,
+        "receta_id": 51,
+        "ingrediente_nombre": "tomate o cherrys",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 385,
+        "receta_id": 51,
+        "ingrediente_nombre": "aceite de oliva",
+        "cantidad": null,
+        "unidad": "para condimentar"
+      },
+      {
+        "id": 386,
+        "receta_id": 51,
+        "ingrediente_nombre": "vinagre de manzana",
+        "cantidad": null,
+        "unidad": "para condimentar"
+      },
+      {
+        "id": 387,
+        "receta_id": 51,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 388,
+        "receta_id": 51,
+        "ingrediente_nombre": "pimienta",
+        "cantidad": null,
+        "unidad": "a gusto"
+      }
+    ]
+  },
+  {
+    "id": 52,
+    "nombre": "Espárragos limón",
+    "porciones": 2,
+    "tiempo_preparacion_min": null,
+    "notas": "Preparación: cocinar espárragos solos en sartén, cuando oscurecen agregar rodajas de limón, manteca, aceite, salpimentar y agregar ajo cortadito, sacar cuando estén cocinaditos.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 389,
+        "receta_id": 52,
+        "ingrediente_nombre": "espárragos",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 390,
+        "receta_id": 52,
+        "ingrediente_nombre": "limón",
+        "cantidad": null,
+        "unidad": "en rodajas"
+      },
+      {
+        "id": 391,
+        "receta_id": 52,
+        "ingrediente_nombre": "manteca",
+        "cantidad": null,
+        "unidad": "un poquito"
+      },
+      {
+        "id": 392,
+        "receta_id": 52,
+        "ingrediente_nombre": "aceite de oliva",
+        "cantidad": null,
+        "unidad": "un poquito"
+      },
+      {
+        "id": 393,
+        "receta_id": 52,
+        "ingrediente_nombre": "ajo",
+        "cantidad": null,
+        "unidad": "cortadito"
+      },
+      {
+        "id": 394,
+        "receta_id": 52,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 395,
+        "receta_id": 52,
+        "ingrediente_nombre": "pimienta",
+        "cantidad": null,
+        "unidad": "a gusto"
+      }
+    ]
+  },
+  {
+    "id": 53,
+    "nombre": "Hamburguesa",
+    "porciones": 6,
+    "tiempo_preparacion_min": null,
+    "notas": "Rinde 6 hamburguesas de 100g cada una.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 396,
+        "receta_id": 53,
+        "ingrediente_nombre": "carne (100% roast beef)",
+        "cantidad": 600.0,
+        "unidad": "g"
+      },
+      {
+        "id": 397,
+        "receta_id": 53,
+        "ingrediente_nombre": "panceta ahumada",
+        "cantidad": 100.0,
+        "unidad": "g (evitar marca Paladini)"
+      },
+      {
+        "id": 398,
+        "receta_id": 53,
+        "ingrediente_nombre": "cheddar",
+        "cantidad": 11.0,
+        "unidad": "feta (10-12, marca Milkaut o Tonadita)"
+      },
+      {
+        "id": 399,
+        "receta_id": 53,
+        "ingrediente_nombre": "pan de papa Bimbo",
+        "cantidad": 1.0,
+        "unidad": "paquete"
+      },
+      {
+        "id": 400,
+        "receta_id": 53,
+        "ingrediente_nombre": "cebolla morada",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 401,
+        "receta_id": 53,
+        "ingrediente_nombre": "lechuga",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 402,
+        "receta_id": 53,
+        "ingrediente_nombre": "tomate",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 403,
+        "receta_id": 53,
+        "ingrediente_nombre": "pepino agridulce",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 404,
+        "receta_id": 53,
+        "ingrediente_nombre": "mayonesa",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 405,
+        "receta_id": 53,
+        "ingrediente_nombre": "ketchup",
+        "cantidad": null,
+        "unidad": "a gusto"
+      }
+    ]
+  },
+  {
+    "id": 54,
+    "nombre": "Kebab con acompañamientos",
+    "porciones": 7,
+    "tiempo_preparacion_min": null,
+    "notas": "Rinde 6-8 porciones con 1kg de carne. Acompañamientos incluidos en la misma receta: tahinia (textura cremosa tipo pasta de dientes) y ensalada de pepino con trigo burgol.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 406,
+        "receta_id": 54,
+        "ingrediente_nombre": "carne picada especial",
+        "cantidad": 1.0,
+        "unidad": "kg"
+      },
+      {
+        "id": 407,
+        "receta_id": 54,
+        "ingrediente_nombre": "cebolla",
+        "cantidad": 1.0,
+        "unidad": "mediana, picada chica"
+      },
+      {
+        "id": 408,
+        "receta_id": 54,
+        "ingrediente_nombre": "perejil",
+        "cantidad": null,
+        "unidad": "un buen puñado (~5 cucharadas)"
+      },
+      {
+        "id": 409,
+        "receta_id": 54,
+        "ingrediente_nombre": "cilantro",
+        "cantidad": null,
+        "unidad": "la mitad de la cantidad de perejil"
+      },
+      {
+        "id": 410,
+        "receta_id": 54,
+        "ingrediente_nombre": "menta",
+        "cantidad": 8.0,
+        "unidad": "hoja, picada"
+      },
+      {
+        "id": 411,
+        "receta_id": 54,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 412,
+        "receta_id": 54,
+        "ingrediente_nombre": "baharat",
+        "cantidad": 2.0,
+        "unidad": "cucharadita"
+      },
+      {
+        "id": 413,
+        "receta_id": 54,
+        "ingrediente_nombre": "nuez moscada",
+        "cantidad": 0.5,
+        "unidad": "cucharadita"
+      },
+      {
+        "id": 414,
+        "receta_id": 54,
+        "ingrediente_nombre": "comino",
+        "cantidad": 1.0,
+        "unidad": "cucharadita"
+      },
+      {
+        "id": 415,
+        "receta_id": 54,
+        "ingrediente_nombre": "gelatina sin sabor",
+        "cantidad": 2.0,
+        "unidad": "sobrecito chico"
+      },
+      {
+        "id": 416,
+        "receta_id": 54,
+        "ingrediente_nombre": "pan pita (laffa)",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 417,
+        "receta_id": 54,
+        "ingrediente_nombre": "hummus",
+        "cantidad": null,
+        "unidad": "comprado o casero, sin detalle"
+      },
+      {
+        "id": 418,
+        "receta_id": 54,
+        "ingrediente_nombre": "tahini",
+        "cantidad": 0.5,
+        "unidad": "pote"
+      },
+      {
+        "id": 419,
+        "receta_id": 54,
+        "ingrediente_nombre": "ajo (para tahinia)",
+        "cantidad": 2.0,
+        "unidad": "diente, picado"
+      },
+      {
+        "id": 420,
+        "receta_id": 54,
+        "ingrediente_nombre": "limón (para tahinia)",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 421,
+        "receta_id": 54,
+        "ingrediente_nombre": "sal (para tahinia)",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 422,
+        "receta_id": 54,
+        "ingrediente_nombre": "tomate perita (ensalada de pepino)",
+        "cantidad": null,
+        "unidad": "picado chico"
+      },
+      {
+        "id": 423,
+        "receta_id": 54,
+        "ingrediente_nombre": "perejil (ensalada de pepino)",
+        "cantidad": null,
+        "unidad": "picado chico"
+      },
+      {
+        "id": 424,
+        "receta_id": 54,
+        "ingrediente_nombre": "cebolla (ensalada de pepino)",
+        "cantidad": null,
+        "unidad": "picada chica"
+      },
+      {
+        "id": 425,
+        "receta_id": 54,
+        "ingrediente_nombre": "trigo burgol",
+        "cantidad": null,
+        "unidad": "hidratado"
+      }
+    ]
+  },
+  {
+    "id": 55,
+    "nombre": "Zanahoria glaseada",
+    "porciones": 4,
+    "tiempo_preparacion_min": null,
+    "notas": "Preparación: cocinar zanahoria en rodajas con manteca en ollita, cuando esté medio cocida agregar miel y salpimentar, hacia el final agregar jengibre en trozos.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 426,
+        "receta_id": 55,
+        "ingrediente_nombre": "zanahoria",
+        "cantidad": null,
+        "unidad": "cortada en rodajas"
+      },
+      {
+        "id": 427,
+        "receta_id": 55,
+        "ingrediente_nombre": "manteca",
+        "cantidad": null,
+        "unidad": "un trozo"
+      },
+      {
+        "id": 428,
+        "receta_id": 55,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 429,
+        "receta_id": 55,
+        "ingrediente_nombre": "pimienta",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 430,
+        "receta_id": 55,
+        "ingrediente_nombre": "miel",
+        "cantidad": 1.0,
+        "unidad": "cucharada"
+      },
+      {
+        "id": 431,
+        "receta_id": 55,
+        "ingrediente_nombre": "jengibre",
+        "cantidad": null,
+        "unidad": "en trozos"
+      }
+    ]
+  },
+  {
+    "id": 56,
+    "nombre": "Yogurt casero",
+    "porciones": 1,
+    "tiempo_preparacion_min": null,
+    "notas": "Rinde ~1 litro. Preparación: calentar leche a 48°C (hasta que no aguantes un dedo sumergido más de 8 segundos), sacar del fuego, agregar el yogurt, mezclar bien, tapar la olla, envolver en toalla, guardar en horno apagado 12-16 horas, colar con tela/repasador dentro de la heladera para sacar el suero (10h+ para más firmeza).",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 432,
+        "receta_id": 56,
+        "ingrediente_nombre": "leche entera",
+        "cantidad": 1.0,
+        "unidad": "litro (marca sugerida: Milkout o sachet con vaca en el envase)"
+      },
+      {
+        "id": 433,
+        "receta_id": 56,
+        "ingrediente_nombre": "yogurt natural (fermento)",
+        "cantidad": 100.0,
+        "unidad": "g (marca sugerida: La Serenísima natural, el celeste)"
+      }
+    ]
+  },
+  {
+    "id": 57,
+    "nombre": "Coliflor Gratinada",
+    "porciones": 4,
+    "tiempo_preparacion_min": null,
+    "notas": "Preparación: cocinar coliflor al vapor/hervido 5-7min, hacer salsa de crema+queso, armar en fuente, cubrir con pan rallado+manteca, hornear 180°C 20-25min.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 434,
+        "receta_id": 57,
+        "ingrediente_nombre": "coliflor",
+        "cantidad": 1.0,
+        "unidad": "grande"
+      },
+      {
+        "id": 435,
+        "receta_id": 57,
+        "ingrediente_nombre": "crema de leche o leche",
+        "cantidad": 1.0,
+        "unidad": "taza"
+      },
+      {
+        "id": 436,
+        "receta_id": 57,
+        "ingrediente_nombre": "queso rallado (mozzarella/parmesano o mezcla)",
+        "cantidad": 1.0,
+        "unidad": "taza"
+      },
+      {
+        "id": 437,
+        "receta_id": 57,
+        "ingrediente_nombre": "pan rallado",
+        "cantidad": 0.5,
+        "unidad": "taza"
+      },
+      {
+        "id": 438,
+        "receta_id": 57,
+        "ingrediente_nombre": "manteca derretida",
+        "cantidad": 2.5,
+        "unidad": "cucharada (2-3)"
+      },
+      {
+        "id": 439,
+        "receta_id": 57,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 440,
+        "receta_id": 57,
+        "ingrediente_nombre": "pimienta",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 441,
+        "receta_id": 57,
+        "ingrediente_nombre": "nuez moscada",
+        "cantidad": null,
+        "unidad": "opcional, a gusto"
+      }
+    ]
+  },
+  {
+    "id": 58,
+    "nombre": "Coliflor al Horno con Especias",
+    "porciones": 4,
+    "tiempo_preparacion_min": null,
+    "notas": "Preparación: mezclar aceite+especias, cubrir floretes, hornear 200°C 25-30min.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 442,
+        "receta_id": 58,
+        "ingrediente_nombre": "coliflor",
+        "cantidad": 1.0,
+        "unidad": "grande"
+      },
+      {
+        "id": 443,
+        "receta_id": 58,
+        "ingrediente_nombre": "aceite de oliva",
+        "cantidad": 3.0,
+        "unidad": "cucharada"
+      },
+      {
+        "id": 444,
+        "receta_id": 58,
+        "ingrediente_nombre": "cúrcuma",
+        "cantidad": 1.0,
+        "unidad": "cucharadita"
+      },
+      {
+        "id": 445,
+        "receta_id": 58,
+        "ingrediente_nombre": "comino",
+        "cantidad": 1.0,
+        "unidad": "cucharadita"
+      },
+      {
+        "id": 446,
+        "receta_id": 58,
+        "ingrediente_nombre": "pimentón dulce",
+        "cantidad": 1.0,
+        "unidad": "cucharadita"
+      },
+      {
+        "id": 447,
+        "receta_id": 58,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 448,
+        "receta_id": 58,
+        "ingrediente_nombre": "pimienta",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 449,
+        "receta_id": 58,
+        "ingrediente_nombre": "cilantro fresco",
+        "cantidad": null,
+        "unidad": "opcional, decoración"
+      }
+    ]
+  },
+  {
+    "id": 59,
+    "nombre": "Coliflor Salteada con Ajo y Limón",
+    "porciones": 4,
+    "tiempo_preparacion_min": null,
+    "notas": "Preparación: saltear coliflor en aceite 7-10min hasta dorar, agregar ajo 1-2min, sazonar, agregar jugo de limón.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 450,
+        "receta_id": 59,
+        "ingrediente_nombre": "coliflor",
+        "cantidad": 1.0,
+        "unidad": "grande"
+      },
+      {
+        "id": 451,
+        "receta_id": 59,
+        "ingrediente_nombre": "ajo",
+        "cantidad": 2.5,
+        "unidad": "diente picado (2-3)"
+      },
+      {
+        "id": 452,
+        "receta_id": 59,
+        "ingrediente_nombre": "aceite de oliva",
+        "cantidad": 2.5,
+        "unidad": "cucharada (2-3)"
+      },
+      {
+        "id": 453,
+        "receta_id": 59,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 454,
+        "receta_id": 59,
+        "ingrediente_nombre": "pimienta",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 455,
+        "receta_id": 59,
+        "ingrediente_nombre": "limón (jugo)",
+        "cantidad": 1.0,
+        "unidad": "limón"
+      },
+      {
+        "id": 456,
+        "receta_id": 59,
+        "ingrediente_nombre": "perejil o cilantro",
+        "cantidad": null,
+        "unidad": "opcional, decoración"
+      }
+    ]
+  },
+  {
+    "id": 60,
+    "nombre": "Coliflor Salteada con Salsa de Soja y Jengibre",
+    "porciones": 4,
+    "tiempo_preparacion_min": null,
+    "notas": "Preparación: saltear coliflor 5-7min, agregar ajo+jengibre 1-2min, agregar soja+miel, cocinar 2-3min más.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 457,
+        "receta_id": 60,
+        "ingrediente_nombre": "coliflor",
+        "cantidad": 1.0,
+        "unidad": "grande"
+      },
+      {
+        "id": 458,
+        "receta_id": 60,
+        "ingrediente_nombre": "aceite de sésamo (o de oliva)",
+        "cantidad": 2.5,
+        "unidad": "cucharada (2-3)"
+      },
+      {
+        "id": 459,
+        "receta_id": 60,
+        "ingrediente_nombre": "ajo",
+        "cantidad": 2.5,
+        "unidad": "diente picado (2-3)"
+      },
+      {
+        "id": 460,
+        "receta_id": 60,
+        "ingrediente_nombre": "jengibre fresco rallado",
+        "cantidad": 1.0,
+        "unidad": "cucharada"
+      },
+      {
+        "id": 461,
+        "receta_id": 60,
+        "ingrediente_nombre": "salsa de soja (o tamari)",
+        "cantidad": 2.5,
+        "unidad": "cucharada (2-3)"
+      },
+      {
+        "id": 462,
+        "receta_id": 60,
+        "ingrediente_nombre": "miel",
+        "cantidad": 1.0,
+        "unidad": "cucharadita (opcional)"
+      },
+      {
+        "id": 463,
+        "receta_id": 60,
+        "ingrediente_nombre": "cebollín o cilantro",
+        "cantidad": null,
+        "unidad": "opcional, decoración"
+      }
+    ]
+  },
+  {
+    "id": 61,
+    "nombre": "Caldo de huesos",
+    "porciones": 1,
+    "tiempo_preparacion_min": null,
+    "notas": "Rinde ~2 litros de caldo base. Preparación: cubrir huesos con agua fría, hervor mínimo (burbujas chicas), espumar impurezas al principio, cocinar 8-12h (pollo) o 12-24h (vaca).",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 464,
+        "receta_id": 61,
+        "ingrediente_nombre": "agua mineral",
+        "cantidad": 2.0,
+        "unidad": "litro"
+      },
+      {
+        "id": 465,
+        "receta_id": 61,
+        "ingrediente_nombre": "huesos (caña, rodilla, costilla de ternera)",
+        "cantidad": 1.0,
+        "unidad": "kg"
+      },
+      {
+        "id": 466,
+        "receta_id": 61,
+        "ingrediente_nombre": "sal",
+        "cantidad": 12.0,
+        "unidad": "gramo"
+      },
+      {
+        "id": 467,
+        "receta_id": 61,
+        "ingrediente_nombre": "vinagre",
+        "cantidad": null,
+        "unidad": "opcional, chorrito (ayuda a liberar minerales)"
+      }
+    ]
+  },
+  {
+    "id": 62,
+    "nombre": "Caldo con fideos",
+    "porciones": 4,
+    "tiempo_preparacion_min": null,
+    "notas": "Caldo base + extras para la sopa final. Notas adicionales sobre verduras compatibles mencionadas por Juan: zanahoria no enturbia el caldo, puerro (parte blanca y verde clara) es excelente, evitar semillas de chía en el caldo (forma gel viscoso), otras opciones: zucchini, espinaca/acelga (al final), repollo, hongos (shiitake/champiñón para umami), brotes de soja (al final).",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 468,
+        "receta_id": 62,
+        "ingrediente_nombre": "huesos de pollo",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 469,
+        "receta_id": 62,
+        "ingrediente_nombre": "apio",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 470,
+        "receta_id": 62,
+        "ingrediente_nombre": "cebolla",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 471,
+        "receta_id": 62,
+        "ingrediente_nombre": "zanahoria",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 472,
+        "receta_id": 62,
+        "ingrediente_nombre": "jengibre",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 473,
+        "receta_id": 62,
+        "ingrediente_nombre": "ajo",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 474,
+        "receta_id": 62,
+        "ingrediente_nombre": "cúrcuma",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 475,
+        "receta_id": 62,
+        "ingrediente_nombre": "pimienta negra",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 476,
+        "receta_id": 62,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 477,
+        "receta_id": 62,
+        "ingrediente_nombre": "fideos de arroz",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 478,
+        "receta_id": 62,
+        "ingrediente_nombre": "huevo",
+        "cantidad": null,
+        "unidad": "duro o batido, a gusto"
+      },
+      {
+        "id": 479,
+        "receta_id": 62,
+        "ingrediente_nombre": "aceite de oliva",
+        "cantidad": null,
+        "unidad": "chorrito"
+      },
+      {
+        "id": 480,
+        "receta_id": 62,
+        "ingrediente_nombre": "limón (jugo)",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 481,
+        "receta_id": 62,
+        "ingrediente_nombre": "verde (espinaca, puerro o zucchini)",
+        "cantidad": null,
+        "unidad": "opcional"
+      }
+    ]
+  },
+  {
+    "id": 63,
+    "nombre": "Puré de raíces con ajo asado",
+    "porciones": 4,
+    "tiempo_preparacion_min": null,
+    "notas": "Acompañamiento para ojo de bife (receta separada). Preparación: asar ajo (y remolacha opcional) envueltos en papel aluminio en freidora de aire 190°C 45-60min; hervir camote+batata+papas+zanahoria 15-20min hasta tiernos; combinar todo con ajo asado pelado, manteca, crema, nuez moscada; triturar; sazonar; decorar.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 482,
+        "receta_id": 63,
+        "ingrediente_nombre": "camote",
+        "cantidad": 1.0,
+        "unidad": "mediano"
+      },
+      {
+        "id": 483,
+        "receta_id": 63,
+        "ingrediente_nombre": "batata",
+        "cantidad": 1.0,
+        "unidad": "mediana"
+      },
+      {
+        "id": 484,
+        "receta_id": 63,
+        "ingrediente_nombre": "papa",
+        "cantidad": 2.0,
+        "unidad": "mediana"
+      },
+      {
+        "id": 485,
+        "receta_id": 63,
+        "ingrediente_nombre": "zanahoria",
+        "cantidad": 2.0,
+        "unidad": "grande"
+      },
+      {
+        "id": 486,
+        "receta_id": 63,
+        "ingrediente_nombre": "remolacha",
+        "cantidad": 1.0,
+        "unidad": "mediana, opcional"
+      },
+      {
+        "id": 487,
+        "receta_id": 63,
+        "ingrediente_nombre": "ajo",
+        "cantidad": 1.0,
+        "unidad": "cabeza entera (asada)"
+      },
+      {
+        "id": 488,
+        "receta_id": 63,
+        "ingrediente_nombre": "manteca",
+        "cantidad": 2.0,
+        "unidad": "cucharada"
+      },
+      {
+        "id": 489,
+        "receta_id": 63,
+        "ingrediente_nombre": "crema de leche",
+        "cantidad": 50.0,
+        "unidad": "ml"
+      },
+      {
+        "id": 490,
+        "receta_id": 63,
+        "ingrediente_nombre": "nuez moscada",
+        "cantidad": null,
+        "unidad": "una pizca"
+      },
+      {
+        "id": 491,
+        "receta_id": 63,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 492,
+        "receta_id": 63,
+        "ingrediente_nombre": "pimienta",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 493,
+        "receta_id": 63,
+        "ingrediente_nombre": "perejil fresco",
+        "cantidad": null,
+        "unidad": "decoración"
+      },
+      {
+        "id": 494,
+        "receta_id": 63,
+        "ingrediente_nombre": "nueces tostadas",
+        "cantidad": null,
+        "unidad": "opcional, decoración"
+      },
+      {
+        "id": 495,
+        "receta_id": 63,
+        "ingrediente_nombre": "aceite de oliva virgen extra",
+        "cantidad": null,
+        "unidad": "para asar el ajo y decorar"
+      }
+    ]
+  },
+  {
+    "id": 64,
+    "nombre": "Ojo de bife",
+    "porciones": 1,
+    "tiempo_preparacion_min": null,
+    "notas": "Cantidades por persona — escalar según comensales. Preparación: sacar de la heladera 30min antes, secar bien, sazonar, calentar sartén de hierro a fuego medio-alto con aceite, sellar 3-4min por lado (término medio), reposar 5min antes de cortar.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 496,
+        "receta_id": 64,
+        "ingrediente_nombre": "ojo de bife",
+        "cantidad": 350.0,
+        "unidad": "g por persona (300-400g)"
+      },
+      {
+        "id": 497,
+        "receta_id": 64,
+        "ingrediente_nombre": "sal gruesa",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 498,
+        "receta_id": 64,
+        "ingrediente_nombre": "pimienta negra recién molida",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 499,
+        "receta_id": 64,
+        "ingrediente_nombre": "aceite de oliva o girasol",
+        "cantidad": null,
+        "unidad": "alto punto de humo"
+      },
+      {
+        "id": 500,
+        "receta_id": 64,
+        "ingrediente_nombre": "hierbas provenzales",
+        "cantidad": null,
+        "unidad": "opcional"
+      }
+    ]
+  },
+  {
+    "id": 65,
+    "nombre": "Panchitos con cebolla alemana y salsa picante-arábiga",
+    "porciones": 4,
+    "tiempo_preparacion_min": null,
+    "notas": "Preparación: dorar cebollas en aceite, mezclar con ají+alcaparras+salsas+curry+condimento, calentar salchichas y tostar panes, armar con pepinillos+queso+salsa.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 501,
+        "receta_id": 65,
+        "ingrediente_nombre": "salchicha tipo alemana",
+        "cantidad": 4.0,
+        "unidad": "unidad"
+      },
+      {
+        "id": 502,
+        "receta_id": 65,
+        "ingrediente_nombre": "pan para pancho",
+        "cantidad": 4.0,
+        "unidad": "unidad"
+      },
+      {
+        "id": 503,
+        "receta_id": 65,
+        "ingrediente_nombre": "pepinillos en vinagre",
+        "cantidad": 3.0,
+        "unidad": "unidad, picados"
+      },
+      {
+        "id": 504,
+        "receta_id": 65,
+        "ingrediente_nombre": "queso (hebras o fetas finas)",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 505,
+        "receta_id": 65,
+        "ingrediente_nombre": "cebolla morada",
+        "cantidad": 1.0,
+        "unidad": "en cubitos, remojada en agua fría"
+      },
+      {
+        "id": 506,
+        "receta_id": 65,
+        "ingrediente_nombre": "cebolla de verdeo (parte verde)",
+        "cantidad": null,
+        "unidad": "picada"
+      },
+      {
+        "id": 507,
+        "receta_id": 65,
+        "ingrediente_nombre": "ají putaparió",
+        "cantidad": 1.0,
+        "unidad": "unidad, picado fino"
+      },
+      {
+        "id": 508,
+        "receta_id": 65,
+        "ingrediente_nombre": "alcaparras",
+        "cantidad": 1.0,
+        "unidad": "cucharadita"
+      },
+      {
+        "id": 509,
+        "receta_id": 65,
+        "ingrediente_nombre": "salsa de tomate",
+        "cantidad": 3.0,
+        "unidad": "cucharada"
+      },
+      {
+        "id": 510,
+        "receta_id": 65,
+        "ingrediente_nombre": "salsa barbacoa",
+        "cantidad": 1.0,
+        "unidad": "cucharadita"
+      },
+      {
+        "id": 511,
+        "receta_id": 65,
+        "ingrediente_nombre": "curry",
+        "cantidad": 0.5,
+        "unidad": "cucharadita"
+      },
+      {
+        "id": 512,
+        "receta_id": 65,
+        "ingrediente_nombre": "condimento árabe (baharat o similar)",
+        "cantidad": 0.5,
+        "unidad": "cucharadita"
+      },
+      {
+        "id": 513,
+        "receta_id": 65,
+        "ingrediente_nombre": "aceite de oliva",
+        "cantidad": null,
+        "unidad": "para saltear"
+      }
+    ]
+  },
+  {
+    "id": 66,
+    "nombre": "Pastichio",
+    "porciones": 8,
+    "tiempo_preparacion_min": null,
+    "notas": "Lasaña griega de macarrones. Preparación: cocer macarrones al dente; sofreír cebolla, agregar caldo desmenuzado+canela+pimienta+carne+vino, reducir, agregar tomate, cocinar a fuego medio, incorporar macarrones; para bechamel calentar leche, agregar harinas disueltas en un vaso de leche fría, espesar, agregar huevo batido+nuez moscada+sal; armar en fuente (boloñesa+macarrones, cubrir con bechamel, queso rallado encima), hornear 180°C 30-40min.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 514,
+        "receta_id": 66,
+        "ingrediente_nombre": "macarrones",
+        "cantidad": 400.0,
+        "unidad": "g"
+      },
+      {
+        "id": 515,
+        "receta_id": 66,
+        "ingrediente_nombre": "carne de cerdo picada",
+        "cantidad": 400.0,
+        "unidad": "g"
+      },
+      {
+        "id": 516,
+        "receta_id": 66,
+        "ingrediente_nombre": "carne de ternera picada",
+        "cantidad": 400.0,
+        "unidad": "g"
+      },
+      {
+        "id": 517,
+        "receta_id": 66,
+        "ingrediente_nombre": "cebolla",
+        "cantidad": 2.0,
+        "unidad": "mediana"
+      },
+      {
+        "id": 518,
+        "receta_id": 66,
+        "ingrediente_nombre": "tomate natural triturado",
+        "cantidad": 800.0,
+        "unidad": "g"
+      },
+      {
+        "id": 519,
+        "receta_id": 66,
+        "ingrediente_nombre": "caldo de carne concentrado",
+        "cantidad": 2.0,
+        "unidad": "pastilla"
+      },
+      {
+        "id": 520,
+        "receta_id": 66,
+        "ingrediente_nombre": "canela",
+        "cantidad": 1.0,
+        "unidad": "cucharada postre"
+      },
+      {
+        "id": 521,
+        "receta_id": 66,
+        "ingrediente_nombre": "vino blanco",
+        "cantidad": 1.0,
+        "unidad": "vaso"
+      },
+      {
+        "id": 522,
+        "receta_id": 66,
+        "ingrediente_nombre": "pimienta negra",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 523,
+        "receta_id": 66,
+        "ingrediente_nombre": "aceite de oliva",
+        "cantidad": 2.0,
+        "unidad": "cucharada sopera"
+      },
+      {
+        "id": 524,
+        "receta_id": 66,
+        "ingrediente_nombre": "harina de trigo",
+        "cantidad": 10.0,
+        "unidad": "cucharada sopera"
+      },
+      {
+        "id": 525,
+        "receta_id": 66,
+        "ingrediente_nombre": "harina de maíz",
+        "cantidad": 5.0,
+        "unidad": "cucharada sopera"
+      },
+      {
+        "id": 526,
+        "receta_id": 66,
+        "ingrediente_nombre": "nuez moscada",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 527,
+        "receta_id": 66,
+        "ingrediente_nombre": "queso rallado",
+        "cantidad": 100.0,
+        "unidad": "g"
+      },
+      {
+        "id": 528,
+        "receta_id": 66,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 529,
+        "receta_id": 66,
+        "ingrediente_nombre": "leche",
+        "cantidad": 1.0,
+        "unidad": "litro"
+      },
+      {
+        "id": 530,
+        "receta_id": 66,
+        "ingrediente_nombre": "huevo",
+        "cantidad": 1.0,
+        "unidad": "unidad (para la bechamel)"
+      }
+    ]
+  },
+  {
+    "id": 67,
+    "nombre": "Pho Bo",
+    "porciones": 4,
+    "tiempo_preparacion_min": null,
+    "notas": "Sopa vietnamita de fideos de arroz con carne.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 531,
+        "receta_id": 67,
+        "ingrediente_nombre": "huesos de médula/rodilla",
+        "cantidad": 1.13,
+        "unidad": "kg"
+      },
+      {
+        "id": 532,
+        "receta_id": 67,
+        "ingrediente_nombre": "agua",
+        "cantidad": null,
+        "unidad": "8-12 vasos"
+      },
+      {
+        "id": 533,
+        "receta_id": 67,
+        "ingrediente_nombre": "cebolla",
+        "cantidad": 1.0,
+        "unidad": "grande"
+      },
+      {
+        "id": 534,
+        "receta_id": 67,
+        "ingrediente_nombre": "jengibre",
+        "cantidad": null,
+        "unidad": "1 trozo grande"
+      },
+      {
+        "id": 535,
+        "receta_id": 67,
+        "ingrediente_nombre": "ajo",
+        "cantidad": 3.0,
+        "unidad": "diente"
+      },
+      {
+        "id": 536,
+        "receta_id": 67,
+        "ingrediente_nombre": "azúcar",
+        "cantidad": 1.0,
+        "unidad": "cucharada"
+      },
+      {
+        "id": 537,
+        "receta_id": 67,
+        "ingrediente_nombre": "salsa de pescado",
+        "cantidad": 3.0,
+        "unidad": "cucharada"
+      },
+      {
+        "id": 538,
+        "receta_id": 67,
+        "ingrediente_nombre": "semillas de cilantro",
+        "cantidad": null,
+        "unidad": "para la bolsita de especias (tostar antes)"
+      },
+      {
+        "id": 539,
+        "receta_id": 67,
+        "ingrediente_nombre": "semillas de hinojo",
+        "cantidad": null,
+        "unidad": "para la bolsita de especias (tostar antes)"
+      },
+      {
+        "id": 540,
+        "receta_id": 67,
+        "ingrediente_nombre": "canela en barra",
+        "cantidad": null,
+        "unidad": "para la bolsita de especias (tostar antes)"
+      },
+      {
+        "id": 541,
+        "receta_id": 67,
+        "ingrediente_nombre": "anís estrellado",
+        "cantidad": null,
+        "unidad": "para la bolsita de especias (tostar antes)"
+      },
+      {
+        "id": 542,
+        "receta_id": 67,
+        "ingrediente_nombre": "cardamomo",
+        "cantidad": null,
+        "unidad": "para la bolsita de especias (tostar antes)"
+      },
+      {
+        "id": 543,
+        "receta_id": 67,
+        "ingrediente_nombre": "fideos de arroz",
+        "cantidad": null,
+        "unidad": "hidratados"
+      },
+      {
+        "id": 544,
+        "receta_id": 67,
+        "ingrediente_nombre": "lomo de vaca",
+        "cantidad": null,
+        "unidad": "en láminas finas, se cocina con el calor del caldo"
+      },
+      {
+        "id": 545,
+        "receta_id": 67,
+        "ingrediente_nombre": "cilantro fresco",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 546,
+        "receta_id": 67,
+        "ingrediente_nombre": "cebolla de verdeo",
+        "cantidad": null,
+        "unidad": "picada"
+      },
+      {
+        "id": 547,
+        "receta_id": 67,
+        "ingrediente_nombre": "brotes de soja",
+        "cantidad": null,
+        "unidad": "topping"
+      },
+      {
+        "id": 548,
+        "receta_id": 67,
+        "ingrediente_nombre": "lima",
+        "cantidad": null,
+        "unidad": "gajos, topping"
+      },
+      {
+        "id": 549,
+        "receta_id": 67,
+        "ingrediente_nombre": "chile",
+        "cantidad": null,
+        "unidad": "en rodajitas, topping"
+      }
+    ]
+  },
+  {
+    "id": 68,
+    "nombre": "Puré de vegetales",
+    "porciones": 4,
+    "tiempo_preparacion_min": null,
+    "notas": "Zanahoria, calabaza, batata y papa. Preparación: pelar y cortar en cubos todo, hervir 20-25min hasta tiernos, escurrir, aplastar, mezclar con manteca+queso crema+(ajo asado+crema si se usan), sazonar.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 550,
+        "receta_id": 68,
+        "ingrediente_nombre": "zanahoria",
+        "cantidad": 2.0,
+        "unidad": "grande"
+      },
+      {
+        "id": 551,
+        "receta_id": 68,
+        "ingrediente_nombre": "calabaza",
+        "cantidad": 300.0,
+        "unidad": "g"
+      },
+      {
+        "id": 552,
+        "receta_id": 68,
+        "ingrediente_nombre": "batata",
+        "cantidad": 1.0,
+        "unidad": "mediana"
+      },
+      {
+        "id": 553,
+        "receta_id": 68,
+        "ingrediente_nombre": "papa",
+        "cantidad": 2.0,
+        "unidad": "mediana"
+      },
+      {
+        "id": 554,
+        "receta_id": 68,
+        "ingrediente_nombre": "queso crema",
+        "cantidad": 2.0,
+        "unidad": "cucharada"
+      },
+      {
+        "id": 555,
+        "receta_id": 68,
+        "ingrediente_nombre": "manteca",
+        "cantidad": 1.0,
+        "unidad": "cucharada"
+      },
+      {
+        "id": 556,
+        "receta_id": 68,
+        "ingrediente_nombre": "ajo asado",
+        "cantidad": 1.0,
+        "unidad": "diente, opcional"
+      },
+      {
+        "id": 557,
+        "receta_id": 68,
+        "ingrediente_nombre": "crema de leche",
+        "cantidad": 0.25,
+        "unidad": "taza, opcional"
+      },
+      {
+        "id": 558,
+        "receta_id": 68,
+        "ingrediente_nombre": "sal",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 559,
+        "receta_id": 68,
+        "ingrediente_nombre": "pimienta negra",
+        "cantidad": null,
+        "unidad": "a gusto"
+      },
+      {
+        "id": 560,
+        "receta_id": 68,
+        "ingrediente_nombre": "nuez moscada",
+        "cantidad": null,
+        "unidad": "opcional, a gusto"
+      }
+    ]
+  },
+  {
+    "id": 69,
+    "nombre": "Limoncello clásico",
+    "porciones": 1,
+    "tiempo_preparacion_min": null,
+    "notas": "Rinde ~4.7L por litro de alcohol usado. Preparación: pelar limones en tiras, macerar cáscaras con alcohol en frasco hermético 30 días en lugar fresco y oscuro; hervir agua+azúcar hasta disolver, enfriar; colar alcohol macerado, mezclar con almíbar frío; envasar, guardar en freezer.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 561,
+        "receta_id": 69,
+        "ingrediente_nombre": "limón",
+        "cantidad": 8.0,
+        "unidad": "unidad (6 a 10, solo cáscara, sin parte blanca)"
+      },
+      {
+        "id": 562,
+        "receta_id": 69,
+        "ingrediente_nombre": "alcohol etílico alimentario",
+        "cantidad": 500.0,
+        "unidad": "ml"
+      },
+      {
+        "id": 563,
+        "receta_id": 69,
+        "ingrediente_nombre": "agua",
+        "cantidad": 1.2,
+        "unidad": "litro"
+      },
+      {
+        "id": 564,
+        "receta_id": 69,
+        "ingrediente_nombre": "azúcar",
+        "cantidad": 1.0,
+        "unidad": "kg"
+      }
+    ]
+  },
+  {
+    "id": 70,
+    "nombre": "Limoncello cremoso",
+    "porciones": 1,
+    "tiempo_preparacion_min": null,
+    "notas": "Rinde ~5.3L por litro de alcohol usado. Preparación: macerar cáscaras en alcohol 30 días; hervir leche+crema+vainilla, retirar vainilla, enfriar un poco, agregar azúcar hasta disolver, enfriar completo; colar alcohol, mezclar con la base cremosa; embotellar; madurar en freezer 1 mes antes de consumir.",
+    "activa": 1,
+    "ingredientes": [
+      {
+        "id": 565,
+        "receta_id": 70,
+        "ingrediente_nombre": "limón",
+        "cantidad": 8.0,
+        "unidad": "unidad, solo cáscara"
+      },
+      {
+        "id": 566,
+        "receta_id": 70,
+        "ingrediente_nombre": "crema de leche",
+        "cantidad": 1.0,
+        "unidad": "litro"
+      },
+      {
+        "id": 567,
+        "receta_id": 70,
+        "ingrediente_nombre": "leche",
+        "cantidad": 0.5,
+        "unidad": "litro"
+      },
+      {
+        "id": 568,
+        "receta_id": 70,
+        "ingrediente_nombre": "azúcar",
+        "cantidad": 1.0,
+        "unidad": "kg"
+      },
+      {
+        "id": 569,
+        "receta_id": 70,
+        "ingrediente_nombre": "alcohol etílico alimentario",
+        "cantidad": 0.5,
+        "unidad": "litro"
+      },
+      {
+        "id": 570,
+        "receta_id": 70,
+        "ingrediente_nombre": "vainilla (chaucha o esencia)",
+        "cantidad": null,
+        "unidad": "a gusto"
+      }
+    ]
+  }
+]

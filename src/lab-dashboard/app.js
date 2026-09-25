@@ -75,10 +75,20 @@ function getLatestRealMonth(rows) {
 
 // ── ESTADO ────────────────────────────────────────────────────────────────
 
-const DATA = { gastos: [], ingresos: [], fijos: [], resumen: [], deudaPendiente: null };
+const DATA = {
+  gastos: [], ingresos: [], fijos: [], resumen: [], deudaPendiente: null,
+  loadErrors: {}, compras: null, comprasError: null, recetas: null, recetasError: null,
+};
 const charts = {};
 let period = null;
 let currentView = 'gastos';
+// Destinos con pestaña visible en nav.view-tabs. 'inversiones' y 'presupuesto'
+// siguen en el DOM (código/panel conservado) pero switchView los ignora: no
+// tienen botón de tab y no deben quedar accesibles desde la navegación.
+const VISIBLE_VIEWS = ['gastos', 'ingresos', 'supermercado', 'recetas'];
+const ALL_VIEWS = [...VISIBLE_VIEWS, 'inversiones', 'presupuesto'];
+let comprasLoaded = false;
+let recetasLoaded = false;
 let personaFiltro = 'comun';
 let categPieMode = 'doughnut';
 let subcatMode = 'doughnut';
@@ -110,6 +120,13 @@ async function loadAll() {
   DATA.fijos = f.status === 'fulfilled' ? f.value : [];
   DATA.resumen = r.status === 'fulfilled' ? r.value : [];
   DATA.deudaPendiente = d.status === 'fulfilled' ? d.value : null;
+  DATA.loadErrors = {
+    gastos: g.status === 'rejected',
+    ingresos: i.status === 'rejected',
+    fijos: f.status === 'rejected',
+    resumen: r.status === 'rejected',
+    deudaPendiente: d.status === 'rejected',
+  };
   if (g.status === 'rejected') console.error('No se pudo cargar data/gastos.json', g.reason);
   if (i.status === 'rejected') console.error('No se pudo cargar data/ingresos.json', i.reason);
   if (f.status === 'rejected') console.error('No se pudo cargar data/gastos_fijos.json', f.reason);
@@ -124,23 +141,35 @@ async function loadAll() {
 
 // ── NAVEGACIÓN ───────────────────────────────────────────────────────────
 
+// Solo los destinos en VISIBLE_VIEWS son alcanzables por esta función — evita
+// que un onclick mal formado o un enlace viejo deje 'inversiones'/'presupuesto'
+// visibles sin su pestaña correspondiente.
 function switchView(v) {
+  if (!VISIBLE_VIEWS.includes(v)) return;
   currentView = v;
-  ['gastos', 'inversiones', 'ingresos', 'presupuesto'].forEach((name) => {
+  ALL_VIEWS.forEach((name) => {
     const tab = document.getElementById('tab-' + name);
     const panel = document.getElementById('view-' + name);
     const isActive = name === v;
-    tab.classList.toggle('active', isActive);
-    tab.setAttribute('aria-selected', String(isActive));
-    panel.classList.toggle('active', isActive);
-    panel.hidden = !isActive;
+    if (tab) {
+      tab.classList.toggle('active', isActive);
+      tab.setAttribute('aria-selected', String(isActive));
+    }
+    if (panel) {
+      panel.classList.toggle('active', isActive);
+      panel.hidden = !isActive;
+    }
   });
+  const topbar = document.getElementById('finanzas-topbar');
+  if (topbar) topbar.hidden = !(v === 'gastos' || v === 'ingresos');
   renderView(v);
 }
 
 function renderView(v) {
   if (v === 'gastos') renderGastosView();
   else if (v === 'ingresos') renderIngresosView();
+  else if (v === 'supermercado') ensureComprasLoaded();
+  else if (v === 'recetas') ensureRecetasLoaded();
   // Inversiones y Presupuesto se quedan en el estado vacío ya maquetado en index.html.
 }
 
@@ -901,6 +930,232 @@ function renderIncomeLines() {
       plugins: { legend: { position: 'bottom', labels: { color: INK, font: FONT, boxWidth: 12 } } },
     },
   });
+}
+
+// ── VISTA SUPERMERCADO ───────────────────────────────────────────────────
+
+async function ensureComprasLoaded() {
+  if (comprasLoaded) { renderSupermercadoList(); return; }
+  comprasLoaded = true;
+  document.getElementById('supermercado-content').textContent = 'Cargando…';
+  try {
+    DATA.compras = await fetchJSON('data/compras.json');
+    DATA.comprasError = null;
+  } catch (err) {
+    DATA.compras = [];
+    DATA.comprasError = err.message;
+    console.error('No se pudo cargar data/compras.json', err);
+  }
+  renderSupermercadoList();
+}
+
+function renderSupermercadoList() {
+  const content = document.getElementById('supermercado-content');
+  if (!content) return;
+  if (DATA.comprasError) {
+    content.innerHTML = `<div class="empty-state">No se pudo cargar la lista del súper (${escapeHtml(DATA.comprasError)}). Verificá que exista <code>data/compras.json</code>.</div>`;
+    return;
+  }
+  if (DATA.compras === null) return; // todavía cargando
+
+  const query = (document.getElementById('supermercado-search')?.value || '').trim().toLowerCase();
+  const items = DATA.compras.filter((it) => !query || String(it.item_nombre || '').toLowerCase().includes(query));
+
+  if (!DATA.compras.length) {
+    content.innerHTML = '<div class="empty-state">La lista del súper está vacía.</div>';
+    return;
+  }
+  if (!items.length) {
+    content.innerHTML = '<div class="empty-state">Sin ítems que coincidan con la búsqueda.</div>';
+    return;
+  }
+
+  const pendientes = items.filter((it) => !it.comprado);
+  const comprados = items.filter((it) => it.comprado);
+  const renderItem = (it) => {
+    const prioridad = (it.prioridad || '').toLowerCase();
+    return `
+    <div class="super-item${it.comprado ? ' done' : ''}">
+      <div class="super-item-main">
+        <span>${escapeHtml(it.item_nombre)}</span>
+        <span class="super-item-meta">
+          ${escapeHtml(it.cantidad_deseada)} ${escapeHtml(it.unidad)}${it.agregado_por ? ' · agregado por ' + escapeHtml(it.agregado_por) : ''}${it.fecha_agregado ? ' · ' + escapeHtml(it.fecha_agregado) : ''}
+        </span>
+      </div>
+      ${it.prioridad ? `<span class="${prioridad === 'alta' ? 'prioridad-alta' : ''}">${escapeHtml(it.prioridad)}</span>` : ''}
+    </div>`;
+  };
+
+  content.innerHTML = `
+    <div class="super-section-title">Pendientes (${pendientes.length})</div>
+    <div class="super-list">${pendientes.length ? pendientes.map(renderItem).join('') : '<div class="empty-state">Nada pendiente.</div>'}</div>
+    <div class="super-section-title">Comprados (${comprados.length})</div>
+    <div class="super-list">${comprados.length ? comprados.map(renderItem).join('') : '<div class="empty-state">Nada marcado como comprado.</div>'}</div>`;
+}
+
+// ── VISTA RECETAS ────────────────────────────────────────────────────────
+
+async function ensureRecetasLoaded() {
+  if (recetasLoaded) { renderRecetasList(); return; }
+  recetasLoaded = true;
+  document.getElementById('recetas-content').textContent = 'Cargando…';
+  try {
+    DATA.recetas = await fetchJSON('data/recetas.json');
+    DATA.recetasError = null;
+  } catch (err) {
+    DATA.recetas = [];
+    DATA.recetasError = err.message;
+    console.error('No se pudo cargar data/recetas.json', err);
+  }
+  renderRecetasList();
+}
+
+function renderRecetasList() {
+  const content = document.getElementById('recetas-content');
+  if (!content) return;
+  if (DATA.recetasError) {
+    content.innerHTML = `<div class="empty-state">No se pudo cargar el recetario (${escapeHtml(DATA.recetasError)}). Verificá que exista <code>data/recetas.json</code>.</div>`;
+    return;
+  }
+  if (DATA.recetas === null) return; // todavía cargando
+
+  const query = (document.getElementById('recetas-search')?.value || '').trim().toLowerCase();
+  const recetas = DATA.recetas.filter((r) => !query || String(r.nombre || '').toLowerCase().includes(query));
+
+  if (!DATA.recetas.length) {
+    content.innerHTML = '<div class="empty-state">Todavía no hay recetas cargadas.</div>';
+    return;
+  }
+  if (!recetas.length) {
+    content.innerHTML = '<div class="empty-state">Sin recetas que coincidan con la búsqueda.</div>';
+    return;
+  }
+
+  content.innerHTML = `<div class="recetas-grid">${recetas.map((r) => `
+    <article class="receta-card">
+      <h3>${escapeHtml(r.nombre)}</h3>
+      <div class="receta-meta">${r.porciones ? escapeHtml(r.porciones) + ' porciones' : ''}${r.tiempo_preparacion_min ? ' · ' + escapeHtml(r.tiempo_preparacion_min) + ' min' : ''}</div>
+      <ul class="receta-ingredientes">
+        ${(r.ingredientes || []).map((ing) => `<li>${escapeHtml(ing.cantidad)} ${escapeHtml(ing.unidad)} ${escapeHtml(ing.ingrediente_nombre)}</li>`).join('') || '<li class="td-muted">Sin ingredientes cargados.</li>'}
+      </ul>
+      ${r.notas ? `<div class="receta-notas">${escapeHtml(r.notas)}</div>` : ''}
+    </article>`).join('')}</div>`;
+}
+
+// ── IMPRIMIR / PDF (GASTOS) ──────────────────────────────────────────────
+
+// Arma un resumen imprimible aparte del dashboard (ver .print-summary en
+// style.css + @media print): reutiliza exactamente los mismos filtros y
+// helpers que renderGastosView para no introducir una segunda fuente de
+// verdad contable. Donde falta una fuente de datos, se deja constancia en
+// vez de mostrar $0 (que se leería como "no hay gasto/deuda").
+function printGastosResumen() {
+  renderPrintSummary();
+  window.print();
+}
+
+function renderPrintSummary() {
+  const el = document.getElementById('print-summary');
+  if (!el) return;
+
+  const periodLabel = period.type === 'month'
+    ? mesLabel(period.refMonth)
+    : (period.from && period.to) ? `${period.from} a ${period.to}` : 'Todo el historial disponible';
+  const generatedAt = new Date().toLocaleString('es-AR');
+
+  let html = `
+    <h1>LIFE — Resumen de gastos</h1>
+    <p>Período: <strong>${escapeHtml(periodLabel)}</strong> · generado el ${escapeHtml(generatedAt)}</p>`;
+
+  if (DATA.loadErrors.gastos) {
+    html += '<p class="print-missing">⚠ No se pudo cargar data/gastos.json: sin datos de gastos, cuotas ni desglose JD/Pinki para este resumen.</p>';
+  } else {
+    const rows = filterGastosPeriod(period.from, period.to);
+    const varRows = rows.filter((r) => (parseInt(r.cuota_nro, 10) || 1) === 1);
+    const varTotal = sum(varRows, 'monto');
+    let sub1 = 0, sub2 = 0;
+    varRows.forEach((r) => {
+      const monto = parseFloat(r.monto) || 0;
+      const { pct1, pct2 } = getRowPct(r);
+      sub1 += monto * pct1 / 100;
+      sub2 += monto * pct2 / 100;
+    });
+    const cuotasRows = filterCuotasComprometidas(period.from, period.to)
+      .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+    const cuotasTotal = sum(cuotasRows, 'monto');
+
+    const months = getMonthsInPeriod(period.from, period.to).length || 1;
+    const fijos = DATA.loadErrors.fijos ? [] : activeFijos();
+    const fijosTotal = fijos.reduce((acc, f) => acc + fijoMonthly(f), 0) * months;
+    const total = varTotal + fijosTotal + cuotasTotal;
+
+    html += `
+      <h2>Total del período</h2>
+      <table>
+        <tr><th>Concepto</th><th>Monto</th></tr>
+        <tr><td>Gastos variables</td><td>${fmtARS(varTotal)}</td></tr>
+        <tr><td>Fijos activos${months > 1 ? ` (mensual × ${months} meses)` : ''}</td><td>${DATA.loadErrors.fijos ? 'no disponible' : fmtARS(fijosTotal)}</td></tr>
+        <tr><td>Cuotas comprometidas</td><td>${fmtARS(cuotasTotal)}</td></tr>
+        <tr><td><strong>Total${DATA.loadErrors.fijos ? ' (sin fijos, ver nota)' : ''}</strong></td><td><strong>${fmtARS(total)}</strong></td></tr>
+      </table>
+      ${DATA.loadErrors.resumen ? '<p class="print-missing">⚠ No se pudo cargar data/resumen_meses.json — las filas sin proporción explícita usan 50/50 por defecto, no la proporción real de ese mes.</p>' : ''}
+
+      <h2>Desglose por persona (gastos variables)</h2>
+      <table>
+        <tr><th>Persona</th><th>Corresponde</th></tr>
+        <tr><td>${escapeHtml(P1)}</td><td>${fmtARS(sub1)}</td></tr>
+        <tr><td>${escapeHtml(P2)}</td><td>${fmtARS(sub2)}</td></tr>
+      </table>
+      <p class="print-note">No incluye el prorrateo de fijos ni cuotas por persona — esos datos no traen split JD/Pinki por ítem en el snapshot migrado.</p>
+
+      <h2>Gastos fijos</h2>
+      ${DATA.loadErrors.fijos
+        ? '<p class="print-missing">⚠ No se pudo cargar data/gastos_fijos.json — sin listado de fijos para este resumen.</p>'
+        : fijos.length
+          ? `<table>
+              <tr><th>Nombre</th><th>Responsable</th><th>Periodicidad</th><th>Mensual</th></tr>
+              ${fijos.map((f) => `<tr>
+                <td>${escapeHtml(f.nombre)}</td>
+                <td>${f.responsable ? escapeHtml(f.responsable) : 'no especificado en los datos'}</td>
+                <td>${escapeHtml(f.periodicidad)}${f.periodicidad === 'bimestral' ? ' (prorrateado ÷2, evita duplicar el bimestre)' : ''}</td>
+                <td>${fmtARS(fijoMonthly(f))}</td>
+              </tr>`).join('')}
+            </table>
+            ${!fijos.some((f) => f.responsable) ? '<p class="print-note">Los datos migrados no traen responsable (Común/JD/Pinki) por ítem fijo — no se fabrica ese dato.</p>' : ''}`
+          : '<p class="print-note">Sin fijos activos.</p>'}
+
+      <h2>Cuotas comprometidas</h2>
+      ${cuotasRows.length
+        ? `<table>
+            <tr><th>Fecha</th><th>Descripción</th><th>Cuota</th><th>Monto</th></tr>
+            ${cuotasRows.map((r) => `<tr>
+              <td>${r.fecha || '—'}</td>
+              <td>${escapeHtml(r.descripcion_original)}</td>
+              <td>${cuotaLabel(r)}</td>
+              <td>${fmtARS(r.monto)}</td>
+            </tr>`).join('')}
+          </table>`
+        : '<p class="print-note">Sin cuotas comprometidas en este período.</p>'}`;
+  }
+
+  html += '<h2>Deuda pendiente</h2>';
+  if (DATA.loadErrors.deudaPendiente) {
+    html += '<p class="print-missing">⚠ No se pudo cargar data/deuda_pendiente.json — no se muestra un monto para evitar una cifra engañosa.</p>';
+  } else {
+    const d = DATA.deudaPendiente;
+    if (d && d.deudor) {
+      html += `
+        <p class="print-missing">⚠ Deuda ACTUAL, todavía NO saldada al momento de generar este resumen (no varía según el período elegido arriba).</p>
+        <table>
+          <tr><th>Deudor</th><th>Acreedor</th><th>Monto</th></tr>
+          <tr><td>${escapeHtml(d.deudor)}</td><td>${escapeHtml(d.acreedor)}</td><td>${fmtARS(d.monto)}</td></tr>
+        </table>`;
+    } else {
+      html += '<p class="print-note">Sin deuda pendiente registrada — todo saldado.</p>';
+    }
+  }
+
+  el.innerHTML = html;
 }
 
 loadAll();

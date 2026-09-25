@@ -69,19 +69,6 @@ h1, h2, h3 {
   color: var(--ink-soft);
 }
 
-.badge-demo {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 12px;
-  background: var(--paper-raised);
-  border: 1px solid var(--line);
-  color: var(--green-deep);
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 500;
-}
-
 .masthead h1 {
   font-size: 46px;
   font-style: italic;
@@ -239,6 +226,62 @@ h1, h2, h3 {
   display: none;
 }
 
+.topbar[hidden] {
+  display: none;
+}
+
+.section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  font-family: 'Work Sans', sans-serif;
+  font-size: 13px;
+  padding: 9px 14px;
+  min-height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--paper-raised);
+  color: var(--ink);
+  min-width: 180px;
+}
+
+.search-input:focus-visible {
+  outline: 2px solid var(--green-deep);
+  outline-offset: 1px;
+}
+
+.btn-print {
+  font-family: 'Work Sans', sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--paper-raised);
+  background: var(--green-deep);
+  border: 1px solid var(--green-deep);
+  border-radius: 999px;
+  padding: 8px 16px;
+  min-height: 44px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-print:hover {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.btn-print:active {
+  transform: translateY(1px);
+}
+
+.btn-print:focus-visible {
+  outline: 2px solid var(--green-deep);
+  outline-offset: 2px;
+}
+
 /* ---- Cards ---- */
 
 .cards {
@@ -274,6 +317,22 @@ button.card {
 button.card:focus-visible {
   outline: 2px solid var(--green-deep);
   outline-offset: 2px;
+}
+
+button.card:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow);
+  background: var(--paper-deep);
+}
+
+/* Total gastos es informativa, no un botón: sin affordance de hover/press. */
+#card-total-gastos-wrap {
+  cursor: default;
+}
+
+#card-total-gastos-wrap:hover {
+  transform: none;
+  box-shadow: var(--shadow);
 }
 
 .card-icon {
@@ -331,6 +390,8 @@ button.card:focus-visible {
 
 .detail-panel-inner {
   padding: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .detail-panel table {
@@ -650,6 +711,111 @@ button.card:focus-visible {
   padding: 10px 0;
 }
 
+/* ---- Supermercado ---- */
+
+.super-section-title {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: 15px;
+  margin: 18px 0 8px;
+}
+
+.super-section-title:first-child {
+  margin-top: 0;
+}
+
+.super-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.super-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--paper-deep);
+}
+
+.super-item.done {
+  opacity: 0.55;
+}
+
+.super-item.done .super-item-main span:first-child {
+  text-decoration: line-through;
+}
+
+.super-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.super-item-meta {
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.prioridad-alta {
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+/* ---- Recetas ---- */
+
+.recetas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.receta-card {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.receta-card h3 {
+  font-size: 16px;
+  font-style: italic;
+  margin-bottom: 6px;
+}
+
+.receta-meta {
+  color: var(--ink-soft);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.receta-ingredientes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 13px;
+}
+
+.receta-ingredientes li {
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.receta-ingredientes li:last-child {
+  border-bottom: none;
+}
+
+.receta-notas {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
 /* ---- Tabla: filtros y extras ---- */
 
 .table-header {
@@ -819,5 +985,82 @@ footer {
   .topbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+  /* Target táctil >=44px para botones de período/persona (antes ~26px alto). */
+  .period-btn,
+  .persona-btn {
+    min-height: 44px;
+    padding: 10px 14px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .btn-print {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+/* ---- Resumen imprimible (Gastos → Imprimir / Guardar PDF) ---- */
+
+.print-summary {
+  display: none;
+}
+
+.print-summary h1 {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.print-summary h2 {
+  font-size: 15px;
+  margin: 18px 0 8px;
+}
+
+.print-summary table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.print-summary th,
+.print-summary td {
+  border: 1px solid #999;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.print-note {
+  font-size: 11px;
+  color: #555;
+  font-style: italic;
+  margin: 4px 0 10px;
+}
+
+.print-missing {
+  font-size: 12px;
+  color: #a3271f;
+  font-weight: 600;
+  margin: 4px 0 10px;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-summary,
+  .print-summary * {
+    visibility: visible;
+  }
+  .print-summary {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    margin: 0;
+    padding: 16px;
+    background: #fff;
+    color: #000;
   }
 }

@@ -1,28 +1,5 @@
 [
   {
-    "id": 21,
-    "fecha": "2026-09-24",
-    "monto": 17000.0,
-    "moneda": "ARS",
-    "categoria": "Entretenimiento",
-    "subcategoria": "Cine/Teatro",
-    "medio_pago": "Crédito",
-    "pagado_por": "JD",
-    "descripcion_original": "Cine con Pinki",
-    "origen": "texto",
-    "confirmado": 1,
-    "created_at": "2026-09-24T13:16:46.537455+00:00",
-    "chat_id": null,
-    "tarjeta_id": "TC1",
-    "tipo_proporcion": "custom",
-    "proporcion_jd": 50.0,
-    "proporcion_pinki": 50.0,
-    "cuotas_total": 1,
-    "cuota_nro": 1,
-    "cuota_ref": null,
-    "saldado": null
-  },
-  {
     "id": 649,
     "fecha": "2026-04-06",
     "monto": 49500.0,
@@ -43,7 +20,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 650,
@@ -66,7 +44,8 @@
     "cuotas_total": 18,
     "cuota_nro": 1,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 651,
@@ -89,7 +68,8 @@
     "cuotas_total": 18,
     "cuota_nro": 2,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 652,
@@ -112,7 +92,8 @@
     "cuotas_total": 18,
     "cuota_nro": 3,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 653,
@@ -135,7 +116,8 @@
     "cuotas_total": 18,
     "cuota_nro": 4,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 654,
@@ -158,7 +140,8 @@
     "cuotas_total": 18,
     "cuota_nro": 5,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 655,
@@ -181,7 +164,8 @@
     "cuotas_total": 18,
     "cuota_nro": 6,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 656,
@@ -204,7 +188,8 @@
     "cuotas_total": 18,
     "cuota_nro": 7,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 657,
@@ -227,7 +212,8 @@
     "cuotas_total": 18,
     "cuota_nro": 8,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 658,
@@ -250,7 +236,8 @@
     "cuotas_total": 18,
     "cuota_nro": 9,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 659,
@@ -273,7 +260,8 @@
     "cuotas_total": 18,
     "cuota_nro": 10,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 660,
@@ -296,7 +284,8 @@
     "cuotas_total": 18,
     "cuota_nro": 11,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 661,
@@ -319,7 +308,8 @@
     "cuotas_total": 18,
     "cuota_nro": 12,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 662,
@@ -342,7 +332,8 @@
     "cuotas_total": 18,
     "cuota_nro": 13,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 663,
@@ -365,7 +356,8 @@
     "cuotas_total": 18,
     "cuota_nro": 14,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 664,
@@ -388,7 +380,8 @@
     "cuotas_total": 18,
     "cuota_nro": 15,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 665,
@@ -411,7 +404,8 @@
     "cuotas_total": 18,
     "cuota_nro": 16,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 666,
@@ -434,7 +428,8 @@
     "cuotas_total": 18,
     "cuota_nro": 17,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 667,
@@ -457,7 +452,8 @@
     "cuotas_total": 18,
     "cuota_nro": 18,
     "cuota_ref": 650,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 668,
@@ -480,7 +476,8 @@
     "cuotas_total": 3,
     "cuota_nro": 1,
     "cuota_ref": 668,
-    "saldado": "2026-02-03"
+    "saldado": "2026-02-03",
+    "es_real": 0
   },
   {
     "id": 669,
@@ -503,7 +500,8 @@
     "cuotas_total": 3,
     "cuota_nro": 2,
     "cuota_ref": 668,
-    "saldado": "2026-03-03"
+    "saldado": "2026-03-03",
+    "es_real": 0
   },
   {
     "id": 670,
@@ -526,7 +524,8 @@
     "cuotas_total": 3,
     "cuota_nro": 3,
     "cuota_ref": 668,
-    "saldado": "2026-04-03"
+    "saldado": "2026-04-03",
+    "es_real": 0
   },
   {
     "id": 671,
@@ -549,7 +548,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-03-31"
+    "saldado": "2026-03-31",
+    "es_real": 0
   },
   {
     "id": 672,
@@ -572,7 +572,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 673,
@@ -595,7 +596,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 674,
@@ -618,7 +620,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 675,
@@ -641,7 +644,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 676,
@@ -664,7 +668,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 677,
@@ -687,7 +692,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 678,
@@ -710,7 +716,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 679,
@@ -733,7 +740,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 680,
@@ -756,7 +764,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 681,
@@ -779,7 +788,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 682,
@@ -802,7 +812,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 683,
@@ -825,7 +836,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 684,
@@ -848,7 +860,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 685,
@@ -871,7 +884,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-04-29"
+    "saldado": "2026-04-29",
+    "es_real": 0
   },
   {
     "id": 686,
@@ -894,7 +908,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 687,
@@ -917,7 +932,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-04-29"
+    "saldado": "2026-04-29",
+    "es_real": 0
   },
   {
     "id": 688,
@@ -940,7 +956,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 689,
@@ -963,7 +980,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 690,
@@ -986,7 +1004,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-04-29"
+    "saldado": "2026-04-29",
+    "es_real": 0
   },
   {
     "id": 691,
@@ -1009,7 +1028,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 692,
@@ -1032,7 +1052,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 693,
@@ -1055,7 +1076,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 694,
@@ -1078,7 +1100,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 695,
@@ -1101,7 +1124,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 696,
@@ -1124,7 +1148,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 697,
@@ -1147,7 +1172,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 698,
@@ -1170,7 +1196,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 699,
@@ -1193,7 +1220,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 700,
@@ -1216,7 +1244,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 701,
@@ -1239,7 +1268,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 702,
@@ -1262,7 +1292,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 703,
@@ -1285,7 +1316,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 704,
@@ -1308,7 +1340,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 705,
@@ -1331,7 +1364,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 706,
@@ -1354,7 +1388,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 707,
@@ -1377,7 +1412,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 708,
@@ -1400,7 +1436,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 709,
@@ -1423,7 +1460,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 710,
@@ -1446,7 +1484,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 711,
@@ -1469,7 +1508,8 @@
     "cuotas_total": 3,
     "cuota_nro": 1,
     "cuota_ref": 711,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 712,
@@ -1492,7 +1532,8 @@
     "cuotas_total": 3,
     "cuota_nro": 2,
     "cuota_ref": 711,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 713,
@@ -1515,7 +1556,8 @@
     "cuotas_total": 3,
     "cuota_nro": 3,
     "cuota_ref": 711,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 714,
@@ -1538,7 +1580,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 715,
@@ -1561,7 +1604,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-04-29"
+    "saldado": "2026-04-29",
+    "es_real": 0
   },
   {
     "id": 716,
@@ -1584,7 +1628,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-04-29"
+    "saldado": "2026-04-29",
+    "es_real": 0
   },
   {
     "id": 717,
@@ -1607,7 +1652,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-04-29"
+    "saldado": "2026-04-29",
+    "es_real": 0
   },
   {
     "id": 718,
@@ -1630,7 +1676,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 719,
@@ -1653,7 +1700,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 720,
@@ -1676,7 +1724,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 721,
@@ -1699,7 +1748,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 722,
@@ -1722,7 +1772,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-04-29"
+    "saldado": "2026-04-29",
+    "es_real": 0
   },
   {
     "id": 723,
@@ -1745,7 +1796,8 @@
     "cuotas_total": 6,
     "cuota_nro": 1,
     "cuota_ref": 723,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 724,
@@ -1768,7 +1820,8 @@
     "cuotas_total": 6,
     "cuota_nro": 2,
     "cuota_ref": 723,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 725,
@@ -1791,7 +1844,8 @@
     "cuotas_total": 6,
     "cuota_nro": 3,
     "cuota_ref": 723,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 726,
@@ -1814,7 +1868,8 @@
     "cuotas_total": 6,
     "cuota_nro": 4,
     "cuota_ref": 723,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 727,
@@ -1837,7 +1892,8 @@
     "cuotas_total": 6,
     "cuota_nro": 5,
     "cuota_ref": 723,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 728,
@@ -1860,7 +1916,8 @@
     "cuotas_total": 6,
     "cuota_nro": 6,
     "cuota_ref": 723,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 729,
@@ -1883,7 +1940,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-04-29"
+    "saldado": "2026-04-29",
+    "es_real": 0
   },
   {
     "id": 730,
@@ -1906,7 +1964,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 731,
@@ -1929,7 +1988,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 732,
@@ -1952,7 +2012,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 733,
@@ -1975,7 +2036,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 734,
@@ -1998,7 +2060,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 735,
@@ -2021,7 +2084,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-04-29"
+    "saldado": "2026-04-29",
+    "es_real": 0
   },
   {
     "id": 736,
@@ -2044,7 +2108,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 737,
@@ -2067,7 +2132,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-04-29"
+    "saldado": "2026-04-29",
+    "es_real": 0
   },
   {
     "id": 738,
@@ -2090,7 +2156,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-04-29"
+    "saldado": "2026-04-29",
+    "es_real": 0
   },
   {
     "id": 739,
@@ -2113,7 +2180,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 740,
@@ -2136,7 +2204,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-04-30"
+    "saldado": "2026-04-30",
+    "es_real": 0
   },
   {
     "id": 741,
@@ -2159,7 +2228,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-07"
+    "saldado": "2026-05-07",
+    "es_real": 0
   },
   {
     "id": 742,
@@ -2182,7 +2252,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-07"
+    "saldado": "2026-05-07",
+    "es_real": 0
   },
   {
     "id": 743,
@@ -2205,7 +2276,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-07"
+    "saldado": "2026-05-07",
+    "es_real": 0
   },
   {
     "id": 744,
@@ -2228,7 +2300,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 745,
@@ -2251,7 +2324,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 746,
@@ -2274,7 +2348,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-07"
+    "saldado": "2026-05-07",
+    "es_real": 0
   },
   {
     "id": 747,
@@ -2297,7 +2372,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-07"
+    "saldado": "2026-05-07",
+    "es_real": 0
   },
   {
     "id": 748,
@@ -2320,7 +2396,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-07"
+    "saldado": "2026-05-07",
+    "es_real": 0
   },
   {
     "id": 749,
@@ -2343,7 +2420,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-07"
+    "saldado": "2026-05-07",
+    "es_real": 0
   },
   {
     "id": 750,
@@ -2366,7 +2444,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 751,
@@ -2389,7 +2468,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 752,
@@ -2412,7 +2492,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 753,
@@ -2435,7 +2516,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 754,
@@ -2458,7 +2540,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 755,
@@ -2481,7 +2564,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 756,
@@ -2504,7 +2588,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-24"
+    "saldado": "2026-05-24",
+    "es_real": 0
   },
   {
     "id": 757,
@@ -2527,7 +2612,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 758,
@@ -2550,7 +2636,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 759,
@@ -2573,7 +2660,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 760,
@@ -2596,7 +2684,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-24"
+    "saldado": "2026-05-24",
+    "es_real": 0
   },
   {
     "id": 761,
@@ -2619,7 +2708,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 762,
@@ -2642,7 +2732,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-24"
+    "saldado": "2026-05-24",
+    "es_real": 0
   },
   {
     "id": 763,
@@ -2665,7 +2756,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 764,
@@ -2688,7 +2780,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 765,
@@ -2711,7 +2804,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 766,
@@ -2734,7 +2828,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 767,
@@ -2757,7 +2852,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 768,
@@ -2780,7 +2876,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 769,
@@ -2803,7 +2900,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-24"
+    "saldado": "2026-05-24",
+    "es_real": 0
   },
   {
     "id": 770,
@@ -2826,7 +2924,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 771,
@@ -2849,7 +2948,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 772,
@@ -2872,7 +2972,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 773,
@@ -2895,7 +2996,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 774,
@@ -2918,7 +3020,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 775,
@@ -2941,7 +3044,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 776,
@@ -2964,7 +3068,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 777,
@@ -2987,7 +3092,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 778,
@@ -3010,7 +3116,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-24"
+    "saldado": "2026-05-24",
+    "es_real": 0
   },
   {
     "id": 779,
@@ -3033,7 +3140,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 780,
@@ -3056,7 +3164,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-24"
+    "saldado": "2026-05-24",
+    "es_real": 0
   },
   {
     "id": 781,
@@ -3079,7 +3188,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-24"
+    "saldado": "2026-05-24",
+    "es_real": 0
   },
   {
     "id": 782,
@@ -3102,7 +3212,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-24"
+    "saldado": "2026-05-24",
+    "es_real": 0
   },
   {
     "id": 783,
@@ -3125,7 +3236,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 784,
@@ -3148,7 +3260,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 785,
@@ -3171,7 +3284,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 786,
@@ -3194,7 +3308,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 787,
@@ -3217,7 +3332,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 788,
@@ -3240,7 +3356,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 789,
@@ -3263,7 +3380,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 790,
@@ -3286,7 +3404,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 791,
@@ -3309,7 +3428,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 792,
@@ -3332,7 +3452,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 793,
@@ -3355,7 +3476,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 794,
@@ -3378,7 +3500,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 795,
@@ -3401,7 +3524,8 @@
     "cuotas_total": 3,
     "cuota_nro": 1,
     "cuota_ref": 795,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 796,
@@ -3424,7 +3548,8 @@
     "cuotas_total": 3,
     "cuota_nro": 2,
     "cuota_ref": 795,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 797,
@@ -3447,7 +3572,8 @@
     "cuotas_total": 3,
     "cuota_nro": 3,
     "cuota_ref": 795,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 798,
@@ -3470,7 +3596,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-05-29"
+    "saldado": "2026-05-29",
+    "es_real": 0
   },
   {
     "id": 799,
@@ -3493,7 +3620,8 @@
     "cuotas_total": 2,
     "cuota_nro": 1,
     "cuota_ref": 799,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 800,
@@ -3516,7 +3644,8 @@
     "cuotas_total": 2,
     "cuota_nro": 2,
     "cuota_ref": 799,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 801,
@@ -3539,7 +3668,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 802,
@@ -3562,7 +3692,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 803,
@@ -3585,7 +3716,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-06-04"
+    "saldado": "2026-06-04",
+    "es_real": 0
   },
   {
     "id": 804,
@@ -3608,7 +3740,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-06-04"
+    "saldado": "2026-06-04",
+    "es_real": 0
   },
   {
     "id": 805,
@@ -3631,7 +3764,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-06-08"
+    "saldado": "2026-06-08",
+    "es_real": 0
   },
   {
     "id": 806,
@@ -3654,7 +3788,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 807,
@@ -3677,7 +3812,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-07-01"
+    "saldado": "2026-07-01",
+    "es_real": 0
   },
   {
     "id": 808,
@@ -3700,7 +3836,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 809,
@@ -3723,7 +3860,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 810,
@@ -3746,7 +3884,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 811,
@@ -3769,7 +3908,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 812,
@@ -3792,7 +3932,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-07-01"
+    "saldado": "2026-07-01",
+    "es_real": 0
   },
   {
     "id": 813,
@@ -3815,7 +3956,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-07-14"
+    "saldado": "2026-07-14",
+    "es_real": 0
   },
   {
     "id": 814,
@@ -3838,7 +3980,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-07-14"
+    "saldado": "2026-07-14",
+    "es_real": 0
   },
   {
     "id": 815,
@@ -3861,7 +4004,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-07-27"
+    "saldado": "2026-07-27",
+    "es_real": 0
   },
   {
     "id": 816,
@@ -3884,7 +4028,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-07-27"
+    "saldado": "2026-07-27",
+    "es_real": 0
   },
   {
     "id": 817,
@@ -3907,7 +4052,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 818,
@@ -3930,7 +4076,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 819,
@@ -3953,7 +4100,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-08-18"
+    "saldado": "2026-08-18",
+    "es_real": 0
   },
   {
     "id": 820,
@@ -3976,7 +4124,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-08-18"
+    "saldado": "2026-08-18",
+    "es_real": 0
   },
   {
     "id": 821,
@@ -3999,7 +4148,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-08-18"
+    "saldado": "2026-08-18",
+    "es_real": 0
   },
   {
     "id": 822,
@@ -4022,7 +4172,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-08-18"
+    "saldado": "2026-08-18",
+    "es_real": 0
   },
   {
     "id": 823,
@@ -4045,7 +4196,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-08-18"
+    "saldado": "2026-08-18",
+    "es_real": 0
   },
   {
     "id": 824,
@@ -4068,7 +4220,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-08-18"
+    "saldado": "2026-08-18",
+    "es_real": 0
   },
   {
     "id": 825,
@@ -4091,7 +4244,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-08-18"
+    "saldado": "2026-08-18",
+    "es_real": 0
   },
   {
     "id": 826,
@@ -4114,7 +4268,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-08-18"
+    "saldado": "2026-08-18",
+    "es_real": 0
   },
   {
     "id": 827,
@@ -4137,7 +4292,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-09-07"
+    "saldado": "2026-09-07",
+    "es_real": 0
   },
   {
     "id": 828,
@@ -4160,7 +4316,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-09-07"
+    "saldado": "2026-09-07",
+    "es_real": 0
   },
   {
     "id": 829,
@@ -4183,7 +4340,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-09-07"
+    "saldado": "2026-09-07",
+    "es_real": 0
   },
   {
     "id": 830,
@@ -4206,7 +4364,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": "2026-09-07"
+    "saldado": "2026-09-07",
+    "es_real": 0
   },
   {
     "id": 831,
@@ -4229,7 +4388,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 832,
@@ -4252,7 +4412,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 833,
@@ -4275,7 +4436,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 834,
@@ -4298,7 +4460,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 835,
@@ -4321,7 +4484,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 836,
@@ -4344,7 +4508,8 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   },
   {
     "id": 837,
@@ -4367,6 +4532,7 @@
     "cuotas_total": 1,
     "cuota_nro": 1,
     "cuota_ref": null,
-    "saldado": null
+    "saldado": null,
+    "es_real": 0
   }
 ]

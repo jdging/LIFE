@@ -231,6 +231,13 @@ def _migrar_columnas_gastos(conn: sqlite3.Connection) -> None:
         # entre JD y Pinki, o NULL si sigue pendiente (ver README, mapeado
         # desde la columna `saldado` del Log real de Sheets).
         ("saldado", "TEXT"),
+        # Marcador de procedencia retrocompatible (default 0 = fail-closed):
+        # un gasto con origen distinto de 'migracion' solo se considera real
+        # (y aparece en el dashboard) si fue validado manualmente y marcado
+        # es_real=1. Los gastos ya migrados (origen='migracion') no lo
+        # necesitan — ver README "Cómo se distingue un gasto real de uno de
+        # ejemplo".
+        ("es_real", "INTEGER NOT NULL DEFAULT 0"),
     )
     for columna, definicion in columnas_nuevas:
         if columna not in existentes:
@@ -260,6 +267,46 @@ def init_db(conn: sqlite3.Connection) -> None:
     _migrar_columnas_gastos(conn)
     _migrar_columnas_tarjetas(conn)
     _migrar_columnas_gastos_fijos(conn)
+    _migrar_columnas_lista_compras(conn)
+    _migrar_columnas_recetas(conn)
+
+
+def _migrar_columnas_lista_compras(conn: sqlite3.Connection) -> None:
+    """Agrega a `lista_compras` el marcador de procedencia si falta.
+
+    Mismo patrón que `_migrar_columnas_gastos`: ALTER TABLE ADD COLUMN
+    retrocompatible, default 0 (fail-closed). Los ítems de ejemplo que ya
+    existen en la tabla no deben presentarse como reales sin confirmación
+    explícita (ver README "Bloqueos de procedencia — compras" y
+    `marcar_lista_compras_confirmada`).
+    """
+    existentes = _column_names(conn, "lista_compras")
+    columnas_nuevas = (
+        ("es_real", "INTEGER NOT NULL DEFAULT 0"),
+    )
+    for columna, definicion in columnas_nuevas:
+        if columna not in existentes:
+            conn.execute(f"ALTER TABLE lista_compras ADD COLUMN {columna} {definicion}")
+    conn.commit()
+
+
+def _migrar_columnas_recetas(conn: sqlite3.Connection) -> None:
+    """Agrega a `recetas` el marcador de procedencia si falta.
+
+    Sin este marcador no hay forma de distinguir, de las recetas sembradas,
+    cuáles son reales (esta misma tabla nació documentada como "recetario de
+    ejemplo" en el encabezado de este archivo). Default 0 (fail-closed):
+    ninguna receta se exporta como real hasta marcarse explícitamente con
+    `marcar_receta_real` (ver README "Bloqueos de procedencia — recetas").
+    """
+    existentes = _column_names(conn, "recetas")
+    columnas_nuevas = (
+        ("es_real", "INTEGER NOT NULL DEFAULT 0"),
+    )
+    for columna, definicion in columnas_nuevas:
+        if columna not in existentes:
+            conn.execute(f"ALTER TABLE recetas ADD COLUMN {columna} {definicion}")
+    conn.commit()
 
 
 def _migrar_columnas_gastos_fijos(conn: sqlite3.Connection) -> None:
@@ -571,6 +618,22 @@ def get_receta_ingredientes(conn: sqlite3.Connection, receta_id: int) -> list:
     return [dict(row) for row in rows]
 
 
+def marcar_receta_real(conn: sqlite3.Connection, receta_id: int) -> None:
+    """Marca `es_real=1` en la receta `receta_id`, tras validación manual.
+
+    Requiere el id explícito porque, a diferencia de `lista_compras`, no hay
+    campos observables que identifiquen sin ambigüedad una receta real (ver
+    README "Bloqueos de procedencia — recetas"). Este helper no decide por sí
+    solo qué recetas son reales: solo aplica una decisión ya tomada afuera,
+    por eso valida que el id exista antes de tocar nada.
+    """
+    fila = conn.execute("SELECT id FROM recetas WHERE id = ?", (receta_id,)).fetchone()
+    if fila is None:
+        raise ValueError(f"No existe ninguna receta con id={receta_id}.")
+    conn.execute("UPDATE recetas SET es_real = 1 WHERE id = ?", (receta_id,))
+    conn.commit()
+
+
 # --- Inventario de bienes ------------------------------------------------
 
 
@@ -682,6 +745,53 @@ def marcar_comprado(conn: sqlite3.Connection, item_id: int) -> None:
         (_now(), item_id),
     )
     conn.commit()
+
+
+def marcar_lista_compras_confirmada(
+    conn: sqlite3.Connection,
+    item_nombre: str,
+    cantidad_deseada: Optional[float] = None,
+    unidad: Optional[str] = None,
+) -> int:
+    """Marca `es_real=1` en el único ítem de `lista_compras` que coincida
+    exactamente con `item_nombre` (+ `cantidad_deseada`/`unidad` si se pasan).
+
+    Deliberadamente NO recibe un id fijo: confirma un ítem por sus datos
+    observables, igual que `retirar_cine_demo.py` verifica el gasto demo por
+    fecha/monto/descripción en vez de confiar ciegamente en un id. Lanza
+    `ValueError` si no hay ninguna coincidencia o si hay más de una
+    (ambigüedad — el caller debe acotar más los criterios).
+    """
+    condiciones = ["item_nombre = ?"]
+    parametros: list = [item_nombre]
+    if cantidad_deseada is not None:
+        condiciones.append("cantidad_deseada = ?")
+        parametros.append(cantidad_deseada)
+    if unidad is not None:
+        condiciones.append("unidad = ?")
+        parametros.append(unidad)
+
+    filas = conn.execute(
+        f"SELECT id FROM lista_compras WHERE {' AND '.join(condiciones)}",
+        parametros,
+    ).fetchall()
+
+    if not filas:
+        raise ValueError(
+            f"No hay ningún ítem en lista_compras que coincida con "
+            f"item_nombre={item_nombre!r}, cantidad_deseada={cantidad_deseada!r}, "
+            f"unidad={unidad!r}."
+        )
+    if len(filas) > 1:
+        raise ValueError(
+            f"Hay {len(filas)} ítems que coinciden con los criterios dados; "
+            "acotá más (agregá cantidad_deseada y/o unidad) para desambiguar."
+        )
+
+    item_id = filas[0]["id"]
+    conn.execute("UPDATE lista_compras SET es_real = 1 WHERE id = ?", (item_id,))
+    conn.commit()
+    return item_id
 
 
 # --- Sugerencias de recetas cocinables ------------------------------------
@@ -1154,6 +1264,35 @@ def calcular_deudas_mes(conn: sqlite3.Connection, mes: str) -> dict:
     if saldo_a_favor_de_jd < -0.0001:
         return {"deudor": "JD", "acreedor": "Pinki", "monto": round(-saldo_a_favor_de_jd, 2)}
     return {"deudor": None, "acreedor": None, "monto": 0.0}
+
+
+def calcular_estado_saldado_mes(conn: sqlite3.Connection, mes: str) -> str:
+    """Clasifica el estado de saldado de la deuda de `mes` ('YYYY-MM').
+
+    Se basa pura y exclusivamente en la columna `saldado` de los gastos que
+    generan deuda ese mes (`pagado_por` en JD/Pinki) — no en si el saldo neto
+    calculado da 0, que es un cálculo aparte (`calcular_deudas_mes`).
+
+    Devuelve:
+      - 'sin_deuda': no hubo gastos de JD/Pinki ese mes.
+      - 'pendiente': ninguno de esos gastos está saldado.
+      - 'saldado': todos están saldados.
+      - 'parcial': mezcla de saldados y pendientes.
+    """
+    rows = conn.execute(
+        "SELECT saldado FROM gastos WHERE substr(fecha, 1, 7) = ? "
+        "AND pagado_por IN ('JD', 'Pinki')",
+        (mes,),
+    ).fetchall()
+    if not rows:
+        return "sin_deuda"
+
+    saldados = [row["saldado"] is not None for row in rows]
+    if all(saldados):
+        return "saldado"
+    if not any(saldados):
+        return "pendiente"
+    return "parcial"
 
 
 def _ultimo_dia_mes(mes: str) -> str:
