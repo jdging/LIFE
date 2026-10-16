@@ -1,17 +1,34 @@
 """Capa de acceso a SQLite para el bot Lasso (Fases 1, 3 y Finanzas completo).
 
+Copia de trabajo de `reference/db.py` (t_65096083), extendida con:
+    - Soft delete de `gastos` (`deleted_at`/`deleted_by` + tabla `auditoria`),
+      aplicando la migración diseñada en `reference/migracion_soft_delete.sql`.
+    - Edición de `ingresos` (`actualizar_ingreso`).
+    - Versionado real de `gastos_fijos` (`vigente_desde` + `crear_version_fijo`
+      + `monto_fijo_vigente_en` + `get_fijos_vigentes`), reemplazando el
+      UPDATE in-place de `actualizar_monto_fijo` (bug reportado por CPO,
+      t_85b8502b). Permite varias versiones con igual `vigente_desde` en
+      una serie (corregir un fijo más de una vez el mismo día es normal);
+      la vigente para una fecha es la de mayor `(vigente_desde, id)` — ver
+      README "Versionado de fijos: varias versiones el mismo día".
+
 Tablas (esquema reconciliado con LIFE-lab-propuesta.md sección 3):
     - gastos: registros de gastos ("Log" en el documento aprobado). Extendido
       con `tarjeta_id`, `tipo_proporcion`, `proporcion_jd`, `proporcion_pinki`
-      (tarjetas/reparto) y `cuotas_total`, `cuota_nro`, `cuota_ref` (cuotas,
-      ver README sección "Cuotas").
+      (tarjetas/reparto), `cuotas_total`, `cuota_nro`, `cuota_ref` (cuotas,
+      ver README sección "Cuotas") y `deleted_at`/`deleted_by` (soft delete,
+      ver README sección "Soft delete de gastos").
+    - auditoria: rastro genérico de alta/baja/edición sobre cualquier tabla
+      (hoy solo usada por `eliminar_gasto_logico`), ver README.
     - tarjetas: catálogo de tarjetas (crédito/débito), portado de la hoja
       `Tarjetas` del sistema real (ver README).
     - categorias: catálogo dinámico de categorías/subcategorías (Gasto /
       Ingreso / Inversión), sembrado desde `seed_categorias.py` pero
       extensible en caliente vía `crear_categoria_si_no_existe` (ver README).
     - gastos_fijos: catálogo de gastos recurrentes (alquiler, expensas, etc.),
-      portado de la hoja `GastosFijos` del sistema real.
+      portado de la hoja `GastosFijos` del sistema real. Versionado real por
+      `vigente_desde` desde esta tarea (ver README sección "Versionado de
+      fijos").
     - ingresos: movimientos de ingreso (Salario/Extra/Freelance/Otro),
       tabla hermana de `gastos` — separada porque en el laboratorio `gastos`
       ya es su propia tabla (ver README).
@@ -33,8 +50,11 @@ rechazan cualquier intento de insertar un registro que no venga marcado como
 import json
 import sqlite3
 from datetime import datetime, timezone
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Optional
+
+from validaciones import validar_expense, validar_gasto_fijo, validar_ingreso
 
 DEFAULT_DB_PATH = str(Path(__file__).parent / "data" / "lasso.sqlite")
 
@@ -196,6 +216,21 @@ CREATE TABLE IF NOT EXISTS inversiones (
     confirmado INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
+
+-- Auditoría genérica de alta/baja/edición sobre cualquier tabla (hoy solo
+-- `gastos`, vía `eliminar_gasto_logico`). Ver
+-- `reference/migracion_soft_delete.sql` sección 2 y README sección
+-- "Soft delete de gastos".
+CREATE TABLE IF NOT EXISTS auditoria (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tabla TEXT NOT NULL,
+    fila_id INTEGER NOT NULL,
+    accion TEXT NOT NULL,
+    actor TEXT,
+    antes_json TEXT,
+    despues_json TEXT,
+    creado_en TEXT NOT NULL
+);
 """
 
 
@@ -213,7 +248,7 @@ def _column_names(conn: sqlite3.Connection, table: str) -> set:
 
 
 def _migrar_columnas_gastos(conn: sqlite3.Connection) -> None:
-    """Agrega a `gastos` las columnas de tarjetas/reparto si faltan.
+    """Agrega a `gastos` las columnas de tarjetas/reparto/soft-delete si faltan.
 
     Usa ALTER TABLE ADD COLUMN en vez de recrear la tabla para no perder
     datos existentes en bases ya inicializadas (ver README).
@@ -238,6 +273,11 @@ def _migrar_columnas_gastos(conn: sqlite3.Connection) -> None:
         # necesitan — ver README "Cómo se distingue un gasto real de uno de
         # ejemplo".
         ("es_real", "INTEGER NOT NULL DEFAULT 0"),
+        # Soft delete (migración aplicada en esta tarea, ver
+        # `reference/migracion_soft_delete.sql`): fecha ISO del borrado
+        # lógico y quién lo ejecutó, o NULL si el gasto sigue activo.
+        ("deleted_at", "TEXT"),
+        ("deleted_by", "TEXT"),
     )
     for columna, definicion in columnas_nuevas:
         if columna not in existentes:
@@ -310,10 +350,54 @@ def _migrar_columnas_recetas(conn: sqlite3.Connection) -> None:
 
 
 def _migrar_columnas_gastos_fijos(conn: sqlite3.Connection) -> None:
-    """Agrega a `gastos_fijos` las columnas de responsable/reparto si faltan.
+    """Agrega a `gastos_fijos` las columnas de responsable/reparto/versionado
+    si faltan.
 
     Mismo patrón que `_migrar_columnas_gastos`: ALTER TABLE ADD COLUMN en
     vez de recrear la tabla, para no perder datos en bases ya inicializadas.
+
+    `vigente_desde` (agregada en t_85b8502b): fecha ISO 'YYYY-MM-DD' desde la
+    que esa FILA (esa versión del gasto fijo) es válida. Para filas
+    insertadas antes de esta migración (o por `insert_gasto_fijo` sin el
+    campo) se usa `ultima_actualizacion` recortada a fecha como mejor
+    aproximación disponible, nunca NULL — una versión sin fecha de vigencia
+    no se puede ordenar contra otras versiones (ver `monto_fijo_vigente_en`).
+
+    `fijo_grupo_id` (agregada tras dictamen NO APTO del revisor
+    independiente, run 3b184396, hallazgo 4): identidad ESTABLE de una
+    serie de versiones de un mismo gasto fijo, separada de `nombre` (que
+    puede repetirse entre gastos fijos distintos o cambiar al renombrar) y
+    separada del `id` de cada versión individual. Para filas nuevas
+    (`insert_gasto_fijo`), `fijo_grupo_id` es el propio `id` de esa primera
+    versión (self-reference). Para versiones nuevas (`crear_version_fijo`),
+    se hereda el `fijo_grupo_id` de la serie — nunca se recalcula por
+    `nombre`.
+
+    Backfill retrocompatible (corregido tras 2da pasada del revisor, run
+    3e22f249, hallazgo 1 — la versión anterior de esta migración fusionaba
+    silenciosamente filas legacy que compartían `nombre` asignándoles el
+    `MIN(id)` de ese nombre como `fijo_grupo_id` común. Eso es INSEGURO:
+    bajo el esquema legacy de `reference/db.py`, `actualizar_monto_fijo`
+    hacía `UPDATE` in-place, así que nunca había más de una fila por gasto
+    fijo real — si dos filas legacy comparten `nombre`, lo más probable es
+    que sean dos gastos fijos DISTINTOS que coinciden en nombre por
+    casualidad (ej. dos "Internet", uno de casa y otro de oficina), NO dos
+    versiones de la misma serie. Fusionarlas mezclaría su histórico de
+    forma irreversible y silenciosa.
+
+    Política nueva: cada fila legacy sin `fijo_grupo_id` recibe su PROPIO
+    grupo (`fijo_grupo_id = id`) por default — nunca se infiere continuidad
+    a partir de `nombre` solo. Si en el futuro se encuentra evidencia
+    inequívoca de que dos filas son la misma serie (ej. un campo de
+    referencia explícito que hoy no existe en los datos legacy), se puede
+    migrar manualmente con un `UPDATE` puntual. Para ayudar a identificar
+    esos casos, `detectar_fijos_nombre_duplicado(conn)` lista los `nombre`
+    que terminan repartidos en más de un `fijo_grupo_id`, sin fusionar nada
+    automáticamente — es solo diagnóstico para revisión manual.
+
+    La migración es idempotente: solo toca filas con `fijo_grupo_id IS
+    NULL`, así que correrla una segunda vez (ej. sobre una base que ya la
+    tiene aplicada) no reasigna ni duplica nada.
     """
     existentes = _column_names(conn, "gastos_fijos")
     columnas_nuevas = (
@@ -321,77 +405,90 @@ def _migrar_columnas_gastos_fijos(conn: sqlite3.Connection) -> None:
         ("tipo_proporcion", "TEXT"),
         ("proporcion_jd", "REAL"),
         ("medio_pago", "TEXT"),
+        ("vigente_desde", "TEXT"),
+        ("fijo_grupo_id", "INTEGER"),
     )
     for columna, definicion in columnas_nuevas:
         if columna not in existentes:
             conn.execute(f"ALTER TABLE gastos_fijos ADD COLUMN {columna} {definicion}")
     conn.commit()
+    conn.execute(
+        "UPDATE gastos_fijos SET vigente_desde = substr(ultima_actualizacion, 1, 10) "
+        "WHERE vigente_desde IS NULL"
+    )
+    conn.execute(
+        "UPDATE gastos_fijos SET fijo_grupo_id = id WHERE fijo_grupo_id IS NULL"
+    )
+    conn.commit()
+
+
+def detectar_fijos_nombre_duplicado(conn: sqlite3.Connection) -> list:
+    """Diagnóstico (NO fusión automática) de `nombre`s de `gastos_fijos` que
+    aparecen repartidos en más de un `fijo_grupo_id` (más de una serie).
+
+    Útil tanto para datos legacy migrados (ver `_migrar_columnas_gastos_fijos`,
+    que ya NO fusiona por `nombre`) como para altas nuevas: dos gastos fijos
+    con el mismo `nombre` son ambiguos para un humano que mire el listado
+    ("¿esto es un error de tipeo o son dos gastos fijos distintos que se
+    llaman igual?"). Esta función se limita a listar los candidatos — la
+    decisión de fusionarlos (con un `UPDATE` manual) queda para quien
+    revise el reporte, nunca se infiere sola.
+
+    Devuelve una lista de dicts `{'nombre': str, 'fijo_grupo_ids': [int,
+    ...], 'ids': [int, ...]}`, uno por cada `nombre` con más de una serie
+    (`fijo_grupo_id` distinto) entre sus filas. Lista vacía si no hay
+    ambigüedades.
+    """
+    rows = conn.execute(
+        "SELECT nombre, fijo_grupo_id, id FROM gastos_fijos ORDER BY nombre, fijo_grupo_id, id"
+    ).fetchall()
+
+    grupos_por_nombre: dict = {}
+    for row in rows:
+        grupos = grupos_por_nombre.setdefault(row["nombre"], {})
+        grupos.setdefault(row["fijo_grupo_id"], []).append(row["id"])
+
+    candidatos = []
+    for nombre, grupos in grupos_por_nombre.items():
+        if len(grupos) > 1:
+            candidatos.append(
+                {
+                    "nombre": nombre,
+                    "fijo_grupo_ids": sorted(grupos.keys()),
+                    "ids": sorted(id_ for ids in grupos.values() for id_ in ids),
+                }
+            )
+    return candidatos
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def insert_gasto(conn: sqlite3.Connection, gasto: dict) -> int:
-    """Inserta un gasto. Exige `gasto['confirmado'] is True`.
+def _insert_gasto_tx(conn: sqlite3.Connection, gasto: dict) -> int:
+    """Igual que `insert_gasto`, pero sin `commit()` — para uso interno de
+    `insert_gasto` y `insert_gasto_con_cuotas`, que controlan la transacción
+    completa (ver nota de atomicidad en `insert_gasto_con_cuotas`).
 
-    Este chequeo es deliberado y redundante con la máquina de estados de
-    `conversation.py`: el bot nunca debe escribir en la base sin
-    confirmación explícita del usuario, sin excepciones.
-
-    Campos de reparto (retrocompatibles — si no se pasan, un gasto queda
-    `tipo_proporcion='dinamico'` sin proporciones explícitas, igual que
-    antes de esta extensión):
-        - tarjeta_id: FK opcional a `tarjetas`.
-        - tipo_proporcion: 'dinamico' (default) o 'custom'.
-        - proporcion_jd / proporcion_pinki: sólo válidas (y obligatorias)
-          si tipo_proporcion='custom'; deben sumar 100 (±0.01). En modo
-          'dinamico' deben venir vacías — el cálculo se hace por fuera.
-
-    Campos de cuotas (retrocompatibles, default = gasto sin cuotas): ver
-    `insert_gasto_con_cuotas` para la generación automática de N filas.
-        - cuotas_total: default 1.
-        - cuota_nro: default 1.
-        - cuota_ref: FK opcional a `gastos.id` (vincula todas las cuotas
-          del mismo gasto original); default None.
-
-    Campo de saldado (retrocompatible, default None = pendiente):
-        - saldado: fecha ISO ('YYYY-MM-DD') en la que este gasto individual
-          fue saldado/compensado entre JD y Pinki, o None si sigue
-          pendiente. Ver `calcular_deudas_pendientes`.
+    Corre `validar_expense(gasto)` antes de tocar la base: es la barrera que
+    el revisor independiente (run 3b184396, hallazgo 1) encontró ausente —
+    antes se podía insertar `monto<=0`, `categoria=""`, `pagado_por`
+    inválido o `cuotas_total<=0` llamando a `insert_gasto` directamente,
+    porque solo se chequeaban `confirmado` y las proporciones a mano.
     """
-    if gasto.get("confirmado") is not True:
-        raise ValueError(
-            "No se puede insertar un gasto sin confirmación explícita "
-            "(confirmado debe ser True)."
-        )
+    errores = validar_expense(gasto)
+    if errores:
+        raise ValueError(f"Gasto inválido: {errores}")
 
     tipo_proporcion = gasto.get("tipo_proporcion") or "dinamico"
     proporcion_jd = gasto.get("proporcion_jd")
     proporcion_pinki = gasto.get("proporcion_pinki")
-
-    if tipo_proporcion == "custom":
-        if proporcion_jd is None or proporcion_pinki is None:
-            raise ValueError(
-                "tipo_proporcion='custom' requiere proporcion_jd y "
-                "proporcion_pinki explícitas."
-            )
-        if abs((proporcion_jd + proporcion_pinki) - 100) > 0.01:
-            raise ValueError(
-                "proporcion_jd + proporcion_pinki debe sumar 100 "
-                f"(recibido {proporcion_jd} + {proporcion_pinki})."
-            )
-    elif tipo_proporcion == "dinamico":
-        if proporcion_jd is not None or proporcion_pinki is not None:
-            raise ValueError(
-                "tipo_proporcion='dinamico' no debe traer proporcion_jd/"
-                "proporcion_pinki (el reparto se calcula por fuera)."
-            )
-    else:
-        raise ValueError(
-            f"tipo_proporcion inválido: {tipo_proporcion!r} "
-            "(usar 'dinamico' o 'custom')."
-        )
+    cuotas_total = gasto.get("cuotas_total", 1)
+    if cuotas_total is None:
+        cuotas_total = 1
+    cuota_nro = gasto.get("cuota_nro", 1)
+    if cuota_nro is None:
+        cuota_nro = 1
 
     cursor = conn.execute(
         """
@@ -419,23 +516,82 @@ def insert_gasto(conn: sqlite3.Connection, gasto: dict) -> int:
             tipo_proporcion,
             proporcion_jd,
             proporcion_pinki,
-            gasto.get("cuotas_total") or 1,
-            gasto.get("cuota_nro") or 1,
+            cuotas_total,
+            cuota_nro,
             gasto.get("cuota_ref"),
             gasto.get("saldado"),
         ),
     )
-    conn.commit()
     return cursor.lastrowid
 
 
-def get_gastos(conn: sqlite3.Connection, chat_id: Optional[str] = None) -> list:
+def insert_gasto(conn: sqlite3.Connection, gasto: dict) -> int:
+    """Inserta un gasto. Exige `gasto['confirmado'] is True` y que el payload
+    cumpla `validar_expense` (monto>0 finito, categoria, pagado_por,
+    tipo_proporcion/proporciones, cuotas_total/cuota_nro) — ver
+    `_insert_gasto_tx`. El chequeo de `confirmado` es deliberado y redundante
+    con la máquina de estados de `conversation.py`: el bot nunca debe
+    escribir en la base sin confirmación explícita del usuario, sin
+    excepciones.
+
+    Campos de reparto (retrocompatibles — si no se pasan, un gasto queda
+    `tipo_proporcion='dinamico'` sin proporciones explícitas, igual que
+    antes de esta extensión):
+        - tarjeta_id: FK opcional a `tarjetas`.
+        - tipo_proporcion: 'dinamico' (default) o 'custom'.
+        - proporcion_jd / proporcion_pinki: sólo válidas (y obligatorias)
+          si tipo_proporcion='custom'; deben sumar 100 (±0.01). En modo
+          'dinamico' deben venir vacías — el cálculo se hace por fuera.
+
+    Campos de cuotas (retrocompatibles, default = gasto sin cuotas): ver
+    `insert_gasto_con_cuotas` para la generación automática de N filas.
+        - cuotas_total: default 1, debe ser entero >= 1 (ver `validar_expense`
+          — un `2.9` o un `0` se rechazan con `ValueError`, nunca se
+          truncan ni se reemplazan en silencio).
+        - cuota_nro: default 1.
+        - cuota_ref: FK opcional a `gastos.id` (vincula todas las cuotas
+          del mismo gasto original); default None.
+
+    Campo de saldado (retrocompatible, default None = pendiente):
+        - saldado: fecha ISO ('YYYY-MM-DD') en la que este gasto individual
+          fue saldado/compensado entre JD y Pinki, o None si sigue
+          pendiente. Ver `calcular_deudas_pendientes`.
+    """
+    if gasto.get("confirmado") is not True:
+        raise ValueError(
+            "No se puede insertar un gasto sin confirmación explícita "
+            "(confirmado debe ser True)."
+        )
+    try:
+        gasto_id = _insert_gasto_tx(conn, gasto)
+    except Exception:
+        conn.rollback()
+        raise
+    conn.commit()
+    return gasto_id
+
+
+def get_gastos(
+    conn: sqlite3.Connection,
+    chat_id: Optional[str] = None,
+    incluir_borrados: bool = False,
+) -> list:
+    """Devuelve gastos ordenados por id.
+
+    Por default excluye los gastos con `deleted_at IS NOT NULL` (soft
+    delete, ver `eliminar_gasto_logico`). Pasar `incluir_borrados=True`
+    para incluirlos también (p.ej. para una vista de auditoría/papelera).
+    """
+    condiciones = []
+    parametros: list = []
     if chat_id is not None:
-        rows = conn.execute(
-            "SELECT * FROM gastos WHERE chat_id = ? ORDER BY id", (chat_id,)
-        ).fetchall()
-    else:
-        rows = conn.execute("SELECT * FROM gastos ORDER BY id").fetchall()
+        condiciones.append("chat_id = ?")
+        parametros.append(chat_id)
+    if not incluir_borrados:
+        condiciones.append("deleted_at IS NULL")
+
+    where = f" WHERE {' AND '.join(condiciones)}" if condiciones else ""
+    rows = conn.execute(f"SELECT * FROM gastos{where} ORDER BY id", parametros).fetchall()
     return [dict(row) for row in rows]
 
 
@@ -459,41 +615,141 @@ def _sumar_meses(fecha_str: str, meses: int) -> str:
 def insert_gasto_con_cuotas(conn: sqlite3.Connection, gasto: dict, cuotas_total: int) -> "int | list":
     """Inserta un gasto, expandiéndolo en N filas si tiene cuotas.
 
-    - `cuotas_total <= 1`: idéntico a `insert_gasto` (devuelve un solo id).
+    - `cuotas_total` None: se toma como 1 (retrocompatible).
+    - `cuotas_total` inválido (no entero, `bool`, o `< 1` — ej. `2.9` o `0`):
+      levanta `ValueError` de inmediato, SIN truncar ni reemplazar en
+      silencio (hallazgo de revisor independiente, run 3b184396, hallazgo 2).
+    - `cuotas_total == 1`: idéntico a `insert_gasto` (devuelve un solo id).
     - `cuotas_total > 1`: inserta `cuotas_total` filas, una por mes
-      consecutivo a partir de la fecha del gasto. Cada fila tiene
-      `monto = monto_total / cuotas_total`, `cuota_nro` de 1 a N, y
-      `cuota_ref` = id de la primera fila (incluida ella misma). El resto
-      de los campos (categoría, tarjeta, tipo_proporcion, pagado_por, etc.)
-      se hereda igual en todas las cuotas. Devuelve la lista de ids
-      insertados, en orden.
+      consecutivo a partir de la fecha del gasto, EN UNA SOLA TRANSACCIÓN:
+      si falla cualquier cuota intermedia (validación o error de SQLite), se
+      hace `rollback()` de todas las cuotas ya insertadas en esta llamada —
+      antes cada cuota hacía su propio `commit()` y una falla a mitad de
+      camino dejaba cuotas previas persistidas sin las restantes. `cuota_nro`
+      va de 1 a N y `cuota_ref` = id de la primera fila (incluida ella
+      misma). El resto de los campos (categoría, tarjeta, tipo_proporcion,
+      pagado_por, etc.) se hereda igual en todas las cuotas. Devuelve la
+      lista de ids insertados, en orden.
+
+    Redondeo de montos cuando `monto_total` no es divisible exacto por
+    `cuotas_total` (condición de QA, run 735a6e21, ver README): se calcula
+    `monto_total / cuotas_total` con `Decimal` y se redondea a 2 decimales
+    (centavos) con `ROUND_HALF_UP`. Esa cuota redondeada se repite en todas
+    las cuotas salvo la ÚLTIMA, que absorbe la diferencia (`monto_total -
+    monto_cuota_redondeada * (cuotas_total - 1)`) para que la suma de todas
+    las cuotas sea exactamente `monto_total`, nunca unos centavos de más o
+    de menos por acumulación de redondeo. Ej.: 100 / 3 -> cuotas 1 y 2 en
+    33.33, cuota 3 en 33.34 (suma 100.00). Si `monto_total` es divisible
+    exacto (ej. 3000 / 3), la última cuota coincide con las demás, igual que
+    antes de este ajuste.
     """
-    cuotas_total = int(cuotas_total) if cuotas_total else 1
-    if cuotas_total <= 1:
+    if cuotas_total is None:
+        cuotas_total = 1
+    if (
+        not isinstance(cuotas_total, int)
+        or isinstance(cuotas_total, bool)
+        or cuotas_total < 1
+    ):
+        raise ValueError(
+            f"cuotas_total debe ser un entero >= 1 (recibido {cuotas_total!r})."
+        )
+    if cuotas_total == 1:
         return insert_gasto(conn, gasto)
 
-    monto_total = gasto["monto"]
-    monto_cuota = monto_total / cuotas_total
+    if gasto.get("confirmado") is not True:
+        raise ValueError(
+            "No se puede insertar un gasto sin confirmación explícita "
+            "(confirmado debe ser True)."
+        )
+
+    monto_total_dec = Decimal(str(gasto["monto"]))
+    monto_cuota_dec = (monto_total_dec / Decimal(cuotas_total)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    monto_ultima_cuota_dec = monto_total_dec - monto_cuota_dec * (cuotas_total - 1)
     fecha_base = (gasto.get("fecha") or _now())[:10]
 
     ids = []
     cuota_ref = None
-    for numero in range(1, cuotas_total + 1):
-        gasto_cuota = dict(gasto)
-        gasto_cuota["monto"] = monto_cuota
-        gasto_cuota["fecha"] = _sumar_meses(fecha_base, numero - 1)
-        gasto_cuota["cuotas_total"] = cuotas_total
-        gasto_cuota["cuota_nro"] = numero
-        gasto_cuota["cuota_ref"] = cuota_ref
-        nuevo_id = insert_gasto(conn, gasto_cuota)
-        if cuota_ref is None:
-            cuota_ref = nuevo_id
-            conn.execute(
-                "UPDATE gastos SET cuota_ref = ? WHERE id = ?", (cuota_ref, nuevo_id)
+    try:
+        for numero in range(1, cuotas_total + 1):
+            es_ultima = numero == cuotas_total
+            gasto_cuota = dict(gasto)
+            gasto_cuota["monto"] = float(
+                monto_ultima_cuota_dec if es_ultima else monto_cuota_dec
             )
-            conn.commit()
-        ids.append(nuevo_id)
+            gasto_cuota["fecha"] = _sumar_meses(fecha_base, numero - 1)
+            gasto_cuota["cuotas_total"] = cuotas_total
+            gasto_cuota["cuota_nro"] = numero
+            gasto_cuota["cuota_ref"] = cuota_ref
+            nuevo_id = _insert_gasto_tx(conn, gasto_cuota)
+            if cuota_ref is None:
+                cuota_ref = nuevo_id
+                conn.execute(
+                    "UPDATE gastos SET cuota_ref = ? WHERE id = ?", (cuota_ref, nuevo_id)
+                )
+            ids.append(nuevo_id)
+    except Exception:
+        conn.rollback()
+        raise
+    conn.commit()
     return ids
+
+
+# --- Soft delete de gastos + auditoría --------------------------------------
+
+
+def eliminar_gasto_logico(conn: sqlite3.Connection, gasto_id: int, actor: str) -> None:
+    """Marca `gastos.id = gasto_id` como borrado lógico (soft delete).
+
+    No borra la fila físicamente — solo setea `deleted_at`/`deleted_by` y
+    deja rastro en `auditoria` con el snapshot previo de la fila (ver
+    `reference/migracion_soft_delete.sql`). Levanta `ValueError` si el
+    gasto no existe o ya estaba borrado (no hay doble-borrado silencioso).
+
+    Atomicidad (corrección pedida por revisor independiente, run 3b184396,
+    hallazgo 3):
+      - El `UPDATE` filtra además por `deleted_at IS NULL` y se verifica
+        `cursor.rowcount == 1`. Si otra conexión ya marcó el borrado entre
+        nuestro `SELECT` inicial y este `UPDATE` (doble baja concurrente),
+        `rowcount` da 0 y se levanta `ValueError` SIN pisar el
+        `deleted_by`/`deleted_at` que puso la otra conexión.
+      - Si falla el `INSERT` en `auditoria` (o cualquier otro paso después
+        del `UPDATE`), se hace `rollback()` explícito antes de propagar la
+        excepción — nunca debe quedar un `UPDATE` de baja persistido sin su
+        fila de auditoría correspondiente.
+    """
+    fila = conn.execute("SELECT * FROM gastos WHERE id = ?", (gasto_id,)).fetchone()
+    if fila is None:
+        raise ValueError(f"No existe ningún gasto con id={gasto_id}.")
+    if fila["deleted_at"] is not None:
+        raise ValueError(f"El gasto id={gasto_id} ya está borrado.")
+
+    snapshot_antes = json.dumps(dict(fila), ensure_ascii=False)
+    ahora = _now()
+
+    try:
+        cursor = conn.execute(
+            "UPDATE gastos SET deleted_at = ?, deleted_by = ? "
+            "WHERE id = ? AND deleted_at IS NULL",
+            (ahora, actor, gasto_id),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError(
+                f"El gasto id={gasto_id} ya fue borrado por otra operación "
+                "concurrente (detectado al aplicar la baja)."
+            )
+        conn.execute(
+            """
+            INSERT INTO auditoria (tabla, fila_id, accion, actor, antes_json, despues_json, creado_en)
+            VALUES ('gastos', ?, 'baja', ?, ?, NULL, ?)
+            """,
+            (gasto_id, actor, snapshot_antes, ahora),
+        )
+    except Exception:
+        conn.rollback()
+        raise
+    conn.commit()
 
 
 def get_estado(conn: sqlite3.Connection, chat_id: str) -> Optional[dict]:
@@ -1005,41 +1261,82 @@ def crear_categoria_si_no_existe(
 
 
 def insert_gasto_fijo(conn: sqlite3.Connection, gasto_fijo: dict) -> int:
-    """Inserta un gasto fijo.
+    """Inserta un gasto fijo (primera versión de una serie nueva).
 
-    Campos de responsable/reparto (retrocompatibles — default NULL si no se
-    pasan, igual que antes de esta extensión):
-        - responsable: 'Común' / 'JD' / 'Pinki', tal cual viene del Excel.
+    Campos de responsable/reparto:
+        - responsable: 'Común' / 'JD' / 'Pinki' — OPCIONAL (compatibilidad
+          legacy con `reference/db.py`, donde siempre fue opcional y
+          default `NULL`; ver `validar_gasto_fijo`, corregido tras 2da
+          pasada del revisor, run 3e22f249, hallazgo 2). Si no se pasa,
+          queda `NULL` — esta capa NO le inventa un dueño a un gasto fijo
+          legacy. Si se pasa, debe ser uno de los 3 valores válidos. La
+          futura capa web (cuando exista) exigirá `responsable` obligatorio
+          en el payload de alta; esta capa de dominio sigue siendo
+          retrocompatible con datos/llamadas legacy sin ese campo.
         - tipo_proporcion: 'dinamica' / 'custom' / None; solo relevante si
           responsable='Común'.
         - proporcion_jd: solo si tipo_proporcion='custom'.
         - medio_pago: informativo.
+
+    `vigente_desde` (versionado, ver README): fecha ISO 'YYYY-MM-DD' desde la
+    que esta fila es la versión vigente. Default: la fecha de
+    `ultima_actualizacion` (o hoy si tampoco se pasa). Para cambios de monto
+    posteriores usar `crear_version_fijo`, NUNCA actualizar esta fila.
+
+    `fijo_grupo_id` (identidad estable de la serie, ver
+    `_migrar_columnas_gastos_fijos`): se fija automáticamente al propio `id`
+    de esta fila (self-reference) — es el ancla de la que `crear_version_fijo`
+    cuelga todas las versiones futuras, independiente de si `nombre` cambia.
     """
-    cursor = conn.execute(
-        """
-        INSERT INTO gastos_fijos
-            (nombre, monto_estimado, periodicidad, dia_vencimiento, categoria,
-             subcategoria, activo, ultima_actualizacion, responsable,
-             tipo_proporcion, proporcion_jd, medio_pago)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            gasto_fijo["nombre"],
-            gasto_fijo["monto_estimado"],
-            gasto_fijo["periodicidad"],
-            gasto_fijo.get("dia_vencimiento"),
-            gasto_fijo.get("categoria"),
-            gasto_fijo.get("subcategoria"),
-            1 if gasto_fijo.get("activo", True) else 0,
-            gasto_fijo.get("ultima_actualizacion") or _now(),
-            gasto_fijo.get("responsable"),
-            gasto_fijo.get("tipo_proporcion"),
-            gasto_fijo.get("proporcion_jd"),
-            gasto_fijo.get("medio_pago"),
-        ),
+    ultima_actualizacion = gasto_fijo.get("ultima_actualizacion") or _now()
+    vigente_desde = gasto_fijo.get("vigente_desde") or ultima_actualizacion[:10]
+
+    errores = validar_gasto_fijo(
+        {
+            "monto_estimado": gasto_fijo.get("monto_estimado"),
+            "vigente_desde": vigente_desde,
+            "responsable": gasto_fijo.get("responsable"),
+        }
     )
+    if errores:
+        raise ValueError(f"Gasto fijo inválido: {errores}")
+
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO gastos_fijos
+                (nombre, monto_estimado, periodicidad, dia_vencimiento, categoria,
+                 subcategoria, activo, ultima_actualizacion, responsable,
+                 tipo_proporcion, proporcion_jd, medio_pago, vigente_desde)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                gasto_fijo["nombre"],
+                gasto_fijo["monto_estimado"],
+                gasto_fijo["periodicidad"],
+                gasto_fijo.get("dia_vencimiento"),
+                gasto_fijo.get("categoria"),
+                gasto_fijo.get("subcategoria"),
+                1 if gasto_fijo.get("activo", True) else 0,
+                ultima_actualizacion,
+                gasto_fijo.get("responsable"),
+                gasto_fijo.get("tipo_proporcion"),
+                gasto_fijo.get("proporcion_jd"),
+                gasto_fijo.get("medio_pago"),
+                vigente_desde,
+            ),
+        )
+        nuevo_id = cursor.lastrowid
+        fijo_grupo_id = gasto_fijo.get("fijo_grupo_id") or nuevo_id
+        conn.execute(
+            "UPDATE gastos_fijos SET fijo_grupo_id = ? WHERE id = ?",
+            (fijo_grupo_id, nuevo_id),
+        )
+    except Exception:
+        conn.rollback()
+        raise
     conn.commit()
-    return cursor.lastrowid
+    return nuevo_id
 
 
 def get_gastos_fijos(conn: sqlite3.Connection, solo_activos: bool = True) -> list:
@@ -1052,15 +1349,201 @@ def get_gastos_fijos(conn: sqlite3.Connection, solo_activos: bool = True) -> lis
     return [dict(row) for row in rows]
 
 
-def actualizar_monto_fijo(
-    conn: sqlite3.Connection, gasto_fijo_id: int, monto_nuevo: float
-) -> None:
-    conn.execute(
-        "UPDATE gastos_fijos SET monto_estimado = ?, ultima_actualizacion = ? "
-        "WHERE id = ?",
-        (monto_nuevo, _now(), gasto_fijo_id),
+def crear_version_fijo(
+    conn: sqlite3.Connection,
+    gasto_fijo_id: int,
+    monto_nuevo: float,
+    vigente_desde: str,
+    responsable: Optional[str] = None,
+    nombre: Optional[str] = None,
+) -> int:
+    """Crea una versión NUEVA de un gasto fijo, vigente desde `vigente_desde`.
+
+    Reemplaza el UPDATE in-place de `actualizar_monto_fijo` (bug reportado
+    por CPO, t_85b8502b: pisaba el histórico de montos). INSERTA una fila
+    nueva en vez de modificar la anterior, para que
+    `monto_fijo_vigente_en` pueda reconstruir cuánto costaba este gasto fijo
+    en cualquier fecha pasada.
+
+    Identidad de la serie (corrección tras dictamen NO APTO del revisor
+    independiente, run 3b184396, hallazgo 4): la fila nueva hereda
+    `fijo_grupo_id` de la SERIE a la que pertenece `gasto_fijo_id` — NUNCA
+    se recalcula por `nombre`.
+
+    Versión base (corregido tras 2da pasada del revisor, run 3e22f249,
+    hallazgo 1): `gasto_fijo_id` solo se usa para RESOLVER a qué serie
+    (`fijo_grupo_id`) pertenece la nueva versión. Los campos heredados
+    (`nombre`/`periodicidad`/`categoria`/`subcategoria`/`responsable`/
+    `tipo_proporcion`/`proporcion_jd`/`medio_pago`/`activo`) se copian de la
+    versión VIGENTE MÁS RECIENTE de esa serie (mayor `vigente_desde`, no
+    necesariamente la fila con mayor `id`) — NO de la fila literal que
+    recibió `gasto_fijo_id`, que puede ser una versión histórica vieja. Sin
+    esto, pasar el `id` de una versión antigua para crear una tercera
+    versión pisaría silenciosamente un rename o cambio de responsable hecho
+    en la versión intermedia. `responsable` y `nombre` igual se pueden
+    pisar explícitamente vía los parámetros de esta función (p.ej. si
+    cambia quién paga, o se renombra el gasto fijo manteniendo su identidad
+    y su historial).
+
+    `vigente_desde` duplicada dentro de la misma serie está PERMITIDA
+    (decisión t_65096083, revirtiendo el rechazo de la ronda anterior:
+    corregir dos veces un gasto fijo el mismo día es un uso normal —p.ej.
+    un error de tipeo detectado minutos después— y no debe fallar, pero
+    tampoco debe pisarse la fila vieja, porque Juan pidió histórico
+    completo). Varias versiones pueden compartir `vigente_desde`; el
+    desempate es determinístico por `(vigente_desde, id)`: entre versiones
+    con igual `vigente_desde`, gana la de mayor `id` (la insertada más
+    recientemente). Ver `monto_fijo_vigente_en` / `get_fijos_vigentes`, que
+    aplican el mismo criterio de orden, y la sección "Versionado de fijos:
+    varias versiones el mismo día" del README.
+
+    Valida con `validar_gasto_fijo` (monto positivo finito, `vigente_desde`
+    ISO válida, `responsable` resultante válido si no es `None`) antes de
+    insertar nada. Lanza `ValueError` si `gasto_fijo_id` no existe o si la
+    validación falla.
+    """
+    fila_referencia = conn.execute(
+        "SELECT * FROM gastos_fijos WHERE id = ?", (gasto_fijo_id,)
+    ).fetchone()
+    if fila_referencia is None:
+        raise ValueError(f"No existe ningún gasto fijo con id={gasto_fijo_id}.")
+
+    fijo_grupo_id = fila_referencia["fijo_grupo_id"] or fila_referencia["id"]
+
+    anterior = conn.execute(
+        "SELECT * FROM gastos_fijos WHERE fijo_grupo_id = ? "
+        "ORDER BY vigente_desde DESC, id DESC LIMIT 1",
+        (fijo_grupo_id,),
+    ).fetchone()
+
+    nuevo_responsable = responsable if responsable is not None else anterior["responsable"]
+    nuevo_nombre = nombre if nombre is not None else anterior["nombre"]
+
+    errores = validar_gasto_fijo(
+        {
+            "monto_estimado": monto_nuevo,
+            "vigente_desde": vigente_desde,
+            "responsable": nuevo_responsable,
+        }
+    )
+    if errores:
+        raise ValueError(f"Nueva versión de gasto fijo inválida: {errores}")
+
+    cursor = conn.execute(
+        """
+        INSERT INTO gastos_fijos
+            (nombre, monto_estimado, periodicidad, dia_vencimiento, categoria,
+             subcategoria, activo, ultima_actualizacion, responsable,
+             tipo_proporcion, proporcion_jd, medio_pago, vigente_desde, fijo_grupo_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            nuevo_nombre,
+            monto_nuevo,
+            anterior["periodicidad"],
+            anterior["dia_vencimiento"],
+            anterior["categoria"],
+            anterior["subcategoria"],
+            anterior["activo"],
+            _now(),
+            nuevo_responsable,
+            anterior["tipo_proporcion"],
+            anterior["proporcion_jd"],
+            anterior["medio_pago"],
+            vigente_desde,
+            fijo_grupo_id,
+        ),
     )
     conn.commit()
+    return cursor.lastrowid
+
+
+def _version_vigente_en(conn: sqlite3.Connection, fijo_grupo_id: int, fecha: str) -> Optional[dict]:
+    """Resuelve la versión vigente de la serie `fijo_grupo_id` en `fecha`.
+
+    Orden determinístico, compartido por `monto_fijo_vigente_en` y
+    `get_fijos_vigentes` (ver README "Versionado de fijos: varias versiones
+    el mismo día"): la vigente es la de mayor `(vigente_desde, id)` entre
+    las versiones (activas o no) con `vigente_desde <= fecha`. Cuando dos
+    versiones de la misma serie comparten `vigente_desde` (corrección del
+    mismo gasto fijo más de una vez el mismo día), desempata la de mayor
+    `id` — la insertada más recientemente. Devuelve `None` si no hay
+    ninguna versión con `vigente_desde <= fecha`.
+    """
+    row = conn.execute(
+        "SELECT * FROM gastos_fijos WHERE fijo_grupo_id = ? AND vigente_desde <= ? "
+        "ORDER BY vigente_desde DESC, id DESC LIMIT 1",
+        (fijo_grupo_id, fecha),
+    ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def monto_fijo_vigente_en(conn: sqlite3.Connection, fijo_grupo_id: int, fecha: str) -> Optional[dict]:
+    """Devuelve la versión de un gasto fijo (serie `fijo_grupo_id`) vigente en
+    `fecha`.
+
+    `fijo_grupo_id` es la identidad estable de la serie (ver
+    `_migrar_columnas_gastos_fijos`), NO el `nombre` (que puede repetirse o
+    cambiar sin afectar la identidad de la serie). Para la primera versión
+    de un gasto fijo, `fijo_grupo_id` es el `id` devuelto por
+    `insert_gasto_fijo`.
+
+    "Vigente en `fecha`" = la versión de mayor `(vigente_desde, id)` entre
+    todas las de esa serie con `vigente_desde <= fecha` (ver
+    `_version_vigente_en` para el criterio de desempate entre versiones con
+    igual `vigente_desde`). Devuelve `None` si no hay ninguna versión con
+    `vigente_desde <= fecha` (p.ej. se consulta una fecha anterior a la
+    creación del gasto fijo).
+    """
+    return _version_vigente_en(conn, fijo_grupo_id, fecha)
+
+
+def get_fijos_vigentes(conn: sqlite3.Connection, fecha: Optional[str] = None) -> list:
+    """Devuelve una fila por SERIE (`fijo_grupo_id`) con la versión vigente a
+    `fecha` ('YYYY-MM-DD'; default hoy), excluyendo series inactivas.
+
+    A diferencia de `get_gastos_fijos` (que devuelve TODAS las filas de la
+    tabla, histórico incluido, y no sabe nada de versionado), esta función
+    resuelve para cada serie cuál de sus versiones es la vigente a la fecha
+    pedida (mismo criterio que `monto_fijo_vigente_en`: mayor
+    `(vigente_desde, id)` entre las versiones con `vigente_desde <= fecha`)
+    y arma una lista con una única fila por serie.
+
+    "Serie inactiva" = la versión vigente resuelta tiene `activo = 0`. Una
+    serie sin ninguna versión con `vigente_desde <= fecha` (todavía no
+    empezó a esa fecha) tampoco aparece en el resultado.
+    """
+    if fecha is None:
+        fecha = _now()[:10]
+
+    fijo_grupo_ids = [
+        row["fijo_grupo_id"]
+        for row in conn.execute(
+            "SELECT DISTINCT fijo_grupo_id FROM gastos_fijos ORDER BY fijo_grupo_id"
+        ).fetchall()
+    ]
+
+    vigentes = []
+    for fijo_grupo_id in fijo_grupo_ids:
+        version = _version_vigente_en(conn, fijo_grupo_id, fecha)
+        if version is not None and version["activo"]:
+            vigentes.append(version)
+    return vigentes
+
+
+def actualizar_monto_fijo(
+    conn: sqlite3.Connection, gasto_fijo_id: int, monto_nuevo: float
+) -> int:
+    """DEPRECADA: delega en `crear_version_fijo` con `vigente_desde=hoy`.
+
+    Antes hacía `UPDATE gastos_fijos SET monto_estimado = ...` in-place,
+    borrando el histórico de montos anteriores (bug reportado por CPO,
+    t_85b8502b). Ya NO modifica la fila anterior — inserta una versión
+    nueva y devuelve su id. Preferir `crear_version_fijo` directamente
+    cuando se conozca la fecha de vigencia real (no siempre es "hoy").
+    """
+    hoy = _now()[:10]
+    return crear_version_fijo(conn, gasto_fijo_id, monto_nuevo, vigente_desde=hoy)
 
 
 # --- Ingresos ----------------------------------------------------------------
@@ -1069,13 +1552,20 @@ def actualizar_monto_fijo(
 def insert_ingreso(conn: sqlite3.Connection, ingreso: dict) -> int:
     """Inserta un ingreso. Exige `ingreso['confirmado'] is True`.
 
-    Mismo principio no negociable que `insert_gasto`.
+    Mismo principio no negociable que `insert_gasto`. Antes de insertar
+    valida con `validar_ingreso` (misma barrera que ya existe en la capa de
+    API para `validar_expense` — acá se aplica también dentro de `db.py`
+    para que ningún caller pueda saltearla).
     """
     if ingreso.get("confirmado") is not True:
         raise ValueError(
             "No se puede insertar un ingreso sin confirmación explícita "
             "(confirmado debe ser True)."
         )
+    errores = validar_ingreso(ingreso)
+    if errores:
+        raise ValueError(f"Ingreso inválido: {errores}")
+
     cursor = conn.execute(
         """
         INSERT INTO ingresos
@@ -1108,6 +1598,50 @@ def get_ingresos(conn: sqlite3.Connection, mes: Optional[str] = None) -> list:
     else:
         rows = conn.execute("SELECT * FROM ingresos ORDER BY id").fetchall()
     return [dict(row) for row in rows]
+
+
+def actualizar_ingreso(conn: sqlite3.Connection, ingreso_id: int, cambios: dict) -> None:
+    """Edición parcial de un ingreso existente.
+
+    Campos editables: fecha/monto/moneda/categoria/persona/descripcion_original.
+    Valida el estado RESULTANTE (fila actual + `cambios` superpuestos) con
+    `validar_ingreso` antes de aplicar nada — si la validación falla, no se
+    ejecuta ningún UPDATE. Lanza `ValueError` si el ingreso no existe, si la
+    validación falla, si `cambios` trae alguna clave fuera de las editables,
+    o si `cambios` está vacío (rechazado explícitamente — con `cambios={}`
+    el `UPDATE ingresos SET  WHERE id = ?` resultante es SQL inválido;
+    hallazgo de revisor independiente, run 3b184396, hallazgo 7).
+    """
+    if not cambios:
+        raise ValueError(
+            "actualizar_ingreso requiere al menos un campo en `cambios` "
+            "(no se aceptan ediciones vacías)."
+        )
+
+    CAMPOS_EDITABLES = (
+        "fecha", "monto", "moneda", "categoria", "persona", "descripcion_original",
+    )
+
+    claves_invalidas = set(cambios) - set(CAMPOS_EDITABLES)
+    if claves_invalidas:
+        raise ValueError(
+            f"Campos no editables en actualizar_ingreso: {sorted(claves_invalidas)} "
+            f"(editables: {CAMPOS_EDITABLES})."
+        )
+
+    fila = conn.execute("SELECT * FROM ingresos WHERE id = ?", (ingreso_id,)).fetchone()
+    if fila is None:
+        raise ValueError(f"No existe ningún ingreso con id={ingreso_id}.")
+
+    resultante = {**dict(fila), **cambios}
+    errores = validar_ingreso(resultante)
+    if errores:
+        raise ValueError(f"Edición de ingreso inválida: {errores}")
+
+    columnas = ", ".join(f"{campo} = ?" for campo in cambios)
+    valores = list(cambios.values()) + [ingreso_id]
+    conn.execute(f"UPDATE ingresos SET {columnas} WHERE id = ?", valores)
+    conn.commit()
 
 
 # --- Inversiones ---------------------------------------------------------
@@ -1214,10 +1748,10 @@ def calcular_proporcion_mes(conn: sqlite3.Connection, mes: str) -> dict:
 def calcular_deudas_mes(conn: sqlite3.Connection, mes: str) -> dict:
     """Calcula el saldo neto de deudas del mes ('YYYY-MM') entre JD y Pinki.
 
-    Es un cálculo derivado, no una tabla propia: recorre `gastos` del mes
-    con `pagado_por` en ('JD', 'Pinki') (los pagados por 'Común' no generan
-    deuda) y, para cada uno, determina cuánto le correspondía pagar al que
-    NO puso la plata:
+    Es un cálculo derivado, no una tabla propia: recorre `gastos` activos
+    (no borrados, ver `eliminar_gasto_logico`) del mes con `pagado_por` en
+    ('JD', 'Pinki') (los pagados por 'Común' no generan deuda) y, para cada
+    uno, determina cuánto le correspondía pagar al que NO puso la plata:
       - `tipo_proporcion='dinamico'`: usa `calcular_proporcion_mes(mes)`
         (una sola vez por mes, no por gasto — la proporción es la misma
         para todos los gastos dinámicos de ese mes).
@@ -1231,7 +1765,7 @@ def calcular_deudas_mes(conn: sqlite3.Connection, mes: str) -> dict:
     """
     rows = conn.execute(
         "SELECT * FROM gastos WHERE substr(fecha, 1, 7) = ? "
-        "AND pagado_por IN ('JD', 'Pinki')",
+        "AND pagado_por IN ('JD', 'Pinki') AND deleted_at IS NULL",
         (mes,),
     ).fetchall()
 
@@ -1269,9 +1803,10 @@ def calcular_deudas_mes(conn: sqlite3.Connection, mes: str) -> dict:
 def calcular_estado_saldado_mes(conn: sqlite3.Connection, mes: str) -> str:
     """Clasifica el estado de saldado de la deuda de `mes` ('YYYY-MM').
 
-    Se basa pura y exclusivamente en la columna `saldado` de los gastos que
-    generan deuda ese mes (`pagado_por` en JD/Pinki) — no en si el saldo neto
-    calculado da 0, que es un cálculo aparte (`calcular_deudas_mes`).
+    Se basa pura y exclusivamente en la columna `saldado` de los gastos
+    activos (no borrados) que generan deuda ese mes (`pagado_por` en
+    JD/Pinki) — no en si el saldo neto calculado da 0, que es un cálculo
+    aparte (`calcular_deudas_mes`).
 
     Devuelve:
       - 'sin_deuda': no hubo gastos de JD/Pinki ese mes.
@@ -1281,7 +1816,7 @@ def calcular_estado_saldado_mes(conn: sqlite3.Connection, mes: str) -> str:
     """
     rows = conn.execute(
         "SELECT saldado FROM gastos WHERE substr(fecha, 1, 7) = ? "
-        "AND pagado_por IN ('JD', 'Pinki')",
+        "AND pagado_por IN ('JD', 'Pinki') AND deleted_at IS NULL",
         (mes,),
     ).fetchall()
     if not rows:
@@ -1308,12 +1843,12 @@ def calcular_deudas_pendientes(conn: sqlite3.Connection, hasta_mes: Optional[str
     """Calcula el saldo neto de deudas PENDIENTES (no saldadas) entre JD y Pinki.
 
     A diferencia de `calcular_deudas_mes` (que arma el saldo de un mes
-    puntual), esta función recorre TODOS los gastos con `pagado_por` en
-    ('JD', 'Pinki') que tengan `saldado IS NULL` — sin importar de qué mes
-    sean — porque a Juan solo le interesa la deuda pendiente real, no el
-    histórico ya saldado (ver brief). `gastos` no tiene columna `borrado`
-    (los borrados ya se excluyen en la migración), así que no hace falta
-    filtrarlos acá.
+    puntual), esta función recorre TODOS los gastos activos (no borrados)
+    con `pagado_por` en ('JD', 'Pinki') que tengan `saldado IS NULL` — sin
+    importar de qué mes sean — porque a Juan solo le interesa la deuda
+    pendiente real, no el histórico ya saldado (ver brief). Los gastos
+    borrados lógicamente (`deleted_at IS NOT NULL`) se excluyen siempre:
+    un gasto borrado no puede generar una deuda vigente.
 
     Decisión de diseño (documentada en README): para gastos
     `tipo_proporcion='dinamico'`, la proporción se calcula con
@@ -1334,13 +1869,13 @@ def calcular_deudas_pendientes(conn: sqlite3.Connection, hasta_mes: Optional[str
     if hasta_mes is not None:
         rows = conn.execute(
             "SELECT * FROM gastos WHERE pagado_por IN ('JD', 'Pinki') "
-            "AND saldado IS NULL AND fecha <= ?",
+            "AND saldado IS NULL AND deleted_at IS NULL AND fecha <= ?",
             (_ultimo_dia_mes(hasta_mes),),
         ).fetchall()
     else:
         rows = conn.execute(
             "SELECT * FROM gastos WHERE pagado_por IN ('JD', 'Pinki') "
-            "AND saldado IS NULL"
+            "AND saldado IS NULL AND deleted_at IS NULL"
         ).fetchall()
 
     proporciones_por_mes: dict = {}

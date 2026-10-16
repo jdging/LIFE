@@ -130,3 +130,15 @@ Código implementado y verificado (tests + ejecución real, incluyendo cálculos
 proporción/deudas hechos a mano) por especialistas delegados por Lasso en workdirs
 aislados, integrado a este repo por Lasso. Ver `/home/ai-os/brain/plans/lasso/BITACORA.md`
 para el detalle de las corridas y verificaciones.
+
+## Backend v2 — escritura segura y fijos versionados (t_65096083, 2026-10-16)
+
+Integrado desde candidato `backend-sqlite-web-v2` tras revisor independiente (run e8121b36, APTO) y QA técnico (run 735a6e21, APTO). Solo capa de dominio: no hay API HTTP desplegada.
+
+- Gastos: alta validada (monto finito > 0, categoría, reparto), cuotas atómicas con redondeo a centavos (la última cuota absorbe la diferencia), baja lógica (`eliminar_gasto_logico`, `deleted_at`/`deleted_by` + tabla `auditoria`), lecturas y deudas excluyen borrados.
+- Ingresos: `insert_ingreso` valida, `actualizar_ingreso` edición parcial validada.
+- Gastos fijos: versionado no destructivo con serie estable `fijo_grupo_id` y `vigente_desde`; `crear_version_fijo`, `monto_fijo_vigente_en`, `get_fijos_vigentes`. `actualizar_monto_fijo` ya no hace UPDATE in-place. Versiones del mismo día permitidas; gana la mayor `(vigente_desde, id)`. `responsable` sigue opcional (NULL legacy).
+- Migración idempotente: cada fila legacy queda en su propia serie; `detectar_fijos_nombre_duplicado` lista candidatos a unificar (no fusiona solo). Dry-run sobre copia de `data/lasso.sqlite`: conteos idénticos; 6 nombres con varias filas (histórico migrado) pendientes de unificación en la Story de la pestaña de fijos (t_ce790609).
+- Cambio de contrato: `tests/test_finanzas.py::test_actualizar_monto_fijo` ahora afirma versionado.
+- Pendiente frontend: `activeFijos()` en `src/lab-dashboard/app.js` agrupa por nombre y no filtra por vigencia del período.
+- Tests: `cd lab && python -m pytest -q tests` (251 passed al integrar).

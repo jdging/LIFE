@@ -133,8 +133,17 @@ class TestGastosFijos(unittest.TestCase):
         )
         db.actualizar_monto_fijo(self.conn, gasto_fijo_id, 9500.0)
 
-        fijos = db.get_gastos_fijos(self.conn)
-        self.assertEqual(fijos[0]["monto_estimado"], 9500.0)
+        # La fila original conserva su monto: el versionado no pisa el
+        # histórico (bug de UPDATE in-place corregido en t_65096083).
+        fila_original = self.conn.execute(
+            "SELECT * FROM gastos_fijos WHERE id = ?", (gasto_fijo_id,)
+        ).fetchone()
+        self.assertEqual(fila_original["monto_estimado"], 8000.0)
+
+        # La versión vigente hoy es la nueva, con el monto actualizado.
+        vigentes = db.get_fijos_vigentes(self.conn)
+        fijo_internet = next(f for f in vigentes if f["fijo_grupo_id"] == gasto_fijo_id)
+        self.assertEqual(fijo_internet["monto_estimado"], 9500.0)
 
     def test_insert_gasto_fijo_con_responsable_y_reparto(self):
         db.insert_gasto_fijo(
