@@ -1,0 +1,21 @@
+{
+  "month": "2026-04",
+  "expenses_total": 0.0,
+  "income_total": 100.0,
+  "fixed_total_mensual": 0.0,
+  "proportion": {
+    "JD": 100.0,
+    "Pinki": 0.0
+  },
+  "debt_month": {
+    "deudor": null,
+    "acreedor": null,
+    "monto": 0.0
+  },
+  "debt_pending_through_month": {
+    "deudor": null,
+    "acreedor": null,
+    "monto": 0.0
+  },
+  "debt_status": "sin_deuda"
+}

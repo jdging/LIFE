@@ -192,6 +192,7 @@ def validar_gasto_fijo(payload: dict) -> list:
     corrección posterior, run 3e22f249, para compatibilidad legacy con
     `reference/db.py`):
       - `monto_estimado` obligatorio, numérico, finito, > 0.
+      - `nombre` no vacío y `periodicidad` mensual o bimestral.
       - `vigente_desde` obligatoria, fecha ISO 'YYYY-MM-DD' válida (una
         comparación lexicográfica como la de `monto_fijo_vigente_en` da
         orden incorrecto con fechas no normalizadas, ej. '2026-2-01').
@@ -206,6 +207,13 @@ def validar_gasto_fijo(payload: dict) -> list:
     `payload` ni toca la base de datos.
     """
     errores = []
+
+    nombre = payload.get("nombre")
+    if not isinstance(nombre, str) or not nombre.strip():
+        errores.append("nombre es obligatorio y no puede estar vacío.")
+
+    if payload.get("periodicidad") not in ("mensual", "bimestral"):
+        errores.append("periodicidad debe ser mensual o bimestral.")
 
     monto_estimado = payload.get("monto_estimado")
     if not _es_numero(monto_estimado):

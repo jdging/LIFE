@@ -1,0 +1,27 @@
+# Formularios WEB LIFE — candidato t_ce790609 / t09376ebe
+
+Este candidato usa la API de `contrato-api.md` y `api-reference.py`. El navegador llama rutas `/api/*` del mismo origen con `credentials: 'same-origin'`. El proxy de autenticación debe agregar el header interno en el servidor; el navegador no recibe ese valor ni envía `actor`, `confirmado` u otros campos de control. No hay conexión ni despliegue incluidos en este directorio.
+
+## Para QA del coordinador
+
+Desde este directorio, los comandos de pruebas locales son:
+
+```bash
+node --test tests/fijos.test.mjs tests/forms.test.mjs
+```
+
+`tests/forms.test.mjs` usa la respuesta sintética generada por la API con base efímera (`tests/fixtures/api-summary-synthetic.json`) para la forma del resumen, más registros sintéticos y `fetch` simulado para los flujos. Ejecuta funciones reales de `app.js` en VM de Node para verificar rutas plurales, envelopes, cuerpos de escritura, actualización de `DATA`, 401 y modo sin conexión, reintento de lectura sin repetir el POST, y el reparto de fijos en altas y versiones. Comprueba porcentajes 0/25/100 y decimales, preservación en PATCH de monto, limpieza al pasar a personal y rechazo sin request de porcentajes inválidos. También comprueba IDs decimales exactos hasta el máximo SQLite, rechazo de números JSON inseguros, rutas e historial, y el modal salarial. No constituye una prueba E2E de navegador, proxy o SQLite. No se ejecutaron pruebas en esta corrida por instrucción del wrapper; el coordinador realizará la integración con backend y la revisión en Chromium.
+
+Para la revisión visual, servir `index.html`, `app.js` y `style.css` desde el mismo origen que el proxy de `/api`. En una sesión autenticada, `/api/health` debe devolver `ok:true`, `mode:"live"` y las capacidades `expenses`, `income`, `fixed`. Con `401`, `503` o error de red, el panel pasa a snapshot de lectura y deshabilita las escrituras. Los JSON de Supermercado y Recetas conservan su carga independiente.
+
+Revisar alta y baja de una cuota individual, alta y edición de ingresos con advertencia salarial, y alta/versión/baja de fijos. Tras cada escritura confirmada se recargan los datos del mismo período. Si falla esa recarga, el panel bloquea nuevas escrituras y ofrece reintentar **solo la lectura**. Una respuesta fallida de escritura nunca se presenta como éxito.
+
+## Límites de integración y contrato
+
+- Según `contrato-api.md`, el alta y la edición de fijos admiten `tipo_proporcion` y `proporcion_jd` por versión. Para responsable `Común`, el formulario ofrece reparto dinámico (`dinamica`, porcentaje `null`) o personalizado (`custom`, porcentaje JD numérico de 0 a 100 inclusive, con decimales). El porcentaje de Pinki se muestra como `100 - JD`. Para `JD` o `Pinki` se omiten los dos campos de reparto. En una edición sin cambio de reparto también se omiten: la API conserva el reparto vigente en `vigente_desde`. Cambiar a dinámico envía `dinamica` y `null` para limpiar el porcentaje previo. La confirmación muestra valor, reparto y fecha; PATCH crea una nueva versión y conserva las anteriores en el historial. No se modificó la referencia de API.
+- La fixture sintética producida por la API devuelve `proportion: {"JD":100,"Pinki":0}`, deudas como `{deudor,acreedor,monto}` y `debt_status` como texto. El adaptador usa esas claves, conserva el cero válido y exige porcentajes que sumen 100; si la respuesta es inválida, live queda deshabilitado sin inventar 50/50. `DATA.resumen` conserva la deuda y su estado por mes; `DATA.deudaPendiente` recibe el saldo acumulado del mes consultado. La forma se debe confirmar también con respuestas de runtime del backend durante QA.
+- La API no ofrece catálogo de tarjetas. El formulario sugiere únicamente IDs vistos en los gastos cargados y permite introducir un ID explícito opcional. No se inventan tarjetas.
+- El historial en pantalla se deriva de `GET /api/fixed/versions` usando fecha e ID de versión. Las versiones reemplazadas el mismo día aparecen como «reemplazada ese día» y quedan fuera de tramos y gráfico. El endpoint `/api/fixed/:id/historial` conserva ese mismo criterio en el contrato.
+- El acceso al detalle usa `fijo_grupo_id` (o `id` si el grupo es nulo) de las versiones y las escrituras usan el `id` de la versión seleccionada. El contrato define IDs de ruta numéricos; la forma y la relación `id`/`fijo_grupo_id` de las filas servidas en runtime aún deben cotejarse con `/api/fixed/versions` y `/api/fixed/:id/historial`. No se supone un formato de ID alternativo.
+- Los IDs de gasto, ingreso, fijo, grupo e historial se manejan en el navegador como cadenas decimales canónicas positivas de hasta `9223372036854775807`; los números JSON sólo se aceptan si son enteros seguros. La API actual puede serializar IDs como números JSON. Por encima de `9007199254740991`, `JSON.parse` puede entregar un valor ya redondeado: el navegador no puede reconstruir la identidad original. Hasta que la API entregue esos IDs como cadenas, una carga live con un número inseguro pasa a snapshot de solo lectura y no habilita formularios. Las cadenas grandes exactas sí funcionan. Una escritura con HTTP 2xx se considera guardada aunque su respuesta incluya un ID inseguro; se intenta recargar y, si la lectura no verifica los IDs, se pausan nuevas escrituras y el botón reintenta únicamente la lectura. No se debe repetir el POST para resolver esta situación.
+- El frontend no inicia ni configura el backend, la base ni el proxy. No hay escritura a datos reales, publicación ni migración en este candidato.

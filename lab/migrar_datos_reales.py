@@ -87,6 +87,12 @@ def migrar_gastos_fijos(conn, filas: list) -> int:
     Mapea también `responsable` ('Común'/'JD'/'Pinki', tal cual viene del
     Excel, sin normalizar), `tipo_proporcion`, `proporcion_jd` y `medio_pago`
     (ver README: antes de esto quedaban todos mezclados sin distinción).
+
+    Para responsable 'JD'/'Pinki' el reparto es implícito (ver
+    `db.resolve_fixed_split`): un fijo personal no admite `tipo_proporcion`/
+    `proporcion_jd` explícitos, aunque el Excel los traiga seteados (quedan
+    redundantes del 100/0 que ya implica el responsable), así que no se
+    reenvían para esos casos.
     """
     migrados = 0
     for fila in filas:
@@ -94,6 +100,8 @@ def migrar_gastos_fijos(conn, filas: list) -> int:
         categoria = fila.get("categoria")
         subcategoria = fila.get("subcategoria")
         ultima_actualizacion = fila.get("vigente_desde")
+        responsable = fila.get("responsable")
+        es_personal = responsable in ("JD", "Pinki")
 
         conn.execute(
             "DELETE FROM gastos_fijos WHERE nombre = ? AND categoria IS ? "
@@ -111,9 +119,9 @@ def migrar_gastos_fijos(conn, filas: list) -> int:
                 "subcategoria": subcategoria,
                 "activo": bool(fila.get("activo")),
                 "ultima_actualizacion": ultima_actualizacion,
-                "responsable": fila.get("responsable"),
-                "tipo_proporcion": fila.get("tipo_proporcion"),
-                "proporcion_jd": fila.get("proporcion_jd"),
+                "responsable": responsable,
+                "tipo_proporcion": None if es_personal else fila.get("tipo_proporcion"),
+                "proporcion_jd": None if es_personal else fila.get("proporcion_jd"),
                 "medio_pago": fila.get("medio_pago"),
             },
         )

@@ -351,3 +351,45 @@ Loop de auditoria por fases (Claude spec -> Codex impl -> Claude review). Todos 
 - **Auditado sano sin tocar:** Deuda (card/panel/saldar coherentes), carga inicial con manejo de errores, Inversiones.
 - **Decisiones (sin cambios de codigo):** DEC-029 (ingreso pago='Comun' no se modela, se divide por fuera), DEC-030 (gasto variable en mes 100/0 se mantiene dinamico).
 - **Deuda tecnica aceptada:** H1 (API publica, uso de la pareja), H8 (logica shared/personal duplicada en 4+ lugares — candidata a unificar en helper).
+
+## Integración CRUD LIFE (candidato aislado `lab/reinvencion`, t_ce790609) — cierre de suite (2026-10-17)
+
+> Este bloque describe trabajo hecho en `candidates/integration-crud-v1`
+> (copia aislada), **NO** en `lab/reinvencion` real ni en `main`. No
+> representa el estado del repo real de Área Viva/Brain hasta que Juan lo
+> acepte y el coordinador lo integre.
+
+- **Alcance del hito:** API HTTP local (`api.py`) + dominio de fijos con
+  reparto explícito/dinámico (`db.py::resolve_fixed_split`, historial de
+  versiones del mismo día) + formularios (`src/lab-dashboard/app.js`,
+  `index.html`, `style.css`) + proxy Vercel (`middleware.js`).
+- **Estado de revisión:** Revisor de código APTO (run `a9042de1`). QA
+  Codex APTO (run `e7916108`). Suite de integración verde con los ajustes
+  de esta sesión (ver `INTEGRACION.md` para el detalle de archivos,
+  comandos y pendientes).
+- **Ajuste de esta sesión — reparto de fijos personal vs. explícito:**
+  `db.py` exige que `tipo_proporcion`/`proporcion_jd` explícitos solo
+  correspondan a responsable `Común` (un fijo de `JD`/`Pinki` ya tiene
+  100/0 implícito; pasarlo explícito es redundante y ahora se rechaza con
+  `FixedSplitError`). `migrar_datos_reales.py` y los tests afectados
+  (`test_finanzas.py`, `test_migracion.py::TestGastosFijosResponsable`) se
+  alinearon a esa semántica — `db.py` no se tocó, la validación es
+  intencional.
+- **Dataset real excluido a propósito:** este candidato no trae
+  `finanzas_raw.json` (dato real). El test que depende de él
+  (`TestSanityCheckDatasetReal`) queda `@unittest.skip` documentado; solo
+  debe correr en el repo real, con backup, antes de integrar.
+- **`api-contract.md`** realineado al contrato ya implementado en
+  `api.py`/`README-api.md` + proxy/`README-proxy.md`: dos capas de auth
+  (cookie `dashboard_session` del navegador, `X-Internal-Proxy-Secret`
+  interno proxy→API), sin URLs/secretos/servicios inventados.
+- **Pendientes explícitos (no prometidos como resueltos):** activación de
+  infraestructura real (VPS + Vercel), QA manual de Juan sobre el
+  conjunto completo, y correr `TestSanityCheckDatasetReal` en el repo real
+  una vez exista `finanzas_raw.json` + backup.
+- **Nota de proceso:** esta sesión no tuvo acceso a una herramienta de
+  ejecución de shell; la resolución de los puntos de test se verificó por
+  lectura/trazado manual del código, no por una corrida real de
+  `pytest`/`node`. El coordinador debe correr los comandos listados en
+  `INTEGRACION.md` y confirmar el resultado antes de dar la suite por
+  cerrada.

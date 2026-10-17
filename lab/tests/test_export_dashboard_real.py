@@ -1,8 +1,4 @@
-"""Tests de export_dashboard_real.py contra una DB :memory: sintética.
-
-No usan ningún dataset real. No se ejecutaron en este entorno (rol sin
-shell) — ver README.md.
-"""
+"""Tests de export_dashboard_real.py contra una DB :memory: sintética."""
 
 import db
 import export_dashboard_real as export_mod
@@ -98,3 +94,56 @@ def test_recetas_marcadas_incluyen_ingredientes():
     ingredientes = db.get_receta_ingredientes(conn, receta_id)
     assert len(ingredientes) == 1
     assert ingredientes[0]["ingrediente_nombre"] == "Tomate"
+
+
+def test_export_fijos_v2_campos_orden_null_y_baja(monkeypatch):
+    conn = _conn()
+    monkeypatch.setattr(db, "_now", lambda: "2026-10-16T00:00:00+00:00")
+    try:
+        primero = db.insert_gasto_fijo(conn, {
+            "nombre": "Cable", "monto_estimado": 100.01, "periodicidad": "bimestral",
+            "vigente_desde": "2026-01-01", "ultima_actualizacion": "2026-01-01T00:00:00+00:00",
+            "categoria": "Hogar", "subcategoria": "Internet", "dia_vencimiento": 8,
+            "medio_pago": "Débito",
+        })
+        correccion = db.crear_version_fijo(conn, primero, 120.01, "2026-01-01", actor="JD")
+        baja = db.dar_baja_fijo(conn, primero, "2026-03-01", "JD")
+        segundo = db.insert_gasto_fijo(conn, {
+            "nombre": "Luz", "monto_estimado": 42.0, "periodicidad": "mensual",
+            "vigente_desde": "2025-12-01", "ultima_actualizacion": "2025-12-01T00:00:00+00:00",
+            "responsable": "Común", "tipo_proporcion": "custom", "proporcion_jd": 60.0,
+            "medio_pago": "Transferencia", "categoria": "Servicios",
+        })
+
+        campos = {"id", "fijo_grupo_id", "nombre", "monto_estimado", "monto_mensual",
+                  "periodicidad", "vigente_desde", "activo", "responsable",
+                  "tipo_proporcion", "proporcion_jd", "medio_pago", "categoria",
+                  "subcategoria", "dia_vencimiento", "ultima_actualizacion"}
+        filas = export_mod.exportar_gastos_fijos(conn)
+        assert [set(fila) for fila in filas] == [campos] * 4
+        primera_base = {
+            "fijo_grupo_id": primero, "nombre": "Cable", "periodicidad": "bimestral",
+            "responsable": None, "tipo_proporcion": None, "proporcion_jd": None,
+            "medio_pago": "Débito", "categoria": "Hogar", "subcategoria": "Internet",
+            "dia_vencimiento": 8,
+        }
+        assert filas == [
+            {**primera_base, "id": primero, "monto_estimado": 100.01,
+             "monto_mensual": 50.01, "vigente_desde": "2026-01-01", "activo": 1,
+             "ultima_actualizacion": "2026-01-01T00:00:00+00:00"},
+            {**primera_base, "id": correccion, "monto_estimado": 120.01,
+             "monto_mensual": 60.01, "vigente_desde": "2026-01-01", "activo": 1,
+             "ultima_actualizacion": "2026-10-16T00:00:00+00:00"},
+            {**primera_base, "id": baja, "monto_estimado": 120.01,
+             "monto_mensual": 60.01, "vigente_desde": "2026-03-01", "activo": 0,
+             "ultima_actualizacion": "2026-10-16T00:00:00+00:00"},
+            {"id": segundo, "fijo_grupo_id": segundo, "nombre": "Luz",
+             "monto_estimado": 42.0, "monto_mensual": 42.0,
+             "periodicidad": "mensual", "vigente_desde": "2025-12-01", "activo": 1,
+             "responsable": "Común", "tipo_proporcion": "custom", "proporcion_jd": 60.0,
+             "medio_pago": "Transferencia", "categoria": "Servicios",
+             "subcategoria": None, "dia_vencimiento": None,
+             "ultima_actualizacion": "2025-12-01T00:00:00+00:00"},
+        ]
+    finally:
+        conn.close()

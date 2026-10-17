@@ -1,0 +1,15 @@
+{
+  "grupos": [
+    {"nombre": "Alquiler", "ids": [94, 103, 104, 105, 112], "confianza": "alta", "nota": "Incluye Alquiler 1er Aumento (112)."},
+    {"nombre": "Internet", "ids": [100, 99, 101, 109, 123], "confianza": "alta", "nota": "Incluye Julio Internet (123)."},
+    {"nombre": "Seguro departamento", "ids": [102, 110, 111], "confianza": "alta", "nota": "Continuidad confirmada en el lab."},
+    {"nombre": "EPE", "ids": [95, 106], "confianza": "alta", "nota": "Continuidad confirmada en el lab."},
+    {"nombre": "Gas", "ids": [98, 108], "confianza": "alta", "nota": "Continuidad confirmada en el lab."},
+    {"nombre": "Expensas ordinarias", "ids": [96, 97, 107, 113, 122], "confianza": "media", "nota": "Incluye Expensas Junio (113) y Julio Expesna (122)."}
+  ],
+  "a_confirmar": [
+    {"id": 124, "nombre": "Agosto", "confianza": "a_confirmar", "nota": "Posible expensas de agosto; consultar a Juan en QA."},
+    {"id": 118, "nombre": "5 Veces Abril", "confianza": "a_confirmar", "nota": "Sin unificar hasta QA de Juan."},
+    {"id": 119, "nombre": "4 Veces Mayo", "confianza": "a_confirmar", "nota": "Sin unificar hasta QA de Juan."}
+  ]
+}

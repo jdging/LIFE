@@ -1,188 +1,104 @@
-# Contrato API — Finanzas write endpoints (`/api/expenses`, `/api/fixed/:id`)
+# Contrato API — `/api/*` consumido por el dashboard
 
-> **Estado: NO desplegado.** Este documento es un contrato de diseño para
-> cuando exista infraestructura VPS aprobada (Opción A: puerto HTTPS propio
-> en el VPS, u Opción B: poller que consuma una cola). Hoy no hay ningún
-> proceso escuchando estas rutas ni ningún request real llega a
-> `data/lasso.sqlite`. `middleware.js` ya protege el prefijo `/api/` con
-> 401 JSON si falta/venció la sesión, pero eso es autenticación de borde —
-> no implica que el backend exista.
+> **Estado: NO desplegado.** Este documento describe el contrato ya
+> implementado en `api.py` (ver `README-api.md`) y expuesto al navegador a
+> través de `middleware.js` (ver `README-proxy.md`). Hoy no hay ningún VPS
+> real detrás de `VPS_API_BASE_URL`, ni despliegue de Vercel, ni base
+> `data/lasso.sqlite` productiva: `api.py` corre localmente contra una base
+> SQLite efímera (archivo temporal o `:memory:`) para tests, y el proxy no
+> tiene `VPS_API_BASE_URL`/`VPS_INTERNAL_SECRET` configurados en ningún
+> entorno real. Este archivo NO inventa una URL de VPS ni un secreto: esos
+> valores los define el operador en el entorno de Vercel al integrar.
+
+## Dos capas de autenticación
+
+1. **Navegador → proxy (`middleware.js`)**: cookie de sesión firmada
+   `dashboard_session` (gate existente, `DASHBOARD_PASSWORD`). Sin cookie
+   válida, `/api/*` responde `401` JSON antes de llegar al proxy. Para
+   `POST`/`PATCH`/`DELETE` el header `Origin` es obligatorio y debe
+   coincidir exactamente con el origen de la request.
+2. **Proxy → API (`api.py`)**: el proxy agrega `X-Internal-Proxy-Secret`
+   (desde `VPS_INTERNAL_SECRET`, solo variable de servidor) a cada request
+   reenviada a `VPS_API_BASE_URL`. El navegador nunca ve ni envía este
+   secreto. `api.py` compara ese header en tiempo constante; sin él, o
+   incorrecto, responde `401` (incluso en `/api/health`).
+
+El dashboard (`app.js`) solo conoce la primera capa: llama a rutas relativas
+(`/api/expenses`, `/api/income`, `/api/fixed`, `/api/fixed/versions`,
+`/api/summary`, `/api/health`) con `credentials: 'same-origin'`. No conoce
+`VPS_API_BASE_URL` ni el secreto interno.
 
 ## Convenciones generales
 
-- Todos los request/response bodies son JSON (`content-type:
-  application/json; charset=utf-8`).
-- Autenticación: cookie `dashboard_session` (ver `middleware.js`). Sin
-  sesión válida → `401 {"error":"unauthorized"}` antes de llegar al
-  handler.
+- Todos los request/response bodies son JSON
+  (`application/json; charset=utf-8`), con `Cache-Control: no-store`.
 - Nombres de campo idénticos a las columnas expuestas por `db.py` (no se
   traducen ni se camelCasean).
-- Los errores de validación devuelven `400` con
-  `{"error": "validation_failed", "details": ["mensaje 1", "mensaje 2"]}`
-  — `details` es la lista tal cual la devuelven `validar_expense` /
-  `validar_fixed_update` en `validaciones.py`.
+- Claves JSON repetidas, campos/parámetros desconocidos, parámetros
+  repetidos, `NaN`, infinito y booleanos en campos numéricos se rechazan
+  con `400`.
+- `actor`, `confirmado`, `origen` y otros campos de control no se aceptan
+  del cliente: la API los fija internamente (`confirmado=True` en altas).
+  Las escrituras auditadas quedan con actor `sesion_compartida:no_verificado`
+  — la sesión del dashboard no identifica a JD ni a Pinki ante la API.
+- Códigos: `400` entrada inválida, `401` autenticación (cookie o secreto
+  interno ausente/incorrecto), `404` recurso inexistente, `405` método no
+  admitido (con header `Allow`), `409` conflicto de estado/SQLite ocupado,
+  `413` cuerpo de más de 64 KiB, `422` si datos legacy o acumulados impiden
+  calcular una respuesta fiable, `500`/`502`/`504` errores de servidor o
+  del proxy upstream (ver `README-proxy.md`).
 
-## `POST /api/expenses` — alta de gasto
+## Rutas (contrato completo en `README-api.md`)
 
-Inserta un gasto (equivalente a `db.insert_gasto` / `insert_gasto_con_cuotas`
-si `cuotas_total > 1`).
+| Método y ruta | Entrada | Respuesta exitosa |
+| --- | --- | --- |
+| `GET /api/health` | Sin parámetros | `{"ok":true,"capabilities":["expenses","income","fixed"],"mode":"live"}` |
+| `GET /api/expenses?month=YYYY-MM` | `month` opcional | `{"expenses":[...]}`; excluye bajas lógicas |
+| `POST /api/expenses` | `fecha`, `monto`, `moneda`, `categoria`, `subcategoria`, `medio_pago`, `pagado_por`, `descripcion_original`, `tarjeta_id`, `tipo_proporcion`, `proporcion_jd`, `proporcion_pinki`, `cuotas_total` | `201 {"expenses":[...]}`; una fila por cuota |
+| `DELETE /api/expenses/:id` | Sin cuerpo | `{"deleted":true,"id":N}` |
+| `GET /api/income` | Sin parámetros | `{"income":[...]}` |
+| `POST /api/income` | `fecha`, `monto`, `moneda`, `categoria`, `persona`, `descripcion_original` | `201 {"income":{...}}` |
+| `PATCH /api/income/:id` | Subconjunto no vacío de los campos del alta | `{"income":{...}}` |
+| `GET /api/fixed?dateISO=YYYY-MM-DD` | `dateISO` opcional | `{"fixed":[...]}`; una versión activa por serie |
+| `GET /api/fixed/versions` | Sin parámetros | `{"versions":[...]}`; todas las versiones |
+| `GET /api/fixed/range?fromISO=...&toISO=...` | Dos fechas obligatorias | `{"range":[{"fijo_grupo_id":N,"tramos":[...]}]}` |
+| `GET /api/fixed/:id/historial` | `id` de cualquier versión | `{"historial":[...]}` |
+| `POST /api/fixed` | `nombre`, `monto_estimado`, `periodicidad`, `responsable`, `vigente_desde` obligatorios; `tipo_proporcion`/`proporcion_jd` según tabla de reparto | `201 {"fixed":{...}}` |
+| `PATCH /api/fixed/:id` | `vigente_desde` obligatorio + cambios | `{"fixed":{...}}` con id de la nueva versión |
+| `DELETE /api/fixed/:id` | `{"fecha_baja":"YYYY-MM-DD"}` | `{"fixed":{...}}` con versión inactiva nueva |
+| `GET /api/summary?month=YYYY-MM` | `month` opcional | Con mes: objeto resumen; sin mes: `{"months":[...]}` |
 
-### Request body
+No existe `DELETE /api/income/:id`. `:id` es un entero decimal positivo (no
+se admiten ids tipo `F-1`).
 
-```json
-{
-  "fecha": "2026-09-25",
-  "monto": 15000.5,
-  "moneda": "ARS",
-  "categoria": "Comida",
-  "subcategoria": "Supermercado",
-  "medio_pago": "Crédito",
-  "pagado_por": "JD",
-  "descripcion_original": "Coto del mes",
-  "tarjeta_id": "TC1",
-  "tipo_proporcion": "dinamico",
-  "proporcion_jd": null,
-  "proporcion_pinki": null,
-  "cuotas_total": 1,
-  "cuota_nro": 1
-}
-```
+### Reparto de gastos fijos (regla vigente, ver `db.resolve_fixed_split`)
 
-| Campo | Tipo | Obligatorio | Notas |
-|---|---|---|---|
-| `fecha` | string `YYYY-MM-DD` | No | Default: hoy (UTC) si se omite. |
-| `monto` | number | Sí | Debe ser `> 0`. |
-| `moneda` | string | No | Default `"ARS"`. |
-| `categoria` | string | Sí | — |
-| `subcategoria` | string \| null | No | — |
-| `medio_pago` | string | No | — |
-| `pagado_por` | string | No | `"Común"` \| `"JD"` \| `"Pinki"`. Default `"Común"`. |
-| `descripcion_original` | string \| null | No | — |
-| `tarjeta_id` | string \| null | No | FK a `tarjetas.id`. |
-| `tipo_proporcion` | string | No | `"dinamico"` (default) \| `"custom"`. |
-| `proporcion_jd` | number \| null | Condicional | Obligatorio si `tipo_proporcion="custom"`; debe venir `null`/ausente si `"dinamico"`. |
-| `proporcion_pinki` | number \| null | Condicional | Igual regla que `proporcion_jd`. |
-| `cuotas_total` | integer | No | Default `1`. Debe ser `>= 1`. |
-| `cuota_nro` | integer | No | Default `1`. Debe ser `>= 1` y `<= cuotas_total`. |
+| Responsable | Entrada admitida | Valores guardados y devueltos |
+| --- | --- | --- |
+| `Común`, dinámico | Omitir ambos campos, o `"tipo_proporcion":"dinamica"` sin `proporcion_jd` (o `null`) | `"tipo_proporcion":"dinamica","proporcion_jd":null` |
+| `Común`, manual | `"tipo_proporcion":"custom","proporcion_jd":N` (`0..100`) | `"tipo_proporcion":"custom","proporcion_jd":N` |
+| `JD` | Omitir los campos de reparto o enviarlos como `null` | `"tipo_proporcion":null,"proporcion_jd":100` |
+| `Pinki` | Omitir los campos de reparto o enviarlos como `null` | `"tipo_proporcion":null,"proporcion_jd":0` |
 
-### Validaciones (ver `validaciones.py::validar_expense`)
+**No se aceptan valores de reparto explícitos para un responsable
+personal** (`JD`/`Pinki`): es redundante con el 100/0 implícito y la API
+responde `400` si se envían. Ver punto 2 de `INTEGRACION.md` para el
+ajuste equivalente en `migrar_datos_reales.py`.
 
-- `monto > 0` (rechaza `0`, negativos, no-numérico).
-- `categoria` no vacía.
-- `pagado_por` ∈ `{Común, JD, Pinki}` si viene informado.
-- `tipo_proporcion` ∈ `{dinamico, custom}`.
-- Si `tipo_proporcion = "custom"`: `proporcion_jd` y `proporcion_pinki`
-  son obligatorias, numéricas, y `abs((proporcion_jd + proporcion_pinki)
-  - 100) <= 0.01`.
-- Si `tipo_proporcion = "dinamico"`: `proporcion_jd` y `proporcion_pinki`
-  deben venir `null`/ausentes (mismo criterio que `db.insert_gasto`).
-- `cuotas_total >= 1`.
-- `cuota_nro >= 1` y `cuota_nro <= cuotas_total`.
+## Query permitida y rutas vía proxy
 
-### Response
-
-**201 Created**
-
-```json
-{ "id": 42 }
-```
-
-Si `cuotas_total > 1`, el servidor expande las cuotas internamente
-(equivalente a `insert_gasto_con_cuotas`) y responde con la lista de ids
-generados:
-
-```json
-{ "ids": [42, 43, 44] }
-```
-
-**400 Bad Request** — validación falló (ver formato general arriba).
-
-**401 Unauthorized** — sin cookie de sesión válida.
-
-## `DELETE /api/expenses/:id` — baja lógica
-
-Marca un gasto como borrado (soft delete). Requiere la migración descripta
-en `migracion_soft_delete.sql` (columnas `deleted_at`/`deleted_by` en
-`gastos`) — **no aplicada todavía**, ver ese archivo.
-
-### Request
-
-- `:id` — entero, id de `gastos.id`.
-- Body opcional:
-
-```json
-{ "actor": "JD" }
-```
-
-| Campo | Tipo | Obligatorio | Notas |
-|---|---|---|---|
-| `actor` | string | No | Quién ejecuta el borrado, para `deleted_by` / `auditoria.actor`. Default `"desconocido"` si se omite. |
-
-### Response
-
-**200 OK**
-
-```json
-{ "id": 42, "deleted_at": "2026-09-25T14:30:00+00:00" }
-```
-
-**404 Not Found** — `{"error": "not_found"}` si el id no existe o ya
-estaba borrado.
-
-**401 Unauthorized** — sin cookie de sesión válida.
-
-## `PATCH /api/fixed/:id` — actualizar monto de un gasto fijo
-
-Equivalente a `db.actualizar_monto_fijo(conn, id, monto_nuevo)`.
-
-### Request body
-
-```json
-{ "monto_estimado": 85000.0 }
-```
-
-| Campo | Tipo | Obligatorio | Notas |
-|---|---|---|---|
-| `monto_estimado` | number | Sí | Debe ser `> 0`. |
-
-Nota: el contrato solo cubre actualización de monto (alcance del brief).
-No cubre cambios de `responsable`, `periodicidad` ni otros campos de
-`gastos_fijos` — eso queda fuera de esta iteración.
-
-### Validaciones (ver `validaciones.py::validar_fixed_update`)
-
-- `monto_estimado` presente, numérico y `> 0`.
-
-### Response
-
-**200 OK**
-
-```json
-{ "id": 7, "monto_estimado": 85000.0 }
-```
-
-**404 Not Found** — `{"error": "not_found"}` si el id de `gastos_fijos` no
-existe.
-
-**400 Bad Request** — validación falló.
-
-**401 Unauthorized** — sin cookie de sesión válida.
-
-## Códigos de error — resumen
-
-| Código | `error` | Cuándo |
-|---|---|---|
-| 400 | `validation_failed` | Payload no cumple las reglas de `validaciones.py`. Incluye `details: string[]`. |
-| 401 | `unauthorized` | Cookie de sesión ausente o vencida (emitido por `middleware.js`, ver punto 1 del brief). |
-| 404 | `not_found` | El recurso (`gastos.id` / `gastos_fijos.id`) no existe. |
-| 500 | `internal_error` | Falla no esperada del servidor. |
+El proxy (`middleware.js`) solo reenvía la query documentada en
+`README-proxy.md` por ruta (p.ej. `month` solo en `GET /api/expenses` y
+`GET /api/summary`, `dateISO` solo en `GET /api/fixed`, `fromISO`/`toISO`
+obligatorias en `GET /api/fixed/range`). Una query no listada devuelve
+`400` antes de llegar a `api.py`.
 
 ## Fuera de alcance de este contrato
 
-- Autenticación distinta a la cookie de sesión ya existente.
-- Endpoints de lectura (`GET /api/expenses`, `GET /api/fixed`) — no
-  pedidos en el brief, se pueden derivar de `db.get_gastos` /
-  `db.get_gastos_fijos` cuando se implementen.
-- Cualquier infraestructura de despliegue (Opción A/B), rate limiting,
-  CORS, o manejo de conexión a SQLite concurrente — todo eso depende de
-  la arquitectura de VPS que todavía no está aprobada.
+- El valor real de `VPS_API_BASE_URL` / `VPS_INTERNAL_SECRET` — los define
+  el operador en Vercel, nunca este repositorio.
+- Activación de infraestructura (VPS, deploy de Vercel) y el smoke test
+  remoto de login/cookie/logout/`next()`/endpoints — pendientes, ver
+  `INTEGRACION.md`.
+- Endpoints no listados en la tabla de rutas (no hay más superficie que la
+  que exponen `api.py` y `middleware.js` hoy).

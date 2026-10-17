@@ -21,7 +21,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 650,
@@ -45,7 +47,9 @@
     "cuota_nro": 1,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 651,
@@ -69,7 +73,9 @@
     "cuota_nro": 2,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 652,
@@ -93,7 +99,9 @@
     "cuota_nro": 3,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 653,
@@ -117,7 +125,9 @@
     "cuota_nro": 4,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 654,
@@ -141,7 +151,9 @@
     "cuota_nro": 5,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 655,
@@ -165,7 +177,9 @@
     "cuota_nro": 6,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 656,
@@ -189,7 +203,9 @@
     "cuota_nro": 7,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 657,
@@ -213,7 +229,9 @@
     "cuota_nro": 8,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 658,
@@ -237,7 +255,9 @@
     "cuota_nro": 9,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 659,
@@ -261,7 +281,9 @@
     "cuota_nro": 10,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 660,
@@ -285,7 +307,9 @@
     "cuota_nro": 11,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 661,
@@ -309,7 +333,9 @@
     "cuota_nro": 12,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 662,
@@ -333,7 +359,9 @@
     "cuota_nro": 13,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 663,
@@ -357,7 +385,9 @@
     "cuota_nro": 14,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 664,
@@ -381,7 +411,9 @@
     "cuota_nro": 15,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 665,
@@ -405,7 +437,9 @@
     "cuota_nro": 16,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 666,
@@ -429,7 +463,9 @@
     "cuota_nro": 17,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 667,
@@ -453,7 +489,9 @@
     "cuota_nro": 18,
     "cuota_ref": 650,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 668,
@@ -477,7 +515,9 @@
     "cuota_nro": 1,
     "cuota_ref": 668,
     "saldado": "2026-02-03",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 669,
@@ -501,7 +541,9 @@
     "cuota_nro": 2,
     "cuota_ref": 668,
     "saldado": "2026-03-03",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 670,
@@ -525,7 +567,9 @@
     "cuota_nro": 3,
     "cuota_ref": 668,
     "saldado": "2026-04-03",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 671,
@@ -549,7 +593,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-03-31",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 672,
@@ -573,7 +619,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 673,
@@ -597,7 +645,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 674,
@@ -621,7 +671,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 675,
@@ -645,7 +697,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 676,
@@ -669,7 +723,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 677,
@@ -693,7 +749,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 678,
@@ -717,7 +775,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 679,
@@ -741,7 +801,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 680,
@@ -765,7 +827,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 681,
@@ -789,7 +853,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 682,
@@ -813,7 +879,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 683,
@@ -837,7 +905,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 684,
@@ -861,7 +931,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 685,
@@ -885,7 +957,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-04-29",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 686,
@@ -909,7 +983,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 687,
@@ -933,7 +1009,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-04-29",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 688,
@@ -957,7 +1035,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 689,
@@ -981,7 +1061,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 690,
@@ -1005,7 +1087,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-04-29",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 691,
@@ -1029,7 +1113,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 692,
@@ -1053,7 +1139,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 693,
@@ -1077,7 +1165,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 694,
@@ -1101,7 +1191,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 695,
@@ -1125,7 +1217,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 696,
@@ -1149,7 +1243,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 697,
@@ -1173,7 +1269,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 698,
@@ -1197,7 +1295,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 699,
@@ -1221,7 +1321,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 700,
@@ -1245,7 +1347,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 701,
@@ -1269,7 +1373,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 702,
@@ -1293,7 +1399,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 703,
@@ -1317,7 +1425,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 704,
@@ -1341,7 +1451,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 705,
@@ -1365,7 +1477,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 706,
@@ -1389,7 +1503,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 707,
@@ -1413,7 +1529,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 708,
@@ -1437,7 +1555,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 709,
@@ -1461,7 +1581,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 710,
@@ -1485,7 +1607,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 711,
@@ -1509,7 +1633,9 @@
     "cuota_nro": 1,
     "cuota_ref": 711,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 712,
@@ -1533,7 +1659,9 @@
     "cuota_nro": 2,
     "cuota_ref": 711,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 713,
@@ -1557,7 +1685,9 @@
     "cuota_nro": 3,
     "cuota_ref": 711,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 714,
@@ -1581,7 +1711,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 715,
@@ -1605,7 +1737,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-04-29",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 716,
@@ -1629,7 +1763,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-04-29",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 717,
@@ -1653,7 +1789,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-04-29",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 718,
@@ -1677,7 +1815,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 719,
@@ -1701,7 +1841,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 720,
@@ -1725,7 +1867,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 721,
@@ -1749,7 +1893,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 722,
@@ -1773,7 +1919,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-04-29",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 723,
@@ -1797,7 +1945,9 @@
     "cuota_nro": 1,
     "cuota_ref": 723,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 724,
@@ -1821,7 +1971,9 @@
     "cuota_nro": 2,
     "cuota_ref": 723,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 725,
@@ -1845,7 +1997,9 @@
     "cuota_nro": 3,
     "cuota_ref": 723,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 726,
@@ -1869,7 +2023,9 @@
     "cuota_nro": 4,
     "cuota_ref": 723,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 727,
@@ -1893,7 +2049,9 @@
     "cuota_nro": 5,
     "cuota_ref": 723,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 728,
@@ -1917,7 +2075,9 @@
     "cuota_nro": 6,
     "cuota_ref": 723,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 729,
@@ -1941,7 +2101,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-04-29",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 730,
@@ -1965,7 +2127,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 731,
@@ -1989,7 +2153,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 732,
@@ -2013,7 +2179,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 733,
@@ -2037,7 +2205,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 734,
@@ -2061,7 +2231,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 735,
@@ -2085,7 +2257,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-04-29",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 736,
@@ -2109,7 +2283,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 737,
@@ -2133,7 +2309,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-04-29",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 738,
@@ -2157,7 +2335,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-04-29",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 739,
@@ -2181,7 +2361,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 740,
@@ -2205,7 +2387,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-04-30",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 741,
@@ -2229,7 +2413,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-07",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 742,
@@ -2253,7 +2439,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-07",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 743,
@@ -2277,7 +2465,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-07",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 744,
@@ -2301,7 +2491,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 745,
@@ -2325,7 +2517,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 746,
@@ -2349,7 +2543,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-07",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 747,
@@ -2373,7 +2569,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-07",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 748,
@@ -2397,7 +2595,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-07",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 749,
@@ -2421,7 +2621,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-07",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 750,
@@ -2445,7 +2647,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 751,
@@ -2469,7 +2673,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 752,
@@ -2493,7 +2699,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 753,
@@ -2517,7 +2725,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 754,
@@ -2541,7 +2751,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 755,
@@ -2565,7 +2777,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 756,
@@ -2589,7 +2803,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-24",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 757,
@@ -2613,7 +2829,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 758,
@@ -2637,7 +2855,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 759,
@@ -2661,7 +2881,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 760,
@@ -2685,7 +2907,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-24",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 761,
@@ -2709,7 +2933,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 762,
@@ -2733,7 +2959,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-24",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 763,
@@ -2757,7 +2985,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 764,
@@ -2781,7 +3011,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 765,
@@ -2805,7 +3037,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 766,
@@ -2829,7 +3063,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 767,
@@ -2853,7 +3089,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 768,
@@ -2877,7 +3115,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 769,
@@ -2901,7 +3141,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-24",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 770,
@@ -2925,7 +3167,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 771,
@@ -2949,7 +3193,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 772,
@@ -2973,7 +3219,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 773,
@@ -2997,7 +3245,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 774,
@@ -3021,7 +3271,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 775,
@@ -3045,7 +3297,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 776,
@@ -3069,7 +3323,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 777,
@@ -3093,7 +3349,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 778,
@@ -3117,7 +3375,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-24",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 779,
@@ -3141,7 +3401,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 780,
@@ -3165,7 +3427,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-24",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 781,
@@ -3189,7 +3453,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-24",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 782,
@@ -3213,7 +3479,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-24",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 783,
@@ -3237,7 +3505,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 784,
@@ -3261,7 +3531,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 785,
@@ -3285,7 +3557,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 786,
@@ -3309,7 +3583,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 787,
@@ -3333,7 +3609,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 788,
@@ -3357,7 +3635,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 789,
@@ -3381,7 +3661,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 790,
@@ -3405,7 +3687,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 791,
@@ -3429,7 +3713,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 792,
@@ -3453,7 +3739,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 793,
@@ -3477,7 +3765,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 794,
@@ -3501,7 +3791,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 795,
@@ -3525,7 +3817,9 @@
     "cuota_nro": 1,
     "cuota_ref": 795,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 796,
@@ -3549,7 +3843,9 @@
     "cuota_nro": 2,
     "cuota_ref": 795,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 797,
@@ -3573,7 +3869,9 @@
     "cuota_nro": 3,
     "cuota_ref": 795,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 798,
@@ -3597,7 +3895,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-05-29",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 799,
@@ -3621,7 +3921,9 @@
     "cuota_nro": 1,
     "cuota_ref": 799,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 800,
@@ -3645,7 +3947,9 @@
     "cuota_nro": 2,
     "cuota_ref": 799,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 801,
@@ -3669,7 +3973,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 802,
@@ -3693,7 +3999,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 803,
@@ -3717,7 +4025,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-06-04",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 804,
@@ -3741,7 +4051,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-06-04",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 805,
@@ -3765,7 +4077,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-06-08",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 806,
@@ -3789,7 +4103,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 807,
@@ -3813,7 +4129,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-07-01",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 808,
@@ -3837,7 +4155,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 809,
@@ -3861,7 +4181,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 810,
@@ -3885,7 +4207,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 811,
@@ -3909,7 +4233,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 812,
@@ -3933,7 +4259,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-07-01",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 813,
@@ -3957,7 +4285,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-07-14",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 814,
@@ -3981,7 +4311,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-07-14",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 815,
@@ -4005,7 +4337,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-07-27",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 816,
@@ -4029,7 +4363,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-07-27",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 817,
@@ -4053,7 +4389,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 818,
@@ -4077,7 +4415,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 819,
@@ -4101,7 +4441,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-08-18",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 820,
@@ -4125,7 +4467,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-08-18",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 821,
@@ -4149,7 +4493,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-08-18",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 822,
@@ -4173,7 +4519,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-08-18",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 823,
@@ -4197,7 +4545,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-08-18",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 824,
@@ -4221,7 +4571,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-08-18",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 825,
@@ -4245,7 +4597,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-08-18",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 826,
@@ -4269,7 +4623,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-08-18",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 827,
@@ -4293,7 +4649,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-09-07",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 828,
@@ -4317,7 +4675,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-09-07",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 829,
@@ -4341,7 +4701,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-09-07",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 830,
@@ -4365,7 +4727,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": "2026-09-07",
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 831,
@@ -4389,7 +4753,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 832,
@@ -4413,7 +4779,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 833,
@@ -4437,7 +4805,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 834,
@@ -4461,7 +4831,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 835,
@@ -4485,7 +4857,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 836,
@@ -4509,7 +4883,9 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   },
   {
     "id": 837,
@@ -4533,6 +4909,8 @@
     "cuota_nro": 1,
     "cuota_ref": null,
     "saldado": null,
-    "es_real": 0
+    "es_real": 0,
+    "deleted_at": null,
+    "deleted_by": null
   }
 ]

@@ -18,8 +18,7 @@ Tablas (esquema reconciliado con LIFE-lab-propuesta.md sección 3):
       (tarjetas/reparto), `cuotas_total`, `cuota_nro`, `cuota_ref` (cuotas,
       ver README sección "Cuotas") y `deleted_at`/`deleted_by` (soft delete,
       ver README sección "Soft delete de gastos").
-    - auditoria: rastro genérico de alta/baja/edición sobre cualquier tabla
-      (hoy solo usada por `eliminar_gasto_logico`), ver README.
+    - auditoria: rastro genérico de cambios en gastos y gastos fijos.
     - tarjetas: catálogo de tarjetas (crédito/débito), portado de la hoja
       `Tarjetas` del sistema real (ver README).
     - categorias: catálogo dinámico de categorías/subcategorías (Gasto /
@@ -48,8 +47,9 @@ rechazan cualquier intento de insertar un registro que no venga marcado como
 """
 
 import json
+import math
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Optional
@@ -1259,8 +1259,84 @@ def crear_categoria_si_no_existe(
 
 # --- Gastos fijos ------------------------------------------------------------
 
+_FIXED_UNSET = object()
 
-def insert_gasto_fijo(conn: sqlite3.Connection, gasto_fijo: dict) -> int:
+
+class FixedSplitError(ValueError):
+    """Invalid fixed-expense allocation supplied by a caller."""
+
+
+class FixedNoChangeError(ValueError):
+    """A proposed version has the same business fields as its predecessor."""
+
+
+def resolve_fixed_split(responsable, tipo_proporcion=_FIXED_UNSET,
+                        proporcion_jd=_FIXED_UNSET, anterior=None):
+    """Return the stored split for a new version without changing older rows.
+
+    A missing field inherits only within a common-to-common edit. Moving from
+    a personal expense back to common starts in dynamic mode unless the caller
+    explicitly supplies a complete custom split.
+    """
+    if responsable in ("JD", "Pinki"):
+        if tipo_proporcion not in (_FIXED_UNSET, None) or proporcion_jd not in (_FIXED_UNSET, None):
+            raise FixedSplitError("El reparto explícito solo corresponde a responsable Común.")
+        return None, 100.0 if responsable == "JD" else 0.0
+
+    if responsable is None:
+        if tipo_proporcion is not _FIXED_UNSET or proporcion_jd is not _FIXED_UNSET:
+            raise FixedSplitError("No se puede asignar reparto sin responsable.")
+        return (anterior["tipo_proporcion"], anterior["proporcion_jd"]) if anterior else (None, None)
+
+    if responsable != "Común":
+        raise FixedSplitError("Responsable inválido.")
+
+    inherited = anterior is not None and anterior["responsable"] == "Común"
+    if tipo_proporcion is _FIXED_UNSET:
+        tipo = anterior["tipo_proporcion"] if inherited else "dinamica"
+    else:
+        tipo = tipo_proporcion
+    if tipo == "dinamico":
+        tipo = "dinamica"
+    if tipo is None and inherited and tipo_proporcion is _FIXED_UNSET:
+        tipo = "dinamica"
+    if tipo not in ("dinamica", "custom"):
+        raise FixedSplitError("tipo_proporcion debe ser dinamica o custom.")
+
+    if tipo == "dinamica":
+        if proporcion_jd not in (_FIXED_UNSET, None):
+            raise FixedSplitError("La proporción dinámica no admite porcentaje explícito.")
+        return "dinamica", None
+
+    if proporcion_jd is _FIXED_UNSET:
+        pct = anterior["proporcion_jd"] if inherited and anterior["tipo_proporcion"] == "custom" else None
+    else:
+        pct = proporcion_jd
+    if (isinstance(pct, bool) or not isinstance(pct, (int, float))
+            or not math.isfinite(pct) or not 0 <= pct <= 100):
+        raise FixedSplitError("custom requiere proporcion_jd numérico y finito entre 0 y 100.")
+    return "custom", float(pct)
+
+
+def _auditar_fijo(conn, fila_id, accion, actor, antes, despues):
+    conn.execute(
+        "INSERT INTO auditoria (tabla, fila_id, accion, actor, antes_json, despues_json, creado_en) "
+        "VALUES ('gastos_fijos', ?, ?, ?, ?, ?, ?)",
+        (fila_id, accion, actor,
+         json.dumps(antes, ensure_ascii=False) if antes is not None else None,
+         json.dumps(despues, ensure_ascii=False) if despues is not None else None, _now()),
+    )
+
+
+def monto_mensual(version: dict) -> float:
+    """Monto mensual equivalente, con redondeo decimal comercial a centavos."""
+    divisor = 2 if version["periodicidad"] == "bimestral" else 1
+    return float((Decimal(str(version["monto_estimado"])) / divisor).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    ))
+
+
+def insert_gasto_fijo(conn: sqlite3.Connection, gasto_fijo: dict, actor: Optional[str] = None) -> int:
     """Inserta un gasto fijo (primera versión de una serie nueva).
 
     Campos de responsable/reparto:
@@ -1270,12 +1346,13 @@ def insert_gasto_fijo(conn: sqlite3.Connection, gasto_fijo: dict) -> int:
           pasada del revisor, run 3e22f249, hallazgo 2). Si no se pasa,
           queda `NULL` — esta capa NO le inventa un dueño a un gasto fijo
           legacy. Si se pasa, debe ser uno de los 3 valores válidos. La
-          futura capa web (cuando exista) exigirá `responsable` obligatorio
-          en el payload de alta; esta capa de dominio sigue siendo
+          capa web exige `responsable` obligatorio en el payload de alta;
+          esta capa de dominio sigue siendo
           retrocompatible con datos/llamadas legacy sin ese campo.
-        - tipo_proporcion: 'dinamica' / 'custom' / None; solo relevante si
-          responsable='Común'.
-        - proporcion_jd: solo si tipo_proporcion='custom'.
+        - tipo_proporcion: 'dinamica' / 'custom' solo para 'Común'; el alias
+          de entrada 'dinamico' se guarda como 'dinamica'.
+        - proporcion_jd: porcentaje manual para 'Común' + 'custom'; para
+          'JD'/'Pinki' se guarda 100/0 con tipo_proporcion NULL.
         - medio_pago: informativo.
 
     `vigente_desde` (versionado, ver README): fecha ISO 'YYYY-MM-DD' desde la
@@ -1296,10 +1373,17 @@ def insert_gasto_fijo(conn: sqlite3.Connection, gasto_fijo: dict) -> int:
             "monto_estimado": gasto_fijo.get("monto_estimado"),
             "vigente_desde": vigente_desde,
             "responsable": gasto_fijo.get("responsable"),
+            "nombre": gasto_fijo.get("nombre"),
+            "periodicidad": gasto_fijo.get("periodicidad"),
         }
     )
     if errores:
         raise ValueError(f"Gasto fijo inválido: {errores}")
+    tipo_proporcion, proporcion_jd = resolve_fixed_split(
+        gasto_fijo.get("responsable"),
+        gasto_fijo.get("tipo_proporcion", _FIXED_UNSET),
+        gasto_fijo.get("proporcion_jd", _FIXED_UNSET),
+    )
 
     try:
         cursor = conn.execute(
@@ -1320,18 +1404,20 @@ def insert_gasto_fijo(conn: sqlite3.Connection, gasto_fijo: dict) -> int:
                 1 if gasto_fijo.get("activo", True) else 0,
                 ultima_actualizacion,
                 gasto_fijo.get("responsable"),
-                gasto_fijo.get("tipo_proporcion"),
-                gasto_fijo.get("proporcion_jd"),
+                tipo_proporcion,
+                proporcion_jd,
                 gasto_fijo.get("medio_pago"),
                 vigente_desde,
             ),
         )
         nuevo_id = cursor.lastrowid
-        fijo_grupo_id = gasto_fijo.get("fijo_grupo_id") or nuevo_id
+        fijo_grupo_id = nuevo_id
         conn.execute(
             "UPDATE gastos_fijos SET fijo_grupo_id = ? WHERE id = ?",
             (fijo_grupo_id, nuevo_id),
         )
+        despues = dict(conn.execute("SELECT * FROM gastos_fijos WHERE id = ?", (nuevo_id,)).fetchone())
+        _auditar_fijo(conn, nuevo_id, "alta", actor, None, despues)
     except Exception:
         conn.rollback()
         raise
@@ -1352,10 +1438,14 @@ def get_gastos_fijos(conn: sqlite3.Connection, solo_activos: bool = True) -> lis
 def crear_version_fijo(
     conn: sqlite3.Connection,
     gasto_fijo_id: int,
-    monto_nuevo: float,
-    vigente_desde: str,
+    monto_nuevo: Optional[float] = None,
+    vigente_desde: Optional[str] = None,
     responsable: Optional[str] = None,
     nombre: Optional[str] = None,
+    periodicidad: Optional[str] = None,
+    actor: Optional[str] = None,
+    tipo_proporcion=_FIXED_UNSET,
+    proporcion_jd=_FIXED_UNSET,
 ) -> int:
     """Crea una versión NUEVA de un gasto fijo, vigente desde `vigente_desde`.
 
@@ -1370,20 +1460,11 @@ def crear_version_fijo(
     `fijo_grupo_id` de la SERIE a la que pertenece `gasto_fijo_id` — NUNCA
     se recalcula por `nombre`.
 
-    Versión base (corregido tras 2da pasada del revisor, run 3e22f249,
-    hallazgo 1): `gasto_fijo_id` solo se usa para RESOLVER a qué serie
-    (`fijo_grupo_id`) pertenece la nueva versión. Los campos heredados
-    (`nombre`/`periodicidad`/`categoria`/`subcategoria`/`responsable`/
-    `tipo_proporcion`/`proporcion_jd`/`medio_pago`/`activo`) se copian de la
-    versión VIGENTE MÁS RECIENTE de esa serie (mayor `vigente_desde`, no
-    necesariamente la fila con mayor `id`) — NO de la fila literal que
-    recibió `gasto_fijo_id`, que puede ser una versión histórica vieja. Sin
-    esto, pasar el `id` de una versión antigua para crear una tercera
-    versión pisaría silenciosamente un rename o cambio de responsable hecho
-    en la versión intermedia. `responsable` y `nombre` igual se pueden
-    pisar explícitamente vía los parámetros de esta función (p.ej. si
-    cambia quién paga, o se renombra el gasto fijo manteniendo su identidad
-    y su historial).
+    `gasto_fijo_id` solo resuelve la serie. Los campos no modificados se
+    heredan de la versión vigente en `vigente_desde` (mayor fecha anterior
+    o igual, luego mayor id). Así una edición retroactiva conserva los
+    metadatos de su época y no altera las versiones posteriores. No se
+    permite crear una versión anterior al comienzo de la serie.
 
     `vigente_desde` duplicada dentro de la misma serie está PERMITIDA
     (decisión t_65096083, revirtiendo el rechazo de la ronda anterior:
@@ -1397,10 +1478,9 @@ def crear_version_fijo(
     aplican el mismo criterio de orden, y la sección "Versionado de fijos:
     varias versiones el mismo día" del README.
 
-    Valida con `validar_gasto_fijo` (monto positivo finito, `vigente_desde`
-    ISO válida, `responsable` resultante válido si no es `None`) antes de
-    insertar nada. Lanza `ValueError` si `gasto_fijo_id` no existe o si la
-    validación falla.
+    Valida el gasto y su reparto antes de insertar nada. Los dos argumentos
+    de reparto se agregan al final para conservar la posición de `actor`;
+    su centinela distingue omisión, NULL explícito y porcentaje cero.
     """
     fila_referencia = conn.execute(
         "SELECT * FROM gastos_fijos WHERE id = ?", (gasto_fijo_id,)
@@ -1410,52 +1490,187 @@ def crear_version_fijo(
 
     fijo_grupo_id = fila_referencia["fijo_grupo_id"] or fila_referencia["id"]
 
-    anterior = conn.execute(
-        "SELECT * FROM gastos_fijos WHERE fijo_grupo_id = ? "
-        "ORDER BY vigente_desde DESC, id DESC LIMIT 1",
-        (fijo_grupo_id,),
-    ).fetchone()
+    try:
+        fecha = date.fromisoformat(vigente_desde)
+        if fecha.isoformat() != vigente_desde:
+            raise ValueError
+    except (TypeError, ValueError):
+        raise ValueError("Fecha de vigencia inválida: usar YYYY-MM-DD.") from None
 
+    anterior = _version_vigente_en(conn, fijo_grupo_id, vigente_desde)
+    if anterior is None:
+        raise ValueError("La fecha de vigencia precede al inicio de la serie.")
+    if not anterior["activo"]:
+        raise ValueError("La serie está de baja en esa fecha; reactivarla está fuera de alcance.")
     nuevo_responsable = responsable if responsable is not None else anterior["responsable"]
     nuevo_nombre = nombre if nombre is not None else anterior["nombre"]
+    nueva_periodicidad = periodicidad if periodicidad is not None else anterior["periodicidad"]
+    nuevo_monto = monto_nuevo if monto_nuevo is not None else anterior["monto_estimado"]
+    nuevo_tipo, nueva_proporcion = resolve_fixed_split(
+        nuevo_responsable, tipo_proporcion, proporcion_jd, anterior
+    )
+    if (nuevo_nombre, nuevo_monto, nueva_periodicidad, nuevo_responsable,
+            nuevo_tipo, nueva_proporcion) == (
+            anterior["nombre"], anterior["monto_estimado"], anterior["periodicidad"],
+            anterior["responsable"], anterior["tipo_proporcion"], anterior["proporcion_jd"]):
+        raise FixedNoChangeError("La nueva versión no tiene cambios reales.")
 
     errores = validar_gasto_fijo(
         {
-            "monto_estimado": monto_nuevo,
+            "monto_estimado": nuevo_monto,
             "vigente_desde": vigente_desde,
             "responsable": nuevo_responsable,
+            "nombre": nuevo_nombre,
+            "periodicidad": nueva_periodicidad,
         }
     )
     if errores:
         raise ValueError(f"Nueva versión de gasto fijo inválida: {errores}")
 
-    cursor = conn.execute(
-        """
-        INSERT INTO gastos_fijos
-            (nombre, monto_estimado, periodicidad, dia_vencimiento, categoria,
-             subcategoria, activo, ultima_actualizacion, responsable,
-             tipo_proporcion, proporcion_jd, medio_pago, vigente_desde, fijo_grupo_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            nuevo_nombre,
-            monto_nuevo,
-            anterior["periodicidad"],
-            anterior["dia_vencimiento"],
-            anterior["categoria"],
-            anterior["subcategoria"],
-            anterior["activo"],
-            _now(),
-            nuevo_responsable,
-            anterior["tipo_proporcion"],
-            anterior["proporcion_jd"],
-            anterior["medio_pago"],
-            vigente_desde,
-            fijo_grupo_id,
-        ),
-    )
+    try:
+        cursor = conn.execute(
+            """INSERT INTO gastos_fijos
+                (nombre, monto_estimado, periodicidad, dia_vencimiento, categoria,
+                 subcategoria, activo, ultima_actualizacion, responsable,
+                 tipo_proporcion, proporcion_jd, medio_pago, vigente_desde, fijo_grupo_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (nuevo_nombre, nuevo_monto, nueva_periodicidad, anterior["dia_vencimiento"],
+             anterior["categoria"], anterior["subcategoria"], anterior["activo"],
+             _now(), nuevo_responsable, nuevo_tipo,
+             nueva_proporcion, anterior["medio_pago"], vigente_desde,
+             fijo_grupo_id),
+        )
+        nuevo_id = cursor.lastrowid
+        despues = dict(conn.execute("SELECT * FROM gastos_fijos WHERE id = ?", (nuevo_id,)).fetchone())
+        _auditar_fijo(conn, nuevo_id, "version", actor, dict(anterior), despues)
+    except Exception:
+        conn.rollback()
+        raise
     conn.commit()
-    return cursor.lastrowid
+    return nuevo_id
+
+
+def dar_baja_fijo(conn: sqlite3.Connection, gasto_fijo_id: int, fecha_baja: str, actor: str) -> int:
+    """Cierra una serie con una nueva versión inactiva desde la fecha indicada."""
+    referencia = conn.execute("SELECT * FROM gastos_fijos WHERE id = ?", (gasto_fijo_id,)).fetchone()
+    if referencia is None:
+        raise ValueError(f"No existe ningún gasto fijo con id={gasto_fijo_id}.")
+    try:
+        fecha = date.fromisoformat(fecha_baja)
+        if fecha.isoformat() != fecha_baja:
+            raise ValueError
+    except (TypeError, ValueError):
+        raise ValueError("Fecha de baja inválida.")
+    grupo = referencia["fijo_grupo_id"] or referencia["id"]
+    actual = _version_vigente_en(conn, grupo, fecha_baja)
+    if actual is None or not actual["activo"]:
+        raise ValueError("La serie no está vigente en esa fecha.")
+    if fecha_baja < max(row["vigente_desde"] for row in conn.execute(
+        "SELECT vigente_desde FROM gastos_fijos WHERE fijo_grupo_id = ?", (grupo,)
+    )):
+        raise ValueError("La baja no puede preceder a una versión posterior.")
+    try:
+        cursor = conn.execute(
+            """INSERT INTO gastos_fijos
+            (nombre, monto_estimado, periodicidad, dia_vencimiento, categoria, subcategoria,
+             activo, ultima_actualizacion, responsable, tipo_proporcion, proporcion_jd,
+             medio_pago, vigente_desde, fijo_grupo_id)
+            VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)""",
+            (actual["nombre"], actual["monto_estimado"], actual["periodicidad"],
+             actual["dia_vencimiento"], actual["categoria"], actual["subcategoria"],
+             _now(), actual["responsable"], actual["tipo_proporcion"],
+             actual["proporcion_jd"], actual["medio_pago"], fecha_baja, grupo),
+        )
+        nuevo_id = cursor.lastrowid
+        despues = dict(conn.execute("SELECT * FROM gastos_fijos WHERE id = ?", (nuevo_id,)).fetchone())
+        _auditar_fijo(conn, nuevo_id, "baja", actor, actual, despues)
+    except Exception:
+        conn.rollback()
+        raise
+    conn.commit()
+    return nuevo_id
+
+
+def historial_fijo(conn: sqlite3.Connection, fijo_grupo_id: int) -> list:
+    """Versiones auditables; las desplazadas el mismo día no tienen intervalo."""
+    filas = [dict(row) for row in conn.execute(
+        "SELECT * FROM gastos_fijos WHERE fijo_grupo_id = ? ORDER BY vigente_desde, id",
+        (fijo_grupo_id,),
+    )]
+    for index, fila in enumerate(filas):
+        siguiente = filas[index + 1] if index + 1 < len(filas) else None
+        mismo_dia = siguiente is not None and siguiente["vigente_desde"] == fila["vigente_desde"]
+        fila["supersedida_mismo_dia"] = mismo_dia
+        fila["tiene_intervalo_vigencia"] = not mismo_dia
+        fila["vigente_hasta"] = (
+            (date.fromisoformat(siguiente["vigente_desde"]) - timedelta(days=1)).isoformat()
+            if siguiente is not None and not mismo_dia else None
+        )
+        fila["monto_mensual"] = monto_mensual(fila)
+    return filas
+
+
+def fijos_por_rango(conn: sqlite3.Connection, desde: str, hasta: str) -> list:
+    """Series con los tramos históricos que intersectan el rango inclusivo."""
+    try:
+        inicio, fin = date.fromisoformat(desde), date.fromisoformat(hasta)
+        if inicio.isoformat() != desde or fin.isoformat() != hasta or inicio > fin:
+            raise ValueError
+    except (TypeError, ValueError):
+        raise ValueError("Rango inválido: usar fechas YYYY-MM-DD con desde <= hasta.") from None
+    resultado = []
+    grupos = conn.execute("SELECT DISTINCT fijo_grupo_id FROM gastos_fijos ORDER BY fijo_grupo_id")
+    for grupo in grupos:
+        tramos = []
+        for version in historial_fijo(conn, grupo["fijo_grupo_id"]):
+            if not version["tiene_intervalo_vigencia"]:
+                continue
+            tramo_desde = max(desde, version["vigente_desde"])
+            tramo_hasta = min(hasta, version["vigente_hasta"] or hasta)
+            if tramo_desde <= tramo_hasta:
+                tramos.append({**version, "desde": tramo_desde, "hasta": tramo_hasta})
+        if tramos:
+            resultado.append({"fijo_grupo_id": grupo["fijo_grupo_id"], "tramos": tramos})
+    return resultado
+
+
+def unificar_series_fijos(conn: sqlite3.Connection, ids: list, actor: str,
+                          *, commit: bool = True) -> int:
+    """Une series. Con `commit=False`, el llamador gestiona la transacción completa."""
+    if not ids or any(not isinstance(value, int) or isinstance(value, bool) for value in ids):
+        raise ValueError("Se requiere una lista de ids enteros.")
+    ids = sorted(set(ids))
+    filas = conn.execute(
+        f"SELECT * FROM gastos_fijos WHERE id IN ({','.join('?' for _ in ids)})", ids
+    ).fetchall()
+    if len(filas) != len(ids):
+        raise ValueError("Uno o más ids de gasto fijo no existen.")
+    grupos = sorted({fila["fijo_grupo_id"] for fila in filas})
+    todas = [dict(row) for row in conn.execute(
+        f"SELECT * FROM gastos_fijos WHERE fijo_grupo_id IN ({','.join('?' for _ in grupos)})",
+        grupos,
+    )]
+    destino = min(ids)
+    if all(fila["fijo_grupo_id"] == destino for fila in todas):
+        return destino
+    # `id` es clave primaria; por lo tanto (vigente_desde, id) es único.
+    claves = [(fila["vigente_desde"], fila["id"]) for fila in todas]
+    if len(set(claves)) != len(claves):
+        raise ValueError("La unificación dejaría versiones ambiguas.")
+    try:
+        for antes in todas:
+            if antes["fijo_grupo_id"] == destino:
+                continue
+            conn.execute("UPDATE gastos_fijos SET fijo_grupo_id = ? WHERE id = ?", (destino, antes["id"]))
+            despues = {**antes, "fijo_grupo_id": destino}
+            _auditar_fijo(conn, antes["id"], "unificar", actor, antes, despues)
+    except Exception:
+        if commit:
+            conn.rollback()
+        raise
+    if commit:
+        conn.commit()
+    return destino
 
 
 def _version_vigente_en(conn: sqlite3.Connection, fijo_grupo_id: int, fecha: str) -> Optional[dict]:
@@ -1515,6 +1730,12 @@ def get_fijos_vigentes(conn: sqlite3.Connection, fecha: Optional[str] = None) ->
     """
     if fecha is None:
         fecha = _now()[:10]
+    try:
+        fecha_normalizada = date.fromisoformat(fecha)
+        if fecha_normalizada.isoformat() != fecha:
+            raise ValueError
+    except (TypeError, ValueError):
+        raise ValueError("Fecha inválida: usar YYYY-MM-DD.") from None
 
     fijo_grupo_ids = [
         row["fijo_grupo_id"]

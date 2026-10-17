@@ -58,8 +58,8 @@ class GastoFijo:
     """Gasto recurrente, portado de la hoja `GastosFijos`.
 
     Versionado real (ver README sección "Versionado de fijos", t_85b8502b):
-    cada cambio de monto crea una fila NUEVA con `vigente_desde` propio, en
-    vez de pisar la anterior.
+    cada cambio de descripción, monto, periodicidad o responsable crea una
+    fila NUEVA con `vigente_desde` propio. La baja también es una versión.
 
     Identidad de la serie (corrección tras dictamen NO APTO del revisor
     independiente, run 3b184396, hallazgo 4): todas las versiones de un

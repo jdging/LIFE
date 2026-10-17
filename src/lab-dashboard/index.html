@@ -20,11 +20,14 @@
   </header>
 
   <nav class="view-tabs" role="tablist" aria-label="Destinos de LIFE">
-    <button class="tab-btn active" id="tab-gastos" role="tab" aria-selected="true" aria-controls="view-gastos" onclick="switchView('gastos')">🌾 Gastos</button>
-    <button class="tab-btn" id="tab-ingresos" role="tab" aria-selected="false" aria-controls="view-ingresos" onclick="switchView('ingresos')">💰 Ingresos</button>
-    <button class="tab-btn" id="tab-supermercado" role="tab" aria-selected="false" aria-controls="view-supermercado" onclick="switchView('supermercado')">🛒 Supermercado</button>
-    <button class="tab-btn" id="tab-recetas" role="tab" aria-selected="false" aria-controls="view-recetas" onclick="switchView('recetas')">🍲 Recetas</button>
+    <button class="tab-btn active" id="tab-gastos" role="tab" aria-selected="true" aria-controls="view-gastos" tabindex="0" onclick="switchView('gastos')">🌾 Gastos</button>
+    <button class="tab-btn" id="tab-ingresos" role="tab" aria-selected="false" aria-controls="view-ingresos" tabindex="-1" onclick="switchView('ingresos')">💰 Ingresos</button>
+    <button class="tab-btn" id="tab-fijos" role="tab" aria-selected="false" aria-controls="view-fijos" tabindex="-1" onclick="switchView('fijos')">🏠 Fijos</button>
+    <button class="tab-btn" id="tab-supermercado" role="tab" aria-selected="false" aria-controls="view-supermercado" tabindex="-1" onclick="switchView('supermercado')">🛒 Supermercado</button>
+    <button class="tab-btn" id="tab-recetas" role="tab" aria-selected="false" aria-controls="view-recetas" tabindex="-1" onclick="switchView('recetas')">🍲 Recetas</button>
   </nav>
+  <p id="api-status" class="api-status" role="status" aria-live="polite">Comprobando conexión autenticada…</p>
+  <div id="write-notice" class="write-notice" role="status" aria-live="polite" hidden></div>
 
   <div class="topbar" id="finanzas-topbar" role="group" aria-label="Selector de período">
     <span class="topbar-label">Período</span>
@@ -52,6 +55,7 @@
       <div class="section-header">
         <h2 class="section-title">Gastos</h2>
         <div class="section-header-actions">
+          <button type="button" class="btn-print" data-write-action onclick="openForm('expense')" disabled>Agregar gasto</button>
           <button type="button" class="btn-print" onclick="printGastosResumen()">🖨️ Imprimir / Guardar PDF</button>
           <div class="persona-filter" role="group" aria-label="Filtro por persona" id="persona-filter-top">
             <button class="persona-btn active" data-filter="comun" aria-pressed="true" onclick="setPersonaFiltro('comun')">Comunes</button>
@@ -99,6 +103,7 @@
       <div class="detail-panel" id="fijos-detail" hidden>
         <div class="detail-panel-inner" id="fijos-detail-inner"></div>
       </div>
+      <button type="button" class="fijos-link" onclick="switchView('fijos')">Ver pestaña Fijos →</button>
       <div class="detail-panel" id="cuotas-detail" hidden>
         <div class="detail-panel-inner" id="cuotas-detail-inner"></div>
       </div>
@@ -165,6 +170,7 @@
                 <th data-key="medio_pago">Medio de pago</th>
                 <th data-key="pago">Pagado por</th>
                 <th>Cuota</th>
+                <th>Acción</th>
               </tr>
             </thead>
             <tbody id="tabla-body"></tbody>
@@ -173,6 +179,34 @@
       </section>
 
     </div><!-- /view-gastos -->
+
+    <div class="view" id="view-fijos" role="tabpanel" aria-labelledby="tab-fijos" hidden>
+      <div class="section-header">
+        <h2 class="section-title">Gastos fijos</h2>
+        <button type="button" class="btn-print" data-write-action onclick="openForm('fixed')" disabled>Agregar fijo</button>
+      </div>
+      <p class="fijos-snapshot">Datos al último export · esta pestaña no está conectada en vivo.</p>
+      <div class="fijos-modes" role="group" aria-label="Vista de gastos fijos">
+        <button type="button" class="fijos-mode active" id="fijos-mode-vigentes" aria-pressed="true" onclick="setFijosMode('vigentes')">Vigentes</button>
+        <button type="button" class="fijos-mode" id="fijos-mode-historial" aria-pressed="false" onclick="setFijosMode('historial')">Historial / por período</button>
+      </div>
+      <div id="fijos-vigentes">
+        <div class="fijos-totals" id="fijos-totals"></div>
+        <div class="fijos-grid" id="fijos-current-list"></div>
+      </div>
+      <div id="fijos-historial" hidden>
+        <div class="panel fijos-range">
+          <h3>Período del historial de fijos</h3>
+          <div class="fijos-range-fields">
+            <label for="fijos-desde">Desde (mes)<input type="month" id="fijos-desde" class="month-input" onchange="renderFijosView()"></label>
+            <label for="fijos-hasta">Hasta (mes)<input type="month" id="fijos-hasta" class="month-input" onchange="renderFijosView()"></label>
+          </div>
+          <p id="fijos-range-error" class="chart-error" role="alert" hidden></p>
+        </div>
+        <div id="fijos-history-list"></div>
+      </div>
+      <section class="panel fijos-series-detail" id="fijos-series-detail" aria-live="polite" hidden></section>
+    </div><!-- /view-fijos -->
 
     <!-- ── VISTA INVERSIONES ────────────────────────────────────── -->
     <div class="view" id="view-inversiones" role="tabpanel" aria-label="Inversiones (sin destino visible por ahora)" hidden>
@@ -194,6 +228,7 @@
     <div class="view" id="view-ingresos" role="tabpanel" aria-labelledby="tab-ingresos" hidden>
       <div class="section-header">
         <h2 class="section-title">Ingresos</h2>
+        <button type="button" class="btn-print" data-write-action onclick="openForm('income')" disabled>Agregar ingreso</button>
       </div>
 
       <section class="cards">
@@ -236,6 +271,7 @@
                 <th>Descripción</th>
                 <th>Persona</th>
                 <th>Monto</th>
+                <th>Acción</th>
               </tr>
             </thead>
             <tbody id="tabla-ingresos-body"></tbody>
@@ -286,8 +322,25 @@
 
   <div class="print-summary" id="print-summary" aria-hidden="true"></div>
 
+  <div class="modal-overlay" id="form-modal" hidden>
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="form-title" aria-describedby="form-intro">
+      <h2 id="form-title"></h2>
+      <p id="form-intro"></p>
+      <form id="life-form" novalidate>
+        <div id="form-fields"></div>
+        <div id="form-errors" role="alert" aria-live="assertive"></div>
+        <div id="form-confirm" class="form-confirm" role="status" aria-live="polite" hidden></div>
+        <div class="fijos-actions">
+          <button type="submit" class="btn-print" id="form-submit">Revisar</button>
+          <button type="button" class="fijos-secondary" id="form-back" hidden>Volver</button>
+          <button type="button" class="fijos-secondary" id="form-close">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <footer>
-    LIFE — Finanzas · sin conexión en vivo a Google Sheets todavía.
+    LIFE — Finanzas · <span id="footer-status">Comprobando conexión</span>.
   </footer>
 </div>
 

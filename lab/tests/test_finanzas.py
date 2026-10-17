@@ -145,7 +145,10 @@ class TestGastosFijos(unittest.TestCase):
         fijo_internet = next(f for f in vigentes if f["fijo_grupo_id"] == gasto_fijo_id)
         self.assertEqual(fijo_internet["monto_estimado"], 9500.0)
 
-    def test_insert_gasto_fijo_con_responsable_y_reparto(self):
+    def test_insert_gasto_fijo_con_responsable_personal_reparto_implicito(self):
+        # Un fijo de responsable JD/Pinki no admite tipo_proporcion/proporcion_jd
+        # explícitos (ver db.resolve_fixed_split): el reparto 100/0 es implícito
+        # al responsable, pasarlo a mano es redundante y db.py lo rechaza.
         db.insert_gasto_fijo(
             self.conn,
             {
@@ -153,16 +156,28 @@ class TestGastosFijos(unittest.TestCase):
                 "monto_estimado": 56000.0,
                 "periodicidad": "mensual",
                 "responsable": "Pinki",
-                "tipo_proporcion": "custom",
-                "proporcion_jd": 0.0,
                 "medio_pago": "Transferencia",
             },
         )
         fijo = db.get_gastos_fijos(self.conn)[0]
         self.assertEqual(fijo["responsable"], "Pinki")
-        self.assertEqual(fijo["tipo_proporcion"], "custom")
+        self.assertIsNone(fijo["tipo_proporcion"])
         self.assertEqual(fijo["proporcion_jd"], 0.0)
         self.assertEqual(fijo["medio_pago"], "Transferencia")
+
+    def test_insert_gasto_fijo_responsable_personal_rechaza_reparto_explicito(self):
+        with self.assertRaises(db.FixedSplitError):
+            db.insert_gasto_fijo(
+                self.conn,
+                {
+                    "nombre": "Pilates",
+                    "monto_estimado": 56000.0,
+                    "periodicidad": "mensual",
+                    "responsable": "Pinki",
+                    "tipo_proporcion": "custom",
+                    "proporcion_jd": 0.0,
+                },
+            )
 
     def test_insert_gasto_fijo_sin_responsable_queda_null(self):
         db.insert_gasto_fijo(

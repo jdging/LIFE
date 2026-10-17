@@ -17,7 +17,7 @@ Genera:
   mes (db.calcular_deudas_mes) y `estado_deuda` normalizado según la columna
   `saldado` (db.calcular_estado_saldado_mes): 'sin_deuda' | 'pendiente' |
   'parcial' | 'saldado'.
-- data/gastos_fijos.json: gastos fijos activos, con responsable/reparto.
+- data/gastos_fijos.json: todas las versiones según contrato-fijos-json.md v2.
 - data/deuda_pendiente.json: deuda neta PENDIENTE actual
   (db.calcular_deudas_pendientes, sin filtro de mes), con `estado_deuda`
   ('sin_deuda' o 'pendiente').
@@ -63,12 +63,20 @@ def _escribir_json(path: Path, data) -> None:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def exportar_gastos_fijos(conn) -> list:
+    """Construye el JSON v2 de fijos sin I/O ni filtro de actividad."""
+    filas = conn.execute(
+        "SELECT * FROM gastos_fijos ORDER BY fijo_grupo_id, vigente_desde, id"
+    ).fetchall()
+    return [{**dict(fila), "monto_mensual": db.monto_mensual(fila)} for fila in filas]
+
+
 def main() -> None:
     conn = db.get_connection()
 
     gastos = [g for g in db.get_gastos(conn) if es_gasto_real(g)]
     ingresos = db.get_ingresos(conn)
-    gastos_fijos = db.get_gastos_fijos(conn, solo_activos=True)
+    gastos_fijos = exportar_gastos_fijos(conn)
     deuda_pendiente = dict(db.calcular_deudas_pendientes(conn))
     deuda_pendiente["estado_deuda"] = (
         "sin_deuda" if deuda_pendiente["monto"] == 0 else "pendiente"
