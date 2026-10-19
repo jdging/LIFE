@@ -179,7 +179,54 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(self.request("GET", "/api/summary?month=2026-04")[1]["proportion"],
                          {"JD": 50.0, "Pinki": 50.0})
         self.assertEqual(self.request("PATCH", "/api/income/999", {"monto": 2})[0], 404)
-        self.assertEqual(self.request("DELETE", f"/api/income/{income_id}")[0], 405)
+        self.assertEqual(self.request("DELETE", f"/api/income/{income_id}")[0], 200)
+
+    def test_income_delete_200_404_401_body_rejected_and_summary_changes(self):
+        status, first, _ = self.request("POST", "/api/income", self.income(monto=300))
+        self.assertEqual(status, 201)
+        income_id = first["income"]["id"]
+        status, _, _ = self.request("POST", "/api/income", self.income(monto=100, persona="Pinki"))
+        self.assertEqual(status, 201)
+
+        status, summary, _ = self.request("GET", "/api/summary?month=2026-04")
+        self.assertEqual(status, 200)
+        self.assertEqual(summary["income_total"], 400)
+        self.assertEqual(summary["proportion"], {"JD": 75.0, "Pinki": 25.0})
+
+        # DELETE no acepta cuerpo, igual que gastos.
+        self.assertEqual(self.request("DELETE", f"/api/income/{income_id}", {"x": 1})[0], 400)
+        # Sin el header de auth interno, 401 (antes de llegar al handler).
+        self.assertEqual(self.request("DELETE", f"/api/income/{income_id}", auth=False)[0], 401)
+        # Inexistente desde el principio.
+        self.assertEqual(self.request("DELETE", "/api/income/999999")[0], 404)
+
+        status, deleted, _ = self.request("DELETE", f"/api/income/{income_id}")
+        self.assertEqual(status, 200)
+        self.assertEqual(deleted, {"deleted": True, "id": income_id})
+
+        # Doble baja sobre el mismo id: ya no existe para efectos públicos.
+        self.assertEqual(self.request("DELETE", f"/api/income/{income_id}")[0], 404)
+
+        status, listed, _ = self.request("GET", "/api/income")
+        self.assertEqual(status, 200)
+        self.assertNotIn(income_id, [row["id"] for row in listed["income"]])
+
+        status, summary_after, _ = self.request("GET", "/api/summary?month=2026-04")
+        self.assertEqual(status, 200)
+        self.assertEqual(summary_after["income_total"], 100)
+        self.assertEqual(summary_after["proportion"], {"JD": 0.0, "Pinki": 100.0})
+
+        with db.get_connection(self.db_path) as conn:
+            borrado = next(
+                row for row in db.get_ingresos(conn, incluir_borrados=True) if row["id"] == income_id
+            )
+            self.assertIsNotNone(borrado["deleted_at"])
+            self.assertEqual(borrado["deleted_by"], "sesion_compartida:no_verificado")
+            auditoria = conn.execute(
+                "SELECT * FROM auditoria WHERE tabla = 'ingresos' AND fila_id = ?", (income_id,)
+            ).fetchone()
+            self.assertIsNotNone(auditoria)
+            self.assertEqual(auditoria["accion"], "baja")
 
     def test_fixed_versions_history_range_and_end(self):
         status, _, _ = self.request("POST", "/api/fixed", self.fixed(responsable=None))
@@ -417,6 +464,7 @@ class ApiTest(unittest.TestCase):
             ("DELETE", f"/api/expenses/{expense_id}", None),
             ("POST", "/api/income", self.income()),
             ("PATCH", f"/api/income/{income_id}", {"monto": 200}),
+            ("DELETE", f"/api/income/{income_id}", None),
             ("POST", "/api/fixed", self.fixed()),
             ("PATCH", f"/api/fixed/{fixed_id}", {"vigente_desde": "2026-05-01", "monto_estimado": 300}),
             ("DELETE", f"/api/fixed/{fixed_id}", {"fecha_baja": "2026-06-01"}),
@@ -461,6 +509,7 @@ class ApiTest(unittest.TestCase):
         huge_id = "9" * 5000
         self.assertEqual(self.request("DELETE", f"/api/expenses/{huge_id}")[0], 400)
         self.assertEqual(self.request("PATCH", f"/api/income/{huge_id}", {"monto": 2})[0], 400)
+        self.assertEqual(self.request("DELETE", f"/api/income/{huge_id}")[0], 400)
         self.assertEqual(self.request("GET", f"/api/fixed/{huge_id}/historial")[0], 400)
         self.assertEqual(self.request("DELETE", f"/api/fixed/{huge_id}", {"fecha_baja": "2026-05-01"})[0], 400)
         with db.get_connection(self.db_path) as conn:

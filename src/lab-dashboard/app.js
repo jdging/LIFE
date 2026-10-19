@@ -52,6 +52,17 @@ function firstAvailableDate() {
   ].filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= todayLocalISO());
   return dates.length ? dates.sort()[0] : todayLocalISO();
 }
+// Sugerencias del selector de mes: incluye meses futuros con datos (cuotas
+// pendientes, ingresos o fijos con vigente_desde futuro) para que el usuario
+// sepa que puede navegarlos, sin restringir el input a esa lista.
+function monthsWithData() {
+  const months = new Set([
+    ...DATA.gastos.map((row) => (row.fecha || '').slice(0, 7)),
+    ...DATA.ingresos.map((row) => (row.fecha || '').slice(0, 7)),
+    ...DATA.fijos.map((row) => (row.vigente_desde || '').slice(0, 7)),
+  ].filter((m) => /^\d{4}-\d{2}$/.test(m)));
+  return [...months].sort();
+}
 function mesLabel(mesStr) {
   const [y, m] = mesStr.split('-').map(Number);
   return `${capitalize(MESES_LARGO[m - 1])} ${y}`;
@@ -81,10 +92,16 @@ function groupBy(rows, field) {
     return acc;
   }, {});
 }
-function getLatestRealMonth(rows) {
-  const sorted = [...rows].sort((a, b) => a.mes.localeCompare(b.mes));
-  const real = sorted.filter((r) => r.total_ingresos > 0);
-  return real.length ? real[real.length - 1] : sorted[sorted.length - 1];
+// Resuelve el resumen mensual a usar para un mes dado: el propio mes si existe
+// en DATA.resumen, o si no, el último mes anterior (o igual) con ingresos reales.
+// Nunca devuelve un mes posterior al consultado. Si no hay ninguno anterior con
+// datos, devuelve undefined — cada consumidor define su propio fallback de "sin datos".
+function getMonthProportion(month) {
+  const sorted = [...DATA.resumen].sort((a, b) => a.mes.localeCompare(b.mes));
+  const exact = sorted.find((r) => r.mes === month);
+  if (exact) return exact;
+  const previous = sorted.filter((r) => r.mes <= month && Number(r.total_ingresos) > 0);
+  return previous.length ? previous[previous.length - 1] : undefined;
 }
 
 // ── ESTADO ────────────────────────────────────────────────────────────────
@@ -237,6 +254,7 @@ async function loadLive() {
   authState = 'authenticated';
   reloadFailed = false;
   updateAvailability();
+  renderMonthOptions();
   if (period) renderView(currentView);
 }
 
@@ -261,6 +279,7 @@ async function loadSnapshot() {
     deudaPendiente: d.status === 'rejected',
   };
   updateAvailability();
+  renderMonthOptions();
   if (period) renderView(currentView);
 }
 
@@ -287,6 +306,12 @@ async function loadAll() {
   period = computePeriod('month', { month: thisMonth() });
   document.getElementById('month-picker').value = period.refMonth;
   switchView('gastos');
+}
+
+function renderMonthOptions() {
+  const list = document.getElementById('month-options');
+  if (!list) return;
+  list.innerHTML = monthsWithData().map((m) => `<option value="${m}">${escapeHtml(mesLabel(m))}</option>`).join('');
 }
 
 function updateAvailability() {
@@ -352,6 +377,9 @@ function renderView(v) {
 
 // ── PERÍODO ──────────────────────────────────────────────────────────────
 
+// 'month' y 'range' pueden ser futuros (cuotas y fijos vigentes de un mes que
+// todavía no llegó); el resto de los períodos agregados ('quarter', 'semester',
+// 'year', 'all') siguen recortados a hoy para no inflar totales con gasto futuro.
 function computePeriod(type, opts = {}) {
   const todayDate = todayLocalISO();
   const today = todayDate.slice(0, 7);
@@ -362,11 +390,11 @@ function computePeriod(type, opts = {}) {
     while (m < 1) { m += 12; y--; }
     return y + '-' + String(m).padStart(2, '0');
   }
-  let from, to, refMonth;
+  let from, to, refMonth, capToToday = true;
   switch (type) {
     case 'month': {
       const m = opts.month || today;
-      from = m + '-01'; to = fijosLastDay(m); refMonth = m; break;
+      from = m + '-01'; to = fijosLastDay(m); refMonth = m; capToToday = false; break;
     }
     case 'quarter':
       from = nMonthsAgo(2) + '-01'; to = todayDate; refMonth = today; break;
@@ -377,12 +405,12 @@ function computePeriod(type, opts = {}) {
     case 'all':
       from = firstAvailableDate(); to = todayDate; refMonth = today; break;
     case 'range':
-      from = opts.from || firstAvailableDate(); to = opts.to && opts.to < todayDate ? opts.to : todayDate;
-      refMonth = to.substring(0, 7); break;
+      from = opts.from || firstAvailableDate(); to = opts.to || todayDate;
+      refMonth = to.substring(0, 7); capToToday = false; break;
     default:
       from = null; to = null; refMonth = today;
   }
-  if (to && to > todayDate) to = todayDate;
+  if (capToToday && to && to > todayDate) to = todayDate;
   return { type, from, to, refMonth };
 }
 
@@ -443,7 +471,7 @@ function getRowPct(row) {
       ? { pct1: pjd, pct2: 100 - pjd } : { pct1: 0, pct2: 0 };
   }
   const mes = row.fecha ? String(row.fecha).slice(0, 7) : null;
-  const entry = mes ? DATA.resumen.find((r) => r.mes === mes) : null;
+  const entry = mes ? getMonthProportion(mes) : null;
   if (entry && Number.isFinite(entry.proporcion_jd) && Number.isFinite(entry.proporcion_pinki)) {
     return { pct1: entry.proporcion_jd, pct2: entry.proporcion_pinki };
   }
@@ -617,10 +645,7 @@ function fixedAllocation(row, month) {
     return Number.isFinite(pct1) && pct1 >= 0 && pct1 <= 100
       ? { pct1, pct2: 100 - pct1 } : { pct1: 0, pct2: 0 };
   }
-  const exact = DATA.resumen.find((entry) => entry.mes === month);
-  const previous = DATA.resumen.filter((entry) => entry.mes <= month && Number(entry.total_ingresos) > 0)
-    .sort((a, b) => b.mes.localeCompare(a.mes))[0];
-  const entry = exact || previous;
+  const entry = getMonthProportion(month);
   const pct1 = Number(entry?.proporcion_jd);
   const pct2 = Number(entry?.proporcion_pinki);
   return Number.isFinite(pct1) && Number.isFinite(pct2) && pct1 + pct2 === 100
@@ -676,6 +701,22 @@ function setFijosMode(mode) {
   renderFijosView();
 }
 
+// Solo invierte el orden de VISUALIZACIÓN (más nuevo primero). El cálculo de
+// tramos (fijosTramos/fijosHistorial) sigue cronológico, como lo necesita el
+// gráfico de evolución y el cómputo de vigente_hasta de cada tramo.
+function renderFijosHistoryGroup(id, group, latest) {
+  return `<article class="panel fijos-history-group">
+    <div class="fijos-history-head"><h3>${escapeHtml(latest.nombre)}${Number(latest.activo) === 0 ? ' <span class="pill">Dado de baja</span>' : ''}</h3>
+      <button type="button" class="fijos-secondary" data-id="${escapeHtml(id)}" onclick="openFijosDetail(this.dataset.id)">Ver detalle</button></div>
+    <div class="fijos-tramos">${[...group].reverse().map((row) => `<div class="fijos-tramo">
+      <strong>${fijosDateLabel(row.tramo_desde)} a ${fijosDateLabel(row.tramo_hasta)}</strong>
+      <span>${escapeHtml(row.nombre)} · ${fmtARS(row.monto_mensual)}/mes${row.periodicidad === 'bimestral' ? ` · bruto ${fmtARS(row.monto_estimado)} bimestral` : ''}</span>
+      <span class="pill ${pillClassFor(row.responsable)}">${escapeHtml(fijosResponsable(row))}</span>
+      ${Number(row.activo) === 0 ? '<span class="pill">Baja</span>' : ''}
+    </div>`).join('')}</div>
+  </article>`;
+}
+
 function renderFijosView() {
   const current = document.getElementById('fijos-current-list');
   const history = document.getElementById('fijos-history-list');
@@ -725,16 +766,7 @@ function renderFijosView() {
     history.innerHTML = ids.length ? ids.map((id) => {
       const group = tramos.filter((row) => fixedGroupId(row) === id);
       const latest = fijosHistorial(DATA.fijos, id).at(-1);
-      return `<article class="panel fijos-history-group">
-        <div class="fijos-history-head"><h3>${escapeHtml(latest.nombre)}${Number(latest.activo) === 0 ? ' <span class="pill">Dado de baja</span>' : ''}</h3>
-          <button type="button" class="fijos-secondary" data-id="${escapeHtml(id)}" onclick="openFijosDetail(this.dataset.id)">Ver detalle</button></div>
-        <div class="fijos-tramos">${group.map((row) => `<div class="fijos-tramo">
-          <strong>${fijosDateLabel(row.tramo_desde)} a ${fijosDateLabel(row.tramo_hasta)}</strong>
-          <span>${escapeHtml(row.nombre)} · ${fmtARS(row.monto_mensual)}/mes${row.periodicidad === 'bimestral' ? ` · bruto ${fmtARS(row.monto_estimado)} bimestral` : ''}</span>
-          <span class="pill ${pillClassFor(row.responsable)}">${escapeHtml(fijosResponsable(row))}</span>
-          ${Number(row.activo) === 0 ? '<span class="pill">Baja</span>' : ''}
-        </div>`).join('')}</div>
-      </article>`;
+      return renderFijosHistoryGroup(id, group, latest);
     }).join('') : '<div class="empty-state-panel">No hay tramos de fijos en este período.</div>';
   }
   if (fijosSelectedGroup !== null) renderFijosSeriesDetail(fijosSelectedGroup);
@@ -832,6 +864,7 @@ function formSelect(name, label, choices, value) {
 
 function formMarkup(kind, row) {
   if (kind === 'expense-delete') return `<p>Se dará de baja únicamente esta fila: ${escapeHtml(row.descripcion_original || row.categoria)} · ${escapeHtml(row.fecha)} · cuota ${cuotaLabel(row)} · ${fmtARSExact(row.monto)}. Las demás cuotas permanecen.</p>`;
+  if (kind === 'income-delete') return `<p>Se dará de baja el ingreso de ${escapeHtml(row.persona)}: ${escapeHtml(row.descripcion_original || row.categoria)} · ${escapeHtml(row.fecha)} · ${fmtARSExact(row.monto)}.${row.categoria === 'Salario' ? ' Es un ingreso de Salario: esta baja puede cambiar la proporción del mes y las deudas.' : ''}</p>`;
   if (kind === 'fixed-delete') return `<p>La baja de ${escapeHtml(row.nombre)} crea una versión inactiva. El historial permanece.</p>${formField('fecha_baja', 'Fecha de baja', todayLocalISO(), 'date', 'required')}`;
   if (kind === 'expense') {
     const categories = [...new Set(DATA.gastos.map((item) => item.categoria).filter(Boolean))].sort();
@@ -888,7 +921,7 @@ function openForm(kind, id = null) {
   const row = id === null ? null : source.find((item) => canonicalId(item.id) === canonicalId(id));
   if (id !== null && !row) return;
   activeForm = { kind, row, returnFocus: document.activeElement, confirmed: false, payload: null };
-  const titles = { expense: 'Agregar gasto', 'expense-delete': 'Dar de baja una cuota', income: 'Agregar ingreso', 'income-edit': 'Editar ingreso', fixed: 'Agregar fijo', 'fixed-edit': 'Crear versión de fijo', 'fixed-delete': 'Dar de baja fijo' };
+  const titles = { expense: 'Agregar gasto', 'expense-delete': 'Dar de baja una cuota', income: 'Agregar ingreso', 'income-edit': 'Editar ingreso', 'income-delete': 'Dar de baja ingreso', fixed: 'Agregar fijo', 'fixed-edit': 'Crear versión de fijo', 'fixed-delete': 'Dar de baja fijo' };
   document.getElementById('form-title').textContent = titles[kind];
   document.getElementById('form-intro').textContent = kind.includes('delete') ? 'Revisá qué cambio se aplicará.' : 'Completá los datos y revisá el resumen antes de guardar.';
   document.getElementById('form-fields').innerHTML = formMarkup(kind, row);
@@ -967,7 +1000,7 @@ function validDate(raw) {
 function collectForm(kind, row, values) {
   const errors = {};
   const dateKey = kind === 'fixed-delete' ? 'fecha_baja' : kind.startsWith('fixed') ? 'vigente_desde' : 'fecha';
-  if (kind !== 'expense-delete' && !validDate(values[dateKey])) errors[dateKey] = 'Ingresá una fecha válida.';
+  if (kind !== 'expense-delete' && kind !== 'income-delete' && !validDate(values[dateKey])) errors[dateKey] = 'Ingresá una fecha válida.';
   if (kind.endsWith('delete')) return { payload: kind === 'fixed-delete' ? { fecha_baja: values.fecha_baja } : null, errors };
   const moneyKey = kind.startsWith('fixed') ? 'monto_estimado' : 'monto';
   if (!validMoney(values[moneyKey])) errors[moneyKey] = 'Ingresá un monto positivo, finito, de hasta 2 decimales y máximo 1 billón.';
@@ -1028,6 +1061,7 @@ function describeForm(kind, row, payload) {
   if (kind === 'expense-delete') return `Baja solo de la cuota ${cuotaLabel(row)} del gasto #${row.id}, ${fmtARSExact(row.monto)}. Otras cuotas no se borran.`;
   if (kind === 'fixed-delete') return `Baja de ${row.nombre} desde ${payload.fecha_baja}. Se crea una versión inactiva; el historial permanece.`;
   if (kind === 'expense') return `Gasto ${payload.categoria}${payload.subcategoria ? ` / ${payload.subcategoria}` : ''}: ${fmtARSExact(payload.monto)}, ${payload.fecha}, ${payload.cuotas_total} cuota(s). ${payload.descripcion_original || 'Sin descripción'}. Medio: ${payload.medio_pago}${payload.tarjeta_id ? `, tarjeta ${payload.tarjeta_id}` : ''}. Pagó ${payload.pagado_por}; reparto ${payload.tipo_proporcion}${payload.tipo_proporcion === 'custom' ? ` (${payload.proporcion_jd}% JD / ${payload.proporcion_pinki}% Pinki)` : ''}.`;
+  if (kind === 'income-delete') return `Baja del ingreso de ${row.persona} del ${row.fecha}, ${fmtARSExact(row.monto)}.${row.categoria === 'Salario' ? ' Es un ingreso de Salario: puede cambiar la proporción del mes y las deudas.' : ''}`;
   if (kind.startsWith('income')) return `${kind === 'income-edit' ? 'Editar' : 'Agregar'} ingreso ${payload.categoria} de ${payload.persona}: ${fmtARSExact(payload.monto)} el ${payload.fecha}. ${payload.descripcion_original || 'Sin descripción'}.${row?.categoria === 'Salario' || payload.categoria === 'Salario' ? ' Este cambio salarial puede modificar las proporciones de los meses afectados y sus deudas.' : ''}`;
   const fixedSplit = payload.responsable === 'Común'
     ? payload.tipo_proporcion === 'custom' ? `${payload.proporcion_jd}% JD / ${100 - payload.proporcion_jd}% Pinki`
@@ -1041,13 +1075,14 @@ function routeForForm(kind, row) {
   if (kind === 'expense-delete') return ['DELETE', `/api/expenses/${encodeURIComponent(canonicalId(row.id))}`];
   if (kind === 'income') return ['POST', '/api/income'];
   if (kind === 'income-edit') return ['PATCH', `/api/income/${encodeURIComponent(canonicalId(row.id))}`];
+  if (kind === 'income-delete') return ['DELETE', `/api/income/${encodeURIComponent(canonicalId(row.id))}`];
   if (kind === 'fixed') return ['POST', '/api/fixed'];
   return [kind === 'fixed-delete' ? 'DELETE' : 'PATCH', `/api/fixed/${encodeURIComponent(canonicalId(row.id))}`];
 }
 
 function verifiedWriteEnvelope(kind, row, result) {
   try {
-    if (kind === 'expense-delete') return result?.deleted === true && canonicalId(result.id) === canonicalId(row.id);
+    if (kind === 'expense-delete' || kind === 'income-delete') return result?.deleted === true && canonicalId(result.id) === canonicalId(row.id);
     if (kind === 'expense') return Array.isArray(result?.expenses) && result.expenses.length > 0 &&
       result.expenses.every((expense) => !!canonicalId(expense?.id));
     if (kind.startsWith('income')) return !!canonicalId(result?.income?.id);
@@ -1604,6 +1639,7 @@ function renderGastosTable() {
     <tr>
       <td data-label="Fecha" class="td-muted">${escapeHtml(g.fecha || '—')}</td>
       <td data-label="Categoría"><span class="pill">${iconFor(g.categoria)} ${escapeHtml(g.categoria)}</span></td>
+      <td data-label="Descripción">${escapeHtml(g.descripcion_original)}</td>
       <td data-label="Monto" class="td-amount td-accent">${fmtARS(g.monto)}</td>
       <td data-label="Medio de pago" class="td-muted">${escapeHtml(g.medio_pago)}</td>
       <td data-label="Pagó"><span class="pill ${pillClassFor(g.pagado_por)}">${escapeHtml(g.pagado_por)}</span></td>
@@ -1783,8 +1819,7 @@ function renderIngresosView() {
   document.getElementById('inc-p1').textContent = fmtARS(totalP1);
   document.getElementById('inc-p2').textContent = fmtARS(totalP2);
 
-  let entry = period.type === 'month' ? DATA.resumen.find((r) => r.mes === period.refMonth) : null;
-  if (!entry) entry = getLatestRealMonth(DATA.resumen);
+  const entry = getMonthProportion(period.refMonth);
   if (entry && Number.isFinite(entry.proporcion_jd) && Number.isFinite(entry.proporcion_pinki)) {
     document.getElementById('inc-proporcion').textContent =
       `${P1} ${entry.proporcion_jd.toFixed(0)}% · ${P2} ${entry.proporcion_pinki.toFixed(0)}%`;
@@ -1804,7 +1839,10 @@ function renderIngresosView() {
       <td data-label="Descripción">${escapeHtml(r.descripcion_original)}</td>
       <td data-label="Persona"><span class="pill ${pillClassFor(r.persona)}">${escapeHtml(r.persona)}</span></td>
       <td data-label="Monto" class="td-amount td-accent">${fmtARS(r.monto)}</td>
-      <td data-label="Acción"><button type="button" class="fijos-secondary table-action" data-write-action data-id="${escapeHtml(canonicalId(r.id))}" onclick="openForm('income-edit', this.dataset.id)" aria-label="Editar ingreso ${escapeHtml(canonicalId(r.id))} de ${escapeHtml(r.persona)}" ${!liveMode || writePending || reloadPending || reloadFailed ? 'disabled' : ''}>Editar</button></td>
+      <td data-label="Acción">
+        <button type="button" class="fijos-secondary table-action" data-write-action data-id="${escapeHtml(canonicalId(r.id))}" onclick="openForm('income-edit', this.dataset.id)" aria-label="Editar ingreso ${escapeHtml(canonicalId(r.id))} de ${escapeHtml(r.persona)}" ${!liveMode || writePending || reloadPending || reloadFailed ? 'disabled' : ''}>Editar</button>
+        <button type="button" class="fijos-secondary table-action" data-write-action data-id="${escapeHtml(canonicalId(r.id))}" onclick="openForm('income-delete', this.dataset.id)" aria-label="Dar de baja ingreso ${escapeHtml(canonicalId(r.id))} de ${escapeHtml(r.persona)}" ${!liveMode || writePending || reloadPending || reloadFailed ? 'disabled' : ''}>Dar de baja</button>
+      </td>
     </tr>`).join('') : '';
 }
 

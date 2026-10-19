@@ -1055,6 +1055,7 @@ tfoot td {
 .modal-box .fijos-actions { margin-top: 20px; }
 .modal-box button { min-height: 44px; }
 .table-action { white-space: nowrap; }
+.table-action + .table-action { margin-left: 6px; }
 .tab-btn, .period-btn, .persona-btn, .month-input, .search-input,
 .table-filters select, .btn-chart-toggle, .drilldown-back { min-height: 44px; }
 button:disabled { opacity: .55; cursor: not-allowed; }

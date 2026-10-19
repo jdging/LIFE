@@ -159,6 +159,7 @@ class _App:
         ("GET", re.compile(r"^/api/income$"), "list_income"),
         ("POST", re.compile(r"^/api/income$"), "create_income"),
         ("PATCH", re.compile(r"^/api/income/(?P<id>\d+)$"), "update_income"),
+        ("DELETE", re.compile(r"^/api/income/(?P<id>\d+)$"), "delete_income"),
         ("GET", re.compile(r"^/api/fixed/versions$"), "list_fixed_versions"),
         ("GET", re.compile(r"^/api/fixed/range$"), "fixed_range"),
         ("GET", re.compile(r"^/api/fixed/(?P<id>\d+)/historial$"), "fixed_historial"),
@@ -512,6 +513,28 @@ class _App:
 
         actualizado = next(row for row in db.get_ingresos(conn) if row["id"] == income_id)
         return self._json(start_response, 200, {"income": actualizado})
+
+    def delete_income(self, ctx, conn, start_response):
+        income_id = int(ctx.path_params["id"])
+        # Mismo patrón que delete_expense: reservar el escritor antes de leer
+        # evita una promoción de snapshot obsoleto si dos conexiones intentan
+        # borrar la misma fila a la vez.
+        conn.execute("BEGIN IMMEDIATE")
+        fila = conn.execute("SELECT deleted_at, monto FROM ingresos WHERE id = ?", (income_id,)).fetchone()
+        if fila is None:
+            conn.rollback()
+            return self._error(start_response, 404, f"no existe ingreso id={income_id}.")
+        if fila["deleted_at"] is not None:
+            conn.rollback()
+            return self._error(start_response, 404, f"no existe ingreso id={income_id}.")
+        if not _valid_money(fila["monto"]):
+            conn.rollback()
+            return self._error(start_response, 422, "datos almacenados inválidos.")
+        try:
+            db.eliminar_ingreso_logico(conn, income_id, SERVER_ACTOR)
+        except ValueError:
+            return self._error(start_response, 409, "no se pudo borrar el ingreso.")
+        return self._json(start_response, 200, {"deleted": True, "id": income_id})
 
     # --- fixed ----------------------------------------------------------
 

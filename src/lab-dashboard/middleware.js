@@ -93,7 +93,7 @@ const PROXY_ROUTES = [
   { pattern: /^\/api\/expenses$/, methods: ['GET', 'POST'], query: { GET: { month: 'month' } } },
   { pattern: /^\/api\/expenses\/[1-9]\d*$/, methods: ['DELETE'], query: {} },
   { pattern: /^\/api\/income$/, methods: ['GET', 'POST'], query: {} },
-  { pattern: /^\/api\/income\/[1-9]\d*$/, methods: ['PATCH'], query: {} },
+  { pattern: /^\/api\/income\/[1-9]\d*$/, methods: ['PATCH', 'DELETE'], query: {} },
   { pattern: /^\/api\/fixed$/, methods: ['GET', 'POST'], query: { GET: { dateISO: 'date' } } },
   { pattern: /^\/api\/fixed\/versions$/, methods: ['GET'], query: {} },
   { pattern: /^\/api\/fixed\/range$/, methods: ['GET'], query: { GET: { fromISO: 'date', toISO: 'date' } }, requiredQuery: ['fromISO', 'toISO'] },

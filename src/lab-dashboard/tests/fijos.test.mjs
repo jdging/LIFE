@@ -99,9 +99,23 @@ api.setPeriod(api.computePeriod('year'));
 assert.equal(api.computeFixedForPersona('comun'), 2720);
 api.setPeriod(api.computePeriod('range', { from: '2026-04-15', to: '2026-07-10' }));
 assert.equal(api.computeFixedForPersona('comun'), 1240, 'Rango parcial conserva cuatro meses y el corte de julio');
-api.setPeriod(api.computePeriod('range', { from: '2026-10-01', to: '2026-10-31' }));
-assert.equal(api.computeFixedForPersona('comun'), 360, 'El cambio del 20/10 queda fuera del corte actual');
-assert.equal(api.computePeriod('month', { month: '2026-11' }).from > api.computePeriod('month', { month: '2026-11' }).to, true);
+api.setPeriod(api.computePeriod('range', { from: '2026-10-01', to: '2026-10-16' }));
+assert.equal(api.computeFixedForPersona('comun'), 360, 'El cambio del 20/10 queda fuera del corte explícito del rango');
+
+// Mes y Rango pueden ser futuros: muestran el mes completo (y sus fijos vigentes
+// a esa fecha) en vez de quedar vacíos por el recorte a "hoy".
+const novPeriod = api.computePeriod('month', { month: '2026-11' });
+assert.equal(novPeriod.from, '2026-11-01');
+assert.equal(novPeriod.to, '2026-11-30');
+assert.equal(novPeriod.from < novPeriod.to, true);
+const futureRange = api.computePeriod('range', { from: '2026-11-01', to: '2026-12-31' });
+assert.equal(futureRange.from, '2026-11-01');
+assert.equal(futureRange.to, '2026-12-31', 'Range no se recorta a hoy cuando el "to" es explícito y futuro');
+// "3 meses", "6 meses", "Año" y "Todo" siguen recortados a hoy.
+assert.equal(api.computePeriod('quarter').to, '2026-10-16');
+assert.equal(api.computePeriod('semester').to, '2026-10-16');
+assert.equal(api.computePeriod('year').to, '2026-10-16');
+assert.equal(api.computePeriod('all').to, '2026-10-16');
 assert.equal(api.getMonthsInPeriod('2026-11-01', '2026-10-16').length, 0);
 
 const custom = [

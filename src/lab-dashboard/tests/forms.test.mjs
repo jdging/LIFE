@@ -47,17 +47,27 @@ let liveMode = false, authState = 'unknown', writePending = false, reloadPending
 let period = null, currentView = 'gastos', snapshotCount = 0, renderCount = 0;
 function renderView() { renderCount++; }
 async function loadSnapshot() { snapshotCount++; liveMode = false; updateAvailability(); }
-function computePeriod(_type, opts) { return { refMonth: opts.month, from: opts.month + '-01', to: opts.month + '-31' }; }
 function thisMonth() { return '2026-10'; }
 function switchView() { renderCount++; }
 function fmtARS(value) { return '$' + value; }
 function fmtARSExact(value) { return '$' + Number(value).toFixed(2); }
 function cuotaLabel(row) { return row.cuota_nro + '/' + row.cuotas_total; }
 `;
+// computePeriod, monthsWithData, mesLabel y los filtros de período son las
+// funciones REALES de app.js (no copias): loadLive() las llama de verdad al
+// armar el selector de meses y el panel, así que si faltan en el VM, un
+// ReferenceError real se traga el try/catch de loadAll() y el test lee un
+// falso "quedó en snapshot" en vez de ver la causa.
 const api = runInNewContext(`${prelude}
+${slice('const MESES_LARGO = ', 'const MESES_CORTO = ')}
+${slice('const capitalize = ', 'const fmtARS = ')}
+${slice('function todayLocalISO(', 'function shortMonth(')}
 ${slice('async function fetchJSON(', 'async function loadSnapshot(')}
 ${slice('async function loadAll(', '// ── NAVEGACIÓN')}
+${slice('function computePeriod(', 'function selectPeriodType(')}
+${slice('function getMonthProportion(', '// ── ESTADO')}
 ${slice('function getRowPct(', '// ── FILTROS DE DATOS')}
+${slice('function filterGastosPeriod(', 'function fijosLastDay(')}
 ${slice('function fijosLastDay(', 'function gastosTotalState(')}
 ${slice('function fixedAllocation(', 'function computeFixedForPersona(')}
 ${slice('function fijosRepartoLabel(', 'function setFijosMode(')}
@@ -66,7 +76,8 @@ ${slice('function showWriteNotice(', 'async function handleFormSubmit(')}
 ${slice('function renderDeudaCard(', 'function renderComposicion(')}
 ({ DATA, loadAll, loadLive, canonicalId, compareIds, collectForm, describeForm, routeForForm, writeForm,
    saveAndReload, handleRetryReload, fijosVersionVigente, fijosHistorial, fijosTramos, fijosEvolutionData, adaptSummary,
-   adaptCurrentDebt, getRowPct, fixedAllocation, renderDeudaCard,
+   adaptCurrentDebt, getRowPct, fixedAllocation, getMonthProportion, renderDeudaCard,
+   computePeriod, monthsWithData, todayLocalISO, filterGastosPeriod, filterCuotasComprometidas,
    get state() { return { liveMode, authState, reloadFailed, snapshotCount, renderCount, period }; } })`,
 { fetch, document, Date, Number, Math });
 
@@ -130,6 +141,12 @@ assert.equal(api.routeForForm('expense-delete', { id: largeId })[1], `/api/expen
 assert.equal(api.routeForForm('income-edit', { id: maxId })[1], `/api/income/${encodeURIComponent(maxId)}`);
 assert.equal(api.routeForForm('fixed-edit', { id: largeId })[1], `/api/fixed/${encodeURIComponent(largeId)}`);
 assert.throws(() => api.routeForForm('fixed-delete', { id: 9007199254740992 }), /inseguro/);
+assert.deepEqual(Array.from(api.routeForForm('income-delete', { id: maxId })), ['DELETE', `/api/income/${encodeURIComponent(maxId)}`]);
+assert.throws(() => api.routeForForm('income-delete', { id: 9007199254740992 }), /inseguro/);
+
+// La baja de un ingreso de Salario avisa del impacto en la proporción; otras categorías no.
+assert.match(api.describeForm('income-delete', income, null), /Salario.*proporción del mes y las deudas/);
+assert.doesNotMatch(api.describeForm('income-delete', { ...income, categoria: 'Extra' }, null), /Salario/);
 
 // Un número JSON fuera del rango seguro pierde precisión antes de llegar a JS: no habilitar escritura.
 for (const field of ['expenses', 'income', 'versions', 'group']) {
@@ -253,7 +270,8 @@ ${slice('const escapeHtml = ', 'const fmtARS = ')}
 ${slice('const MAX_SQLITE_ID = ', 'function adaptLiveMovement(')}
 const TABLE_KEY_MAP = { monto_total: 'monto', pago: 'pagado_por' };
 let tableFiltroCat = '', sortState = { key: 'fecha', dir: 'desc' };
-let gastosTableRows = [{ ...expenseRow, id: bigId, categoria: '<img src=x onerror=alert(1)>' }];
+let gastosTableRows = [{ ...expenseRow, id: bigId, categoria: '<img src=x onerror=alert(1)>',
+  descripcion_original: '<svg onload=alert(2)>' }];
 let liveMode = true, writePending = false, reloadPending = false, reloadFailed = false;
 function iconFor() { return '🔸'; }
 function fmtARS(value) { return '$' + value; }
@@ -267,6 +285,10 @@ assert.match(expenseTableHtml, new RegExp(`data-id="${largeId}"`));
 assert.match(expenseTableHtml, /openForm\('expense-delete', this\.dataset\.id\)/);
 assert.doesNotMatch(expenseTableHtml, /<img/i);
 assert.match(expenseTableHtml, /&lt;img/);
+// Columna Descripción (BRIEF.md #4): visible, con data-label para la vista mobile, y escapada.
+assert.match(expenseTableHtml, /data-label="Descripción"/);
+assert.doesNotMatch(expenseTableHtml, /<svg/i, 'Un payload XSS en descripcion_original no debe crear un elemento');
+assert.match(expenseTableHtml, /&lt;svg onload=alert\(2\)&gt;/, 'La descripción maliciosa debe llegar escapada al innerHTML');
 const fixedControls = new Map([
   ['field-responsable', { value: 'Común' }],
   ['fixed-split-fields', { hidden: false }],
@@ -303,6 +325,26 @@ assert.equal(history[0].vigente_hasta, null);
 assert.equal(history[1].vigente_hasta, '2026-10-31');
 assert.equal(api.fijosTramos(versions, '2026-10-01', '2026-11-30').length, 2);
 assert.equal(api.fijosEvolutionData(history).dates.length, 2);
+
+// Revisor d2efc768 #3: renderFijosHistoryGroup solo invierte el orden de
+// VISUALIZACIÓN; el grupo llega cronológico (más viejo primero) y debe
+// mostrarse con la versión más nueva primero.
+const historyGroupApi = runInNewContext(`
+${slice('const escapeHtml = ', 'const fmtARS = ')}
+function fmtARS(value) { return '$' + value; }
+${slice('function pillClassFor(', 'function sum(')}
+${slice('function fijosDateLabel(', 'function fijosRepartoLabel(')}
+${slice('function renderFijosHistoryGroup(', 'function renderFijosView(')}
+({ renderFijosHistoryGroup })`, {});
+const fijosHistoryOld = { tramo_desde: '2026-01-01', tramo_hasta: '2026-05-31', nombre: 'Internet',
+  monto_mensual: 100, periodicidad: 'mensual', responsable: 'Común', activo: 1 };
+const fijosHistoryNew = { tramo_desde: '2026-06-01', tramo_hasta: null, nombre: 'Internet',
+  monto_mensual: 150, periodicidad: 'mensual', responsable: 'Común', activo: 1 };
+const fijosHistoryHtml = historyGroupApi.renderFijosHistoryGroup('5', [fijosHistoryOld, fijosHistoryNew], fijosHistoryNew);
+const newTramoIndex = fijosHistoryHtml.indexOf('$150/mes');
+const oldTramoIndex = fijosHistoryHtml.indexOf('$100/mes');
+assert.ok(newTramoIndex >= 0 && oldTramoIndex >= 0 && newTramoIndex < oldTramoIndex,
+  'renderFijosHistoryGroup debe listar la versión más nueva primero');
 
 const writes = [
   ['expense', null, collectedExpense.payload, '/api/expenses', 201, { expenses: [expense] }],
@@ -400,6 +442,9 @@ for (const status of [400, 409, 500]) {
   reply('/api/expenses', status, { error: 'falló la prueba sintética' });
   await assert.rejects(api.writeForm('expense', null, collectedExpense.payload), new RegExp(`HTTP ${status}`));
 }
+// La baja de un ingreso ya borrado responde 404; se maneja como rechazo, no como éxito silencioso.
+reply(`/api/income/${income.id}`, 404, { error: 'no encontrado' });
+await assert.rejects(api.writeForm('income-delete', income, null), /HTTP 404/);
 
 reply('/api/expenses', 201, { expenses: [expense] });
 reply('/api/expenses', 500, { error: 'recarga fallida' });
@@ -459,6 +504,32 @@ await api.handleRetryReload();
 assert.equal(api.state.reloadFailed, false);
 assert.equal(api.DATA.gastos[0].id, largeId);
 assert.equal(calls.filter((call) => call.options.method === 'POST' && call.path === '/api/expenses').length, postsBeforeUnsafe + 1);
+
+// Baja de ingreso: la escritura DELETE se confirma aunque la recarga posterior falle;
+// el reintento de lectura nunca repite el DELETE.
+reply(`/api/income/${income.id}`, 200, { deleted: true, id: income.id });
+reply('/api/expenses', 200, { expenses: [{ ...expense, id: largeId }] });
+reply('/api/income', 500, { error: 'recarga fallida' });
+reply('/api/fixed/versions', 200, { versions: [{ ...fixed, id: maxId, fijo_grupo_id: largeId }] });
+reply('/api/summary', 200, { months: [summary] });
+reply('/api/summary?month=2026-10', 200, summary);
+const deletesBefore = calls.filter((call) => call.options.method === 'DELETE' && call.path === `/api/income/${income.id}`).length;
+const incomeDeleteResult = await api.saveAndReload('income-delete', income, null);
+assert.equal(incomeDeleteResult.saved, true);
+assert.equal(incomeDeleteResult.reloaded, false);
+assert.equal(api.state.reloadFailed, true);
+assert.equal(calls.filter((call) => call.options.method === 'DELETE' && call.path === `/api/income/${income.id}`).length, deletesBefore + 1);
+
+reply('/api/expenses', 200, { expenses: [{ ...expense, id: largeId }] });
+reply('/api/income', 200, { income: [] });
+reply('/api/fixed/versions', 200, { versions: [{ ...fixed, id: maxId, fijo_grupo_id: largeId }] });
+reply('/api/summary', 200, { months: [summary] });
+reply('/api/summary?month=2026-10', 200, summary);
+await api.handleRetryReload();
+assert.equal(api.state.reloadFailed, false);
+assert.equal(api.DATA.ingresos.length, 0, 'El reintento confirma que el ingreso ya no está');
+assert.equal(calls.filter((call) => call.options.method === 'DELETE' && call.path === `/api/income/${income.id}`).length,
+  deletesBefore + 1, 'El reintento de lectura no debe repetir el DELETE');
 
 // También se comprueba el ID del envelope para cada método, sin convertirlo a Number.
 for (const [kind, row, payload, path, body] of [
@@ -659,5 +730,124 @@ assert.match(fijosDetailHtml, /&lt;img/, 'La periodicidad maliciosa debe llegar 
 assert.doesNotMatch(fijosDetailHtml, /<svg/i, 'El nombre del fijo no debe crear elementos');
 assert.match(fijosDetailHtml, /&lt;svg/, 'El nombre del fijo debe quedar escapado');
 
+// Revisor d2efc768 #1: el fallback de proporción debe usar el último mes
+// anterior (o igual) con salarios, nunca uno posterior al mes consultado.
+// Caso exacto: 60/40 en agosto, septiembre sin ingresos, 20/80 en octubre
+// (dos meses después de agosto) → septiembre debe heredar agosto (60/40).
+const resumenBackup = api.DATA.resumen;
+api.DATA.resumen = [
+  { mes: '2026-08', proporcion_jd: 60, proporcion_pinki: 40, total_ingresos: 100 },
+  { mes: '2026-10', proporcion_jd: 20, proporcion_pinki: 80, total_ingresos: 100 },
+];
+const fallbackEntry = api.getMonthProportion('2026-09');
+assert.equal(fallbackEntry.mes, '2026-08');
+assert.equal(fallbackEntry.proporcion_jd, 60);
+assert.equal(fallbackEntry.proporcion_pinki, 40);
+api.DATA.resumen = resumenBackup;
+
+// Revisor d2efc768 #2: monthsWithData, filterGastosPeriod y filterCuotasComprometidas
+// deben ser coherentes para meses futuros con cuotas pendientes.
+const gastosBackup = api.DATA.gastos;
+const futureCuota = { id: 98, fecha: '2027-03-05', monto: 50, categoria: 'Comida',
+  subcategoria: 'Almacén', medio_pago: 'Crédito', pagado_por: 'JD',
+  tipo_proporcion: 'dinamico', cuota_nro: 2, cuotas_total: 4, descripcion_original: 'Cuota futura' };
+const futureSingle = { id: 97, fecha: '2027-03-10', monto: 20, categoria: 'Comida',
+  subcategoria: 'Almacén', medio_pago: 'Efectivo', pagado_por: 'JD',
+  tipo_proporcion: 'dinamico', cuota_nro: 1, cuotas_total: 1, descripcion_original: 'Gasto futuro simple' };
+api.DATA.gastos = [...gastosBackup, futureCuota, futureSingle];
+assert.ok(api.monthsWithData().includes('2027-03'),
+  'monthsWithData debe incluir meses futuros con cuotas pendientes');
+const futurePeriodIds = Array.from(api.filterGastosPeriod('2027-03-01', '2027-03-31'), (r) => r.id).sort();
+assert.deepEqual(futurePeriodIds, [97, 98]);
+const futureCuotasIds = Array.from(api.filterCuotasComprometidas('2027-03-01', '2027-03-31'), (r) => r.id);
+assert.deepEqual(futureCuotasIds, [98],
+  'filterCuotasComprometidas solo debe incluir la fila con cuota_nro > 1');
+api.DATA.gastos = gastosBackup;
+
+// Revisor d2efc768 #4: income-delete no debe disparar el DELETE hasta confirmar,
+// y el DELETE final debe ir exactamente al ID canónico del ingreso.
+const incomeDeleteElements = new Map();
+const incomeDeleteElement = (id) => {
+  if (!incomeDeleteElements.has(id)) incomeDeleteElements.set(id, { textContent: '', innerHTML: '',
+    hidden: false, disabled: false, value: '', focus() {}, addEventListener() {},
+    querySelector: () => ({ focus() {} }), querySelectorAll: () => [] });
+  return incomeDeleteElements.get(id);
+};
+const incomeDeleteDocument = { getElementById: incomeDeleteElement, querySelectorAll: () => [], activeElement: null };
+const incomeDeleteApi = runInNewContext(`
+function todayLocalISO() { return '2026-10-17'; }
+function fmtARSExact(value) { return '$' + Number(value).toFixed(2); }
+function cuotaLabel(row) { return (row.cuota_nro || 1) + '/' + (row.cuotas_total || 1); }
+${slice('const escapeHtml = ', 'const fmtARS = ')}
+let liveMode = true, writePending = false, reloadPending = false, reloadFailed = false;
+let currentView = 'ingresos';
+let activeForm = null;
+const DATA = { gastos: [], ingresos: [incomeRow], fijos: [] };
+function updateAvailability() {}
+function showWriteNotice() {}
+async function loadLive() {}
+${slice('const MAX_SQLITE_ID = ', 'function adaptLiveMovement(')}
+${slice('function formField(', 'function routeForForm(')}
+${slice('function routeForForm(', 'function showWriteNotice(')}
+${slice('async function handleFormSubmit(', "document.getElementById('life-form').addEventListener")}
+({ openForm, closeForm, handleFormSubmit })`,
+  { document: incomeDeleteDocument, Date, Number, Math, fetch, incomeRow: income,
+    FormData: class { constructor(target) { this.target = target; } entries() { return Object.entries(this.target.values); } } });
+
+const incomeDeletePath = `/api/income/${income.id}`;
+const deletesBeforeIncomeCycle = calls.filter((call) => call.options.method === 'DELETE' && call.path === incomeDeletePath).length;
+incomeDeleteApi.openForm('income-delete', income.id);
+assert.equal(incomeDeleteElement('form-fields').hidden, false);
+const reviewEvent = { preventDefault() {}, currentTarget: { values: {} } };
+await incomeDeleteApi.handleFormSubmit(reviewEvent);
+assert.equal(incomeDeleteElement('form-fields').hidden, true, 'Revisar debe ocultar los campos y mostrar la confirmación');
+assert.match(incomeDeleteElement('form-confirm').textContent, /Baja del ingreso de JD/);
+assert.equal(calls.filter((call) => call.options.method === 'DELETE' && call.path === incomeDeletePath).length,
+  deletesBeforeIncomeCycle, 'Revisar todavía no debe disparar el DELETE');
+reply(incomeDeletePath, 200, { deleted: true, id: income.id });
+await incomeDeleteApi.handleFormSubmit(reviewEvent);
+const incomeDeleteCalls = calls.filter((call) => call.options.method === 'DELETE' && call.path === incomeDeletePath);
+assert.equal(incomeDeleteCalls.length, deletesBeforeIncomeCycle + 1, 'Confirmar debe disparar exactamente un DELETE');
+assert.equal(incomeDeleteCalls.at(-1).path, incomeDeletePath);
+assert.equal('body' in incomeDeleteCalls.at(-1).options, false, 'La baja no debe enviar body');
+
+// Revisor d2efc768 #4 (continuación): el botón de baja de un ingreso debe
+// quedar deshabilitado en modo snapshot (sin sesión en vivo).
+const ingresosTableElements = new Map();
+const ingresosTableElement = (id) => {
+  if (!ingresosTableElements.has(id)) ingresosTableElements.set(id, { textContent: '', innerHTML: '' });
+  return ingresosTableElements.get(id);
+};
+const ingresosTableDocument = { getElementById: ingresosTableElement };
+const ingresosTableApi = runInNewContext(`
+${slice('const escapeHtml = ', 'const fmtARS = ')}
+function fmtARS(value) { return '$' + value; }
+${slice('function pillClassFor(', 'function sum(')}
+function sum(rows, field) { return rows.reduce((acc, r) => acc + (parseFloat(r[field]) || 0), 0); }
+${slice('const MAX_SQLITE_ID = ', 'function adaptLiveMovement(')}
+${slice('function getMonthProportion(', '// ── ESTADO')}
+function mesLabel(m) { return m; }
+function renderIncomeLines() {}
+const P1 = 'JD', P2 = 'Pinki';
+const DATA = { ingresos: [incomeRow], resumen: [] };
+let period = { from: '2026-10-01', to: '2026-10-31', refMonth: '2026-10' };
+let liveMode = false, writePending = false, reloadPending = false, reloadFailed = false;
+${slice('function filterGastosPeriod(', 'function fijosLastDay(')}
+${slice('function renderIngresosView(', 'function renderIncomeLines(')}
+({ renderIngresosView, setLive(value) { liveMode = value; } })`,
+  { document: ingresosTableDocument, incomeRow: income, Date, Number, Math });
+
+ingresosTableApi.renderIngresosView();
+const ingresosSnapshotHtml = ingresosTableElement('tabla-ingresos-body').innerHTML;
+assert.match(ingresosSnapshotHtml, /openForm\('income-delete', this\.dataset\.id\)/);
+assert.match(ingresosSnapshotHtml, /aria-label="Dar de baja ingreso 31 de JD" disabled>Dar de baja<\/button>/,
+  'En modo snapshot el botón de baja de ingreso debe quedar deshabilitado');
+ingresosTableApi.setLive(true);
+ingresosTableApi.renderIngresosView();
+const ingresosLiveHtml = ingresosTableElement('tabla-ingresos-body').innerHTML;
+assert.match(ingresosLiveHtml, /aria-label="Dar de baja ingreso 31 de JD" >Dar de baja<\/button>/,
+  'En modo en vivo el botón de baja de ingreso debe estar habilitado');
+
 console.log('Formularios: rutas, payloads y lectura posterior verificados con fixture de API sintética');
 console.log('Modal: ciclo completo (guardar/cancelar/reabrir) y escape de XSS en detalle de fijos verificados');
+console.log('Revisor d2efc768: fallback de proporción, meses futuros con cuotas, historial de fijos e income-delete verificados');

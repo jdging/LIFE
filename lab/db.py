@@ -30,7 +30,9 @@ Tablas (esquema reconciliado con LIFE-lab-propuesta.md sección 3):
       fijos").
     - ingresos: movimientos de ingreso (Salario/Extra/Freelance/Otro),
       tabla hermana de `gastos` — separada porque en el laboratorio `gastos`
-      ya es su propia tabla (ver README).
+      ya es su propia tabla (ver README). Tiene soft delete propio
+      (`deleted_at`/`deleted_by` + `auditoria`, t_ce790609), mismo patrón
+      que `gastos` (ver `eliminar_ingreso_logico`).
     - inversiones: movimientos de inversión (Plazo fijo/FCI/Dólar-MEP/
       Crypto/Otro), misma lógica que `ingresos`.
     - estado_conversacional: estado del flujo multi-turno por chat_id.
@@ -309,6 +311,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     _migrar_columnas_gastos_fijos(conn)
     _migrar_columnas_lista_compras(conn)
     _migrar_columnas_recetas(conn)
+    _migrar_columnas_ingresos(conn)
 
 
 def _migrar_columnas_lista_compras(conn: sqlite3.Connection) -> None:
@@ -1770,6 +1773,25 @@ def actualizar_monto_fijo(
 # --- Ingresos ----------------------------------------------------------------
 
 
+def _migrar_columnas_ingresos(conn: sqlite3.Connection) -> None:
+    """Agrega a `ingresos` las columnas de soft delete si faltan (t_ce790609).
+
+    Mismo patrón que `_migrar_columnas_gastos`: ALTER TABLE ADD COLUMN en
+    vez de recrear la tabla, para no perder datos en bases ya inicializadas.
+    Idempotente: correrla dos veces (ej. sobre una base que ya la tiene
+    aplicada) no vuelve a tocar las columnas existentes.
+    """
+    existentes = _column_names(conn, "ingresos")
+    columnas_nuevas = (
+        ("deleted_at", "TEXT"),
+        ("deleted_by", "TEXT"),
+    )
+    for columna, definicion in columnas_nuevas:
+        if columna not in existentes:
+            conn.execute(f"ALTER TABLE ingresos ADD COLUMN {columna} {definicion}")
+    conn.commit()
+
+
 def insert_ingreso(conn: sqlite3.Connection, ingreso: dict) -> int:
     """Inserta un ingreso. Exige `ingreso['confirmado'] is True`.
 
@@ -1810,14 +1832,27 @@ def insert_ingreso(conn: sqlite3.Connection, ingreso: dict) -> int:
     return cursor.lastrowid
 
 
-def get_ingresos(conn: sqlite3.Connection, mes: Optional[str] = None) -> list:
+def get_ingresos(
+    conn: sqlite3.Connection,
+    mes: Optional[str] = None,
+    incluir_borrados: bool = False,
+) -> list:
+    """Devuelve ingresos ordenados por id.
+
+    Por default excluye los ingresos con `deleted_at IS NOT NULL` (soft
+    delete, ver `eliminar_ingreso_logico`). Pasar `incluir_borrados=True`
+    para incluirlos también (p.ej. para una vista de auditoría/papelera).
+    """
+    condiciones = []
+    parametros: list = []
     if mes is not None:
-        rows = conn.execute(
-            "SELECT * FROM ingresos WHERE substr(fecha, 1, 7) = ? ORDER BY id",
-            (mes,),
-        ).fetchall()
-    else:
-        rows = conn.execute("SELECT * FROM ingresos ORDER BY id").fetchall()
+        condiciones.append("substr(fecha, 1, 7) = ?")
+        parametros.append(mes)
+    if not incluir_borrados:
+        condiciones.append("deleted_at IS NULL")
+
+    where = f" WHERE {' AND '.join(condiciones)}" if condiciones else ""
+    rows = conn.execute(f"SELECT * FROM ingresos{where} ORDER BY id", parametros).fetchall()
     return [dict(row) for row in rows]
 
 
@@ -1827,11 +1862,14 @@ def actualizar_ingreso(conn: sqlite3.Connection, ingreso_id: int, cambios: dict)
     Campos editables: fecha/monto/moneda/categoria/persona/descripcion_original.
     Valida el estado RESULTANTE (fila actual + `cambios` superpuestos) con
     `validar_ingreso` antes de aplicar nada — si la validación falla, no se
-    ejecuta ningún UPDATE. Lanza `ValueError` si el ingreso no existe, si la
-    validación falla, si `cambios` trae alguna clave fuera de las editables,
-    o si `cambios` está vacío (rechazado explícitamente — con `cambios={}`
-    el `UPDATE ingresos SET  WHERE id = ?` resultante es SQL inválido;
-    hallazgo de revisor independiente, run 3b184396, hallazgo 7).
+    ejecuta ningún UPDATE. Lanza `ValueError` si el ingreso no existe, si ya
+    está borrado lógicamente (ver `eliminar_ingreso_logico` — un ingreso de
+    la papelera no se edita, se debe restaurar explícitamente primero, lo
+    que hoy no existe), si la validación falla, si `cambios` trae alguna
+    clave fuera de las editables, o si `cambios` está vacío (rechazado
+    explícitamente — con `cambios={}` el `UPDATE ingresos SET  WHERE id = ?`
+    resultante es SQL inválido; hallazgo de revisor independiente, run
+    3b184396, hallazgo 7).
     """
     if not cambios:
         raise ValueError(
@@ -1853,6 +1891,8 @@ def actualizar_ingreso(conn: sqlite3.Connection, ingreso_id: int, cambios: dict)
     fila = conn.execute("SELECT * FROM ingresos WHERE id = ?", (ingreso_id,)).fetchone()
     if fila is None:
         raise ValueError(f"No existe ningún ingreso con id={ingreso_id}.")
+    if fila["deleted_at"] is not None:
+        raise ValueError(f"No se puede editar el ingreso id={ingreso_id}: está borrado.")
 
     resultante = {**dict(fila), **cambios}
     errores = validar_ingreso(resultante)
@@ -1862,6 +1902,54 @@ def actualizar_ingreso(conn: sqlite3.Connection, ingreso_id: int, cambios: dict)
     columnas = ", ".join(f"{campo} = ?" for campo in cambios)
     valores = list(cambios.values()) + [ingreso_id]
     conn.execute(f"UPDATE ingresos SET {columnas} WHERE id = ?", valores)
+    conn.commit()
+
+
+# --- Soft delete de ingresos + auditoría ------------------------------------
+
+
+def eliminar_ingreso_logico(conn: sqlite3.Connection, ingreso_id: int, actor: str) -> None:
+    """Marca `ingresos.id = ingreso_id` como borrado lógico (soft delete).
+
+    Mismo contrato que `eliminar_gasto_logico` (ver esa función para el
+    detalle de atomicidad y de la condición de carrera): no borra la fila
+    físicamente, deja rastro en `auditoria` con el snapshot previo de la
+    fila, y levanta `ValueError` si el ingreso no existe o ya estaba
+    borrado — incluyendo el caso de doble baja concurrente, detectado por
+    `cursor.rowcount != 1` en el `UPDATE` condicionado a `deleted_at IS
+    NULL`. Si falla el `INSERT` en `auditoria` después del `UPDATE`, se
+    hace `rollback()` explícito antes de propagar la excepción.
+    """
+    fila = conn.execute("SELECT * FROM ingresos WHERE id = ?", (ingreso_id,)).fetchone()
+    if fila is None:
+        raise ValueError(f"No existe ningún ingreso con id={ingreso_id}.")
+    if fila["deleted_at"] is not None:
+        raise ValueError(f"El ingreso id={ingreso_id} ya está borrado.")
+
+    snapshot_antes = json.dumps(dict(fila), ensure_ascii=False)
+    ahora = _now()
+
+    try:
+        cursor = conn.execute(
+            "UPDATE ingresos SET deleted_at = ?, deleted_by = ? "
+            "WHERE id = ? AND deleted_at IS NULL",
+            (ahora, actor, ingreso_id),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError(
+                f"El ingreso id={ingreso_id} ya fue borrado por otra operación "
+                "concurrente (detectado al aplicar la baja)."
+            )
+        conn.execute(
+            """
+            INSERT INTO auditoria (tabla, fila_id, accion, actor, antes_json, despues_json, creado_en)
+            VALUES ('ingresos', ?, 'baja', ?, ?, NULL, ?)
+            """,
+            (ingreso_id, actor, snapshot_antes, ahora),
+        )
+    except Exception:
+        conn.rollback()
+        raise
     conn.commit()
 
 
@@ -1916,10 +2004,16 @@ def get_inversiones(conn: sqlite3.Connection, mes: Optional[str] = None) -> list
 
 
 def _proporcion_salarios_mes(conn: sqlite3.Connection, mes: str) -> Optional[dict]:
-    """Devuelve {'JD': pct, 'Pinki': pct} para `mes`, o None si no hay salarios."""
+    """Devuelve {'JD': pct, 'Pinki': pct} para `mes`, o None si no hay salarios.
+
+    Excluye ingresos borrados lógicamente (`deleted_at IS NOT NULL`, ver
+    `eliminar_ingreso_logico`) — un ingreso borrado no debe afectar la
+    proporción del mes.
+    """
     rows = conn.execute(
         "SELECT persona, SUM(monto) AS total FROM ingresos "
         "WHERE categoria = 'Salario' AND substr(fecha, 1, 7) = ? "
+        "AND deleted_at IS NULL "
         "GROUP BY persona",
         (mes,),
     ).fetchall()
@@ -1941,9 +2035,12 @@ def calcular_proporcion_mes(conn: sqlite3.Connection, mes: str) -> dict:
 
     Lógica portada tal cual del sistema real (no hay salarios fijos
     configurados en ningún lado):
-      1. Suma `ingresos` con categoria='Salario' del mes, agrupado por persona.
+      1. Suma `ingresos` con categoria='Salario' del mes, agrupado por
+         persona (excluyendo ingresos borrados lógicamente, ver
+         `eliminar_ingreso_logico`).
       2. Si el mes no tiene salarios cargados, usa la proporción del último
-         mes ANTERIOR que sí tenga (fallback explícito del modelo real).
+         mes ANTERIOR que sí tenga (fallback explícito del modelo real,
+         también excluyendo borrados).
       3. Si nunca hubo salarios cargados, devuelve 50/50 como default
          documentado.
     """
@@ -1955,7 +2052,8 @@ def calcular_proporcion_mes(conn: sqlite3.Connection, mes: str) -> dict:
         {
             row["fecha"][:7]
             for row in conn.execute(
-                "SELECT fecha FROM ingresos WHERE categoria = 'Salario'"
+                "SELECT fecha FROM ingresos WHERE categoria = 'Salario' "
+                "AND deleted_at IS NULL"
             ).fetchall()
         }
     )

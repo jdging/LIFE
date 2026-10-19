@@ -23,7 +23,7 @@ La continuación al recurso estático llama a `next()` de `@vercel/functions`, s
 | `/api/expenses` | `GET`, `POST` | `month=YYYY-MM` opcional sólo en `GET` |
 | `/api/expenses/:id` | `DELETE` | Ninguna |
 | `/api/income` | `GET`, `POST` | Ninguna |
-| `/api/income/:id` | `PATCH` | Ninguna |
+| `/api/income/:id` | `PATCH`, `DELETE` | Ninguna |
 | `/api/fixed` | `GET`, `POST` | `dateISO=YYYY-MM-DD` opcional sólo en `GET` |
 | `/api/fixed/versions` | `GET` | Ninguna |
 | `/api/fixed/range` | `GET` | `fromISO` y `toISO` obligatorias, fechas `YYYY-MM-DD` |
@@ -45,4 +45,4 @@ El proxy construye los headers salientes desde cero: `Content-Type: application/
 - El fetch usa `redirect: 'manual'`; cualquier `3xx` devuelve `502`. No se copian headers upstream, incluidos `Set-Cookie` y `Location`. Todas las respuestas API usan `Cache-Control: no-store`.
 - El destino se arma exclusivamente con la URL de servidor validada y la ruta permitida. Se exige que el hostname final sea exactamente el hostname configurado. Se rechazan IP literales, localhost y nombres internos conocidos. Un hostname DNS público puede resolver o cambiar a una dirección privada: este runtime no demuestra ni bloquea esa resolución. La selección de un destino real confiable y los controles DNS/egress contra redes privadas son tareas de integración e infraestructura pendientes; no se afirma seguridad remota sin ellos.
 
-Las pruebas en `tests/proxy.test.mjs` usan `node:test`, Web APIs de Node y `fetch` simulado, sin llamadas a red. Se agregaron casos para bodies abiertos rechazados y cancelaciones que rechazan o no terminan. **No se ejecutaron en esta corrida por instrucción expresa**; los 14 casos anteriores también quedaron sin reejecutar aquí. Tampoco hubo smoke test remoto ni despliegue.
+Las pruebas en `tests/proxy.test.mjs` usan `node:test`, Web APIs de Node y `fetch` simulado, sin llamadas a red. Incluyen el `DELETE /api/income/:id` agregado en t_ce790609 (permitido y forwardeado) y la verificación de que `DELETE /api/income` (sin id) sigue devolviendo `405`/`404` según corresponda. El comando es `node --test tests/proxy.test.mjs` (desde `src/lab-dashboard/`). Esta corrida no tuvo shell disponible para ejecutarlas; el coordinador debe correrlas antes de aceptar el candidato. Tampoco hubo smoke test remoto ni despliegue.

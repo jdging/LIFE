@@ -39,7 +39,8 @@
       <button class="period-btn" data-period="all" aria-pressed="false" onclick="selectPeriodType('all')">Todo</button>
       <button class="period-btn" data-period="range" aria-pressed="false" onclick="selectPeriodType('range')">Rango</button>
     </div>
-    <input type="month" id="month-picker" class="month-input" aria-label="Elegir mes" onchange="onMonthChange(this.value)">
+    <input type="month" id="month-picker" class="month-input" aria-label="Elegir mes" list="month-options" onchange="onMonthChange(this.value)">
+    <datalist id="month-options"></datalist>
     <div id="range-pickers" class="range-pickers" hidden>
       <input type="date" id="range-from" class="month-input" aria-label="Desde" onchange="onRangeChange()">
       <span class="range-sep">a</span>
@@ -166,6 +167,7 @@
               <tr>
                 <th data-key="fecha">Fecha</th>
                 <th data-key="categoria">Categoría</th>
+                <th>Descripción</th>
                 <th data-key="monto_total">Monto</th>
                 <th data-key="medio_pago">Medio de pago</th>
                 <th data-key="pago">Pagado por</th>
