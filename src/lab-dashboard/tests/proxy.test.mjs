@@ -146,6 +146,7 @@ test('every contracted method forwards the exact path and query to the configure
     ['PATCH', '/api/fixed/3', '{}'],
     ['DELETE', '/api/fixed/3', '{"fecha_baja":"2026-10-17"}'],
     ['GET', '/api/summary?month=2026-10'],
+    ['GET', '/api/categories?tipo=Gasto'],
   ];
   let calls = 0;
   await withHarness(async () => {
@@ -184,6 +185,7 @@ test('known paths reject wrong methods with Allow; unknown paths stay 404', asyn
     ['/api/fixed/1/historial', 'POST', 'GET'],
     ['/api/fixed/1', 'GET', 'PATCH, DELETE'],
     ['/api/summary', 'POST', 'GET'],
+    ['/api/categories', 'POST', 'GET'],
   ];
   const unknown = [
     '/api/gastos', '/api/ingresos', '/api/fijos', '/api/expenses/F-1',
@@ -216,6 +218,8 @@ test('query whitelist validates names, multiplicity, dates, and method scope', a
     '/api/fixed/versions?dateISO=2026-10-01', '/api/fixed/1/historial?x=1',
     '/api/summary?month=%ZZ', '/api/summary?month=2026-00',
     '/api/expenses/1?month=2026-10',
+    '/api/categories?tag=x', '/api/categories?tipo=Gasto&tipo=Ingreso',
+    '/api/categories?tipo=Factura',
   ];
   let calls = 0;
   await withHarness(async () => {

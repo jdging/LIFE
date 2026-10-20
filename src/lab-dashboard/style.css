@@ -350,14 +350,21 @@ button.card:active {
 
 .card .value {
   font-family: 'Fraunces', serif;
-  font-size: 28px;
+  /* Fluido entre 17px (pantallas angostas) y 28px (tamaño original de escritorio);
+     si el monto es tan largo que ni el mínimo alcanza, rompe a una segunda línea
+     en vez de desbordar la card o cortar dígitos. */
+  font-size: clamp(17px, 5.4vw, 28px);
   font-weight: 600;
   color: var(--green-deep);
+  line-height: 1.2;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .card .value.muted {
   color: var(--ink);
-  font-size: 22px;
+  font-size: clamp(14px, 4.2vw, 22px);
 }
 
 .card .value.value-negative,
@@ -1051,6 +1058,7 @@ tfoot td {
 .field-error:empty, #form-errors:empty { display: none; }
 .form-help, .form-warning { font-size: 12.5px; color: var(--ink-soft); }
 .form-warning { background: rgba(209, 161, 63, .18); padding: 10px; border-radius: 10px; color: var(--ink); }
+.form-loading { font-size: 14px; color: var(--ink-soft); }
 .form-confirm { padding: 14px; border-radius: 10px; background: var(--paper-deep); overflow-wrap: anywhere; }
 .modal-box .fijos-actions { margin-top: 20px; }
 .modal-box button { min-height: 44px; }
@@ -1089,7 +1097,7 @@ footer {
     grid-template-columns: repeat(2, 1fr);
   }
   .card .value {
-    font-size: 22px;
+    font-size: clamp(15px, 6vw, 22px);
   }
   .table-filters {
     align-items: flex-start;

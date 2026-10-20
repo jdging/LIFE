@@ -100,6 +100,7 @@ const PROXY_ROUTES = [
   { pattern: /^\/api\/fixed\/[1-9]\d*\/historial$/, methods: ['GET'], query: {} },
   { pattern: /^\/api\/fixed\/[1-9]\d*$/, methods: ['PATCH', 'DELETE'], query: {} },
   { pattern: /^\/api\/summary$/, methods: ['GET'], query: { GET: { month: 'month' } } },
+  { pattern: /^\/api\/categories$/, methods: ['GET'], query: { GET: { tipo: 'tipo' } } },
 ];
 
 const PROXY_SAFE_UPSTREAM_STATUSES = new Set([
@@ -133,6 +134,12 @@ function isValidDate(value) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+const CATEGORY_TIPOS = new Set(['Gasto', 'Ingreso', 'Inversión']);
+
+function isValidTipo(value) {
+  return CATEGORY_TIPOS.has(value);
+}
+
 function isValidProxyQuery(search, route, method) {
   try {
     decodeURIComponent(search);
@@ -145,6 +152,7 @@ function isValidProxyQuery(search, route, method) {
     if (seen.has(key) || !Object.hasOwn(allowed, key)) return false;
     if (allowed[key] === 'month' && !isValidMonth(value)) return false;
     if (allowed[key] === 'date' && !isValidDate(value)) return false;
+    if (allowed[key] === 'tipo' && !isValidTipo(value)) return false;
     seen.add(key);
   }
   return (route.requiredQuery || []).every((key) => seen.has(key));

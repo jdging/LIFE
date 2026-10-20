@@ -137,6 +137,8 @@ let writePending = false;
 let reloadPending = false;
 let reloadFailed = false;
 let activeForm = null;
+let categoriesGastoCache = null;
+let activeExpenseCatalog = null;
 const TABLE_KEY_MAP = { monto_total: 'monto', pago: 'pagado_por' };
 
 // ── CARGA DE DATOS ───────────────────────────────────────────────────────
@@ -281,6 +283,20 @@ async function loadSnapshot() {
   updateAvailability();
   renderMonthOptions();
   if (period) renderView(currentView);
+}
+
+// Caché en memoria durante la sesión: una vez resuelto el catálogo con éxito,
+// no se vuelve a pedir aunque se abra el formulario de gasto varias veces.
+async function loadCategoriasGasto() {
+  if (categoriesGastoCache) return categoriesGastoCache;
+  const data = await fetchJSON('/api/categories?tipo=Gasto');
+  const list = requireList(data, 'categories');
+  if (!list.length) throw new Error('Catálogo de categorías de gasto vacío.');
+  categoriesGastoCache = list.map((item) => ({
+    categoria: String(item.categoria),
+    subcategorias: Array.isArray(item.subcategorias) ? item.subcategorias.map(String) : [],
+  }));
+  return categoriesGastoCache;
 }
 
 async function loadAll() {
@@ -862,20 +878,57 @@ function formSelect(name, label, choices, value) {
     </select><span class="field-error" id="error-${name}"></span></label>`;
 }
 
-function formMarkup(kind, row) {
+// Catálogo vía <select> dependiente (GET /api/categories?tipo=Gasto, t_ce790609).
+// Sin catálogo (fetch falló o vino vacío) se cae a los inputs de texto + datalist
+// de siempre, para que el alta de gasto nunca quede bloqueada por ese endpoint.
+function formExpenseCategorySelects(catalog) {
+  const options = catalog.map((c) => `<option value="${escapeHtml(c.categoria)}">${escapeHtml(c.categoria)}</option>`).join('');
+  return `<label class="form-field" for="field-categoria">Categoría
+    <select id="field-categoria" name="categoria" required aria-describedby="error-categoria">
+      <option value="" disabled selected>Elegí una categoría</option>
+      ${options}
+    </select>
+    <span class="field-error" id="error-categoria"></span></label>
+    <label class="form-field" for="field-subcategoria">Subcategoría
+    <select id="field-subcategoria" name="subcategoria" aria-describedby="error-subcategoria">
+      <option value="">Sin subcategoría</option>
+    </select>
+    <span class="field-error" id="error-subcategoria"></span></label>`;
+}
+
+function formExpenseCategoryText() {
+  const categories = [...new Set(DATA.gastos.map((item) => item.categoria).filter(Boolean))].sort();
+  const subcategories = [...new Set(DATA.gastos.map((item) => item.subcategoria).filter(Boolean))].sort();
+  return `${formField('categoria', 'Categoría', '', 'text', 'required list="expense-categories"')}
+    <datalist id="expense-categories">${categories.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
+    ${formField('subcategoria', 'Subcategoría', '', 'text', 'list="expense-subcategories"')}
+    <datalist id="expense-subcategories">${subcategories.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>`;
+}
+
+// Repuebla #field-subcategoria con las subcategorías de la categoría elegida,
+// solo esas (nunca las de otra categoría). Sin selección, o sin subcategorías
+// para esa categoría, queda únicamente la opción "Sin subcategoría".
+function onExpenseCategoriaChange() {
+  const categoriaSelect = document.getElementById('field-categoria');
+  const subcategoriaSelect = document.getElementById('field-subcategoria');
+  if (!categoriaSelect || !subcategoriaSelect || !activeExpenseCatalog) return;
+  const entry = activeExpenseCatalog.find((c) => c.categoria === categoriaSelect.value);
+  const subcategorias = entry ? entry.subcategorias : [];
+  subcategoriaSelect.innerHTML = '<option value="">Sin subcategoría</option>' +
+    subcategorias.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  subcategoriaSelect.value = '';
+}
+
+function formMarkup(kind, row, categoriesCatalog) {
   if (kind === 'expense-delete') return `<p>Se dará de baja únicamente esta fila: ${escapeHtml(row.descripcion_original || row.categoria)} · ${escapeHtml(row.fecha)} · cuota ${cuotaLabel(row)} · ${fmtARSExact(row.monto)}. Las demás cuotas permanecen.</p>`;
   if (kind === 'income-delete') return `<p>Se dará de baja el ingreso de ${escapeHtml(row.persona)}: ${escapeHtml(row.descripcion_original || row.categoria)} · ${escapeHtml(row.fecha)} · ${fmtARSExact(row.monto)}.${row.categoria === 'Salario' ? ' Es un ingreso de Salario: esta baja puede cambiar la proporción del mes y las deudas.' : ''}</p>`;
   if (kind === 'fixed-delete') return `<p>La baja de ${escapeHtml(row.nombre)} crea una versión inactiva. El historial permanece.</p>${formField('fecha_baja', 'Fecha de baja', todayLocalISO(), 'date', 'required')}`;
   if (kind === 'expense') {
-    const categories = [...new Set(DATA.gastos.map((item) => item.categoria).filter(Boolean))].sort();
-    const subcategories = [...new Set(DATA.gastos.map((item) => item.subcategoria).filter(Boolean))].sort();
     const cards = [...new Set(DATA.gastos.map((item) => item.tarjeta_id).filter(Boolean))].sort();
+    const categoryFields = categoriesCatalog ? formExpenseCategorySelects(categoriesCatalog) : formExpenseCategoryText();
     return `${formField('monto', 'Monto total (ARS)', '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
       ${formField('fecha', 'Fecha', todayLocalISO(), 'date', 'required')}
-      ${formField('categoria', 'Categoría', '', 'text', 'required list="expense-categories"')}
-      <datalist id="expense-categories">${categories.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
-      ${formField('subcategoria', 'Subcategoría', '', 'text', 'list="expense-subcategories"')}
-      <datalist id="expense-subcategories">${subcategories.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
+      ${categoryFields}
       ${formField('descripcion_original', 'Descripción', '')}
       ${formSelect('medio_pago', 'Medio de pago', ['Efectivo', 'Transferencia', 'Débito', 'Crédito'], 'Efectivo')}
       ${formField('tarjeta_id', 'ID de tarjeta (opcional; ingresalo si corresponde)', '', 'text', 'list="expense-cards"')}
@@ -915,27 +968,56 @@ function formMarkup(kind, row) {
     ${formField('vigente_desde', 'Vigente desde', todayLocalISO(), 'date', 'required')}`;
 }
 
-function openForm(kind, id = null) {
+async function openForm(kind, id = null) {
   if (!liveMode || writePending || reloadPending || reloadFailed) return;
   const source = kind.startsWith('expense') ? DATA.gastos : kind.startsWith('income') ? DATA.ingresos : DATA.fijos;
   const row = id === null ? null : source.find((item) => canonicalId(item.id) === canonicalId(id));
   if (id !== null && !row) return;
-  activeForm = { kind, row, returnFocus: document.activeElement, confirmed: false, payload: null };
+  // Si ya hay una apertura en curso (modal abierto o cargando), el foco actual
+  // está dentro del modal (ej: #form-close) y no es un disparador real: se
+  // conserva el returnFocus original en vez de reemplazarlo.
+  const returnFocus = activeForm ? activeForm.returnFocus : document.activeElement;
+  const form = activeForm = { kind, row, returnFocus, confirmed: false, payload: null };
   const titles = { expense: 'Agregar gasto', 'expense-delete': 'Dar de baja una cuota', income: 'Agregar ingreso', 'income-edit': 'Editar ingreso', 'income-delete': 'Dar de baja ingreso', fixed: 'Agregar fijo', 'fixed-edit': 'Crear versión de fijo', 'fixed-delete': 'Dar de baja fijo' };
   document.getElementById('form-title').textContent = titles[kind];
   document.getElementById('form-intro').textContent = kind.includes('delete') ? 'Revisá qué cambio se aplicará.' : 'Completá los datos y revisá el resumen antes de guardar.';
-  document.getElementById('form-fields').innerHTML = formMarkup(kind, row);
-  document.getElementById('form-fields').hidden = false;
   document.getElementById('form-errors').textContent = '';
   document.getElementById('form-confirm').hidden = true;
-  document.getElementById('form-submit').textContent = 'Revisar';
-  document.getElementById('form-submit').disabled = false;
   document.getElementById('form-back').hidden = true;
   document.getElementById('form-back').disabled = false;
   document.getElementById('form-close').disabled = false;
+  let catalog = null;
+  let catalogWarning = '';
+  if (kind === 'expense') {
+    // Mostrar el modal YA, en estado de carga: así Escape/Cancelar operan sobre el
+    // listener del modal mientras el catálogo todavía no resolvió, en vez de dejar
+    // el foco afuera en el disparador durante el fetch.
+    document.getElementById('form-fields').innerHTML = '<p class="form-loading" role="status" aria-live="polite">Cargando categorías…</p>';
+    document.getElementById('form-fields').hidden = false;
+    document.getElementById('form-submit').textContent = 'Revisar';
+    document.getElementById('form-submit').disabled = true;
+    document.getElementById('form-modal').hidden = false;
+    document.getElementById('form-close').focus();
+    try {
+      catalog = await loadCategoriasGasto();
+    } catch {
+      catalog = null;
+      catalogWarning = '<p class="form-warning">No se pudo cargar el catálogo de categorías. Completá categoría y subcategoría como texto libre.</p>';
+    }
+    // El modal pudo cerrarse, o reabrirse (mismo u otro tipo), mientras esperaba el
+    // fetch: esta apertura ya no es la vigente. Comparar identidad, no `kind`,
+    // porque dos aperturas de 'expense' en carrera comparten el mismo kind.
+    if (activeForm !== form) return;
+    activeExpenseCatalog = catalog;
+  }
+  document.getElementById('form-fields').innerHTML = catalogWarning + formMarkup(kind, row, catalog);
+  document.getElementById('form-fields').hidden = false;
+  document.getElementById('form-submit').textContent = 'Revisar';
+  document.getElementById('form-submit').disabled = false;
   document.getElementById('form-modal').hidden = false;
   document.getElementById('form-modal').querySelector('input, select, button').focus();
   syncCustomProportion();
+  if (kind === 'expense' && catalog) onExpenseCategoriaChange();
 }
 
 function closeForm() {
@@ -1234,6 +1316,9 @@ document.getElementById('form-back').addEventListener('click', () => {
 });
 document.getElementById('form-fields').addEventListener('change', syncCustomProportion);
 document.getElementById('form-fields').addEventListener('input', syncCustomProportion);
+document.getElementById('form-fields').addEventListener('change', (event) => {
+  if (event.target?.id === 'field-categoria') onExpenseCategoriaChange();
+});
 document.getElementById('form-modal').addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !writePending) { event.preventDefault(); closeForm(); return; }
   if (event.key !== 'Tab') return;

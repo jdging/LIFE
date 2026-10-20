@@ -30,12 +30,15 @@ La continuación al recurso estático llama a `next()` de `@vercel/functions`, s
 | `/api/fixed/:id/historial` | `GET` | Ninguna |
 | `/api/fixed/:id` | `PATCH`, `DELETE` | Ninguna |
 | `/api/summary` | `GET` | `month=YYYY-MM` opcional |
+| `/api/categories` | `GET` | `tipo` opcional en el proxy, debe ser `Gasto`, `Ingreso` o `Inversión` si está presente |
 
 `:id` es un entero decimal positivo. No se admiten IDs de texto como `F-1`, aliases en español, parámetros desconocidos ni parámetros repetidos. La query permitida se conserva en la URL upstream sin traducir nombres. Una ruta desconocida devuelve `404`; un método no admitido sobre una ruta conocida devuelve `405` con `Allow`; una query inválida devuelve `400`. La API real valida el contenido de los JSON y los campos de dominio.
 
 La cookie firmada y vigente se exige tanto para lecturas como para escrituras. Sin sesión válida, `/api/*` responde `401` JSON. Si una lectura trae `Origin`, debe coincidir exactamente con el origen de `request.url`. Para `POST`, `PATCH` y `DELETE`, ese `Origin` es obligatorio. `Referer`, `Host` y headers forwarded no sustituyen esa comprobación.
 
 El proxy construye los headers salientes desde cero: `Content-Type: application/json` cuando hay cuerpo y `X-Internal-Proxy-Secret` desde el entorno del servidor. Nunca reenvía `Authorization`, cookies, secretos o identidad aportados por el cliente. La sesión compartida no identifica a JD ni a Pinki ante la API; ésta usa un actor fijo no verificado.
+
+`/api/categories` usa el mismo mecanismo de allowlist de query que `month` en `/api/expenses`: el proxy no exige `tipo` (igual que `month` no es obligatorio ahí), pero si viene, valida que sea exactamente `Gasto`, `Ingreso` o `Inversión` antes de reenviarlo; cualquier otro valor o parámetro desconocido devuelve `400` sin llegar a la API real. La obligatoriedad de `tipo` (ausente → `422`) es responsabilidad exclusiva de la API detrás del proxy.
 
 ## Límites y seguridad
 
@@ -45,4 +48,4 @@ El proxy construye los headers salientes desde cero: `Content-Type: application/
 - El fetch usa `redirect: 'manual'`; cualquier `3xx` devuelve `502`. No se copian headers upstream, incluidos `Set-Cookie` y `Location`. Todas las respuestas API usan `Cache-Control: no-store`.
 - El destino se arma exclusivamente con la URL de servidor validada y la ruta permitida. Se exige que el hostname final sea exactamente el hostname configurado. Se rechazan IP literales, localhost y nombres internos conocidos. Un hostname DNS público puede resolver o cambiar a una dirección privada: este runtime no demuestra ni bloquea esa resolución. La selección de un destino real confiable y los controles DNS/egress contra redes privadas son tareas de integración e infraestructura pendientes; no se afirma seguridad remota sin ellos.
 
-Las pruebas en `tests/proxy.test.mjs` usan `node:test`, Web APIs de Node y `fetch` simulado, sin llamadas a red. Incluyen el `DELETE /api/income/:id` agregado en t_ce790609 (permitido y forwardeado) y la verificación de que `DELETE /api/income` (sin id) sigue devolviendo `405`/`404` según corresponda. El comando es `node --test tests/proxy.test.mjs` (desde `src/lab-dashboard/`). Esta corrida no tuvo shell disponible para ejecutarlas; el coordinador debe correrlas antes de aceptar el candidato. Tampoco hubo smoke test remoto ni despliegue.
+Las pruebas en `tests/proxy.test.mjs` usan `node:test`, Web APIs de Node y `fetch` simulado, sin llamadas a red. Incluyen el `DELETE /api/income/:id` agregado en t_ce790609 (permitido y forwardeado) y la verificación de que `DELETE /api/income` (sin id) sigue devolviendo `405`/`404` según corresponda. También cubren `/api/categories` (t_ce790609, QA de Juan ronda 2): `GET` con `tipo=Gasto` permitido y forwardeado, cualquier otro método rechazado con `405`/`Allow: GET`, y query desconocida, repetida o con un valor de `tipo` fuera de las tres opciones rechazada con `400 invalid_query` antes de llegar a la API real. El comando es `node --test tests/proxy.test.mjs` (desde `src/lab-dashboard/`). Esta corrida no tuvo shell disponible para ejecutarlas; el coordinador debe correrlas antes de aceptar el candidato. Tampoco hubo smoke test remoto ni despliegue.

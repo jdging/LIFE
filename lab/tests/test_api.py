@@ -585,6 +585,58 @@ class ApiTest(unittest.TestCase):
         finally:
             app.close()
 
+    def test_categories_empty_grouped_ordered_deduped_and_validated(self):
+        # Base sin categorías: lista vacía, no 404 ni error.
+        status, body, _ = self.request("GET", "/api/categories?tipo=Gasto")
+        self.assertEqual(status, 200)
+        self.assertEqual(body, {"categories": []})
+
+        with db.get_connection(self.db_path) as conn:
+            for tipo, categoria, subcategoria in (
+                ("Gasto", "Hogar", "Alquiler"),
+                ("Gasto", "Comida", "Supermercado"),
+                ("Gasto", "Hogar", "Expensas"),
+                ("Gasto", "Hogar", "Alquiler"),  # duplicado, debe deduplicarse
+                ("Gasto", "Hogar", None),  # sin subcategoría, no debe agregar nada
+                ("Gasto", "Transporte", ""),  # subcategoría vacía, se ignora
+                ("Gasto", "Transporte", "Nafta"),
+                ("Ingreso", "Salario", None),  # otro tipo, no debe aparecer
+            ):
+                conn.execute(
+                    "INSERT INTO categorias (tipo, categoria, subcategoria, creada_en) "
+                    "VALUES (?, ?, ?, '2026-01-01T00:00:00')",
+                    (tipo, categoria, subcategoria),
+                )
+            conn.commit()
+
+        status, body, _ = self.request("GET", "/api/categories?tipo=Gasto")
+        self.assertEqual(status, 200)
+        self.assertEqual(body, {"categories": [
+            {"categoria": "Hogar", "subcategorias": ["Alquiler", "Expensas"]},
+            {"categoria": "Comida", "subcategorias": ["Supermercado"]},
+            {"categoria": "Transporte", "subcategorias": ["Nafta"]},
+        ]})
+
+        status, body, _ = self.request("GET", "/api/categories?tipo=Ingreso")
+        self.assertEqual(status, 200)
+        self.assertEqual(body, {"categories": [{"categoria": "Salario", "subcategorias": []}]})
+
+        status, body, _ = self.request("GET", "/api/categories?tipo=Inversión")
+        self.assertEqual(status, 200)
+        self.assertEqual(body, {"categories": []})
+
+        # tipo obligatorio y limitado a los tres valores; falta o inválido -> 422.
+        for query in ("", "?tipo=", "?tipo=gasto", "?tipo=Factura"):
+            status, _, _ = self.request("GET", f"/api/categories{query}")
+            self.assertEqual(status, 422)
+
+        # Query desconocida: mismo rechazo (400) que el resto de la API.
+        self.assertEqual(self.request("GET", "/api/categories?tipo=Gasto&extra=1")[0], 400)
+        self.assertEqual(self.request("GET", "/api/categories?tipo=Gasto&tipo=Ingreso")[0], 400)
+
+        # Auth por el mismo header que todas las rutas.
+        self.assertEqual(self.request("GET", "/api/categories?tipo=Gasto", auth=False)[0], 401)
+
     def test_local_http_roundtrip(self):
         server = make_server("127.0.0.1", 0, self.app)
         worker = threading.Thread(target=server.serve_forever, daemon=True)

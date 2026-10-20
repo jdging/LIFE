@@ -100,6 +100,7 @@ el límite técnico, responden `422` sin números inventados.
 | `PATCH /api/fixed/:id` | `vigente_desde` obligatorio y cambios en `nombre`, `monto_estimado`, `periodicidad`, `responsable`, `tipo_proporcion`, `proporcion_jd` | `{"fixed":{...}}` con id de la nueva versión |
 | `DELETE /api/fixed/:id` | `{"fecha_baja":"YYYY-MM-DD"}` | `{"fixed":{...}}` con versión inactiva nueva |
 | `GET /api/summary?month=YYYY-MM` | `month` opcional | Con mes: objeto resumen; sin mes: `{"months":[...]}` |
+| `GET /api/categories?tipo=Gasto\|Ingreso\|Inversión` | `tipo` obligatorio, uno de esos tres valores exactos | `{"categories":[{"categoria":"Hogar","subcategorias":["Alquiler","Expensas",...]},...]}` |
 
 `monto` de gastos e ingresos debe ser positivo. Un ingreso requiere `persona`
 `JD` o `Pinki`; `Común` no es válida. Un fijo exige `responsable` `Común`, `JD`
@@ -193,6 +194,20 @@ fallback histórico definido por `db.py`, también excluyendo ingresos
 borrados lógicamente (un ingreso borrado no cuenta ni para el mes consultado
 ni para el fallback a un mes anterior).
 
+`GET /api/categories` expone de solo lectura el catálogo dinámico de
+`db.get_categorias` (tabla `categorias`) para poblar el desplegable de
+categoría/subcategoría al dar de alta un gasto. `tipo` es obligatorio y debe
+ser exactamente `Gasto`, `Ingreso` o `Inversión`; si falta o no es uno de esos
+tres valores, responde `422` (excepción puntual a la convención `400` del
+resto de la validación de query, pedida así por el dominio). Las filas se
+agrupan por `categoria`, en el orden de primera aparición por `id`; dentro de
+cada categoría, las subcategorías se listan sin valores nulos ni vacíos, sin
+duplicados, en el orden en que aparecen por `id`. Una categoría sin ninguna
+subcategoría válida igual aparece, con `"subcategorias":[]`. Una base sin
+filas en `categorias` devuelve `{"categories":[]}`, nunca un error. No agrega
+ninguna ruta de escritura ni validación nueva sobre altas de gastos: las
+categorías que ya aceptan `POST /api/expenses` no cambian.
+
 ## Pruebas preparadas
 
 `tests/test_api.py` usa archivos temporales y `:memory:`; incluye inyección
@@ -206,7 +221,11 @@ migración de una base temporal legacy, y el contrato completo de
 lógica de ingresos a nivel `db.py` (baja, doble baja, inexistente, auditoría,
 recálculo de `calcular_proporcion_mes` sin el borrado, edición rechazada
 sobre un ingreso borrado, y migración idempotente de columnas sobre una base
-vieja sin `deleted_at`/`deleted_by`).
+vieja sin `deleted_at`/`deleted_by`). El mismo `tests/test_api.py` también
+cubre `GET /api/categories`: base sin categorías, agrupado y orden por `id`,
+deduplicación y exclusión de subcategorías nulas/vacías, filtrado por `tipo`,
+`422` con `tipo` ausente/inválido, `400` con query desconocida o repetida, y
+`401` sin el header de auth interno.
 El comando para el coordinador es `python3 -m pytest -q tests` (desde `lab/`).
 Esta corrida no tuvo shell disponible para ejecutarlas; el coordinador debe
 correrlas antes de aceptar el candidato.

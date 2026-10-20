@@ -80,6 +80,7 @@ ALLOWED_FIXED_PATCH_FIELDS = {
     "nombre", "monto_estimado", "periodicidad", "responsable", "vigente_desde",
     "tipo_proporcion", "proporcion_jd",
 }
+CATEGORY_TIPOS = ("Gasto", "Ingreso", "Inversión")
 
 _STATUS_TEXT = {
     200: "OK", 201: "Created",
@@ -168,10 +169,12 @@ class _App:
         ("PATCH", re.compile(r"^/api/fixed/(?P<id>\d+)$"), "update_fixed"),
         ("DELETE", re.compile(r"^/api/fixed/(?P<id>\d+)$"), "delete_fixed"),
         ("GET", re.compile(r"^/api/summary$"), "summary"),
+        ("GET", re.compile(r"^/api/categories$"), "list_categories"),
     )
     QUERY_FIELDS = {
         "list_expenses": {"month"}, "list_fixed": {"dateISO"},
         "fixed_range": {"fromISO", "toISO"}, "summary": {"month"},
+        "list_categories": {"tipo"},
     }
 
     def __init__(self, db_path, internal_secret):
@@ -801,6 +804,33 @@ class _App:
             "debt_pending_through_month": db.calcular_deudas_pendientes(conn, hasta_mes=month),
             "debt_status": db.calcular_estado_saldado_mes(conn, month),
         }
+
+    # --- categories --------------------------------------------------------
+
+    def list_categories(self, ctx, conn, start_response):
+        unknown = self._unknown_fields(ctx.query.keys(), {"tipo"})
+        if unknown:
+            return self._error(start_response, 400, "parámetros de query desconocidos.")
+        tipo = ctx.query_param("tipo")
+        if tipo not in CATEGORY_TIPOS:
+            return self._error(
+                start_response, 422,
+                "tipo es obligatorio y debe ser 'Gasto', 'Ingreso' o 'Inversión'.",
+            )
+        categories = []
+        index_by_categoria = {}
+        for row in db.get_categorias(conn, tipo):
+            categoria = row["categoria"]
+            if categoria not in index_by_categoria:
+                index_by_categoria[categoria] = len(categories)
+                categories.append({"categoria": categoria, "subcategorias": []})
+            subcategoria = row["subcategoria"]
+            if not subcategoria:
+                continue
+            subcategorias = categories[index_by_categoria[categoria]]["subcategorias"]
+            if subcategoria not in subcategorias:
+                subcategorias.append(subcategoria)
+        return self._json(start_response, 200, {"categories": categories})
 
 
 def create_app(db_path, internal_secret):

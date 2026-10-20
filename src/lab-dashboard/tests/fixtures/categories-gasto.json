@@ -1,0 +1,81 @@
+{
+  "categories": [
+    {
+      "categoria": "Hogar",
+      "subcategorias": [
+        "Alquiler",
+        "Expensas",
+        "Electricidad",
+        "Gas",
+        "Internet",
+        "Ferretería",
+        "Decoración",
+        "Limpieza",
+        "Mantenimiento",
+        "Electrodomesticos",
+        "Jardin"
+      ]
+    },
+    {
+      "categoria": "Comida",
+      "subcategorias": [
+        "Supermercado",
+        "Verdulería",
+        "Carnicería",
+        "Delivery",
+        "Almacén",
+        "Dietética",
+        "Kiosko"
+      ]
+    },
+    {
+      "categoria": "Entretenimiento",
+      "subcategorias": [
+        "Restaurantes",
+        "Bares",
+        "Cine/Teatro",
+        "Streaming",
+        "Eventos",
+        "Panaderias"
+      ]
+    },
+    {
+      "categoria": "Transporte",
+      "subcategorias": [
+        "Nafta",
+        "Peajes",
+        "SUBE",
+        "Mantenimiento vehículo",
+        "Uber",
+        "Estacionamiento"
+      ]
+    },
+    {
+      "categoria": "Salud",
+      "subcategorias": [
+        "Obra social",
+        "Farmacia",
+        "Consultas",
+        "Psicologo"
+      ]
+    },
+    {
+      "categoria": "Personal",
+      "subcategorias": [
+        "Ropa",
+        "Cuidado personal",
+        "Educación",
+        "Nube",
+        "Actividades físicas",
+        "Otros (Gastos)"
+      ]
+    },
+    {
+      "categoria": "Mascotas",
+      "subcategorias": [
+        "Veterinaria",
+        "Alimento"
+      ]
+    }
+  ]
+}

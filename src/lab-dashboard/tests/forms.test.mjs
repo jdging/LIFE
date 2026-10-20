@@ -4,7 +4,19 @@ import { runInNewContext } from 'node:vm';
 
 // Todos los registros de este archivo son SINTÉTICOS. No se llama a una API real.
 const source = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+const cssSource = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const summaryFixture = JSON.parse(readFileSync(new URL('./fixtures/api-summary-synthetic.json', import.meta.url), 'utf8'));
+const categoriesGastoFixture = JSON.parse(readFileSync(new URL('./fixtures/categories-gasto.json', import.meta.url), 'utf8'));
+
+// Card total gastos (t_ce790609 #1): no hay navegador en Node, así que se verifica
+// que la regla CSS exista (clamp fluido + wrap en vez de recorte/scroll). El
+// coordinador confirma visualmente en Chromium a 375px y desktop.
+const cardValueRule = cssSource.slice(cssSource.indexOf('.card .value {'), cssSource.indexOf('.card .value.muted {'));
+assert.match(cardValueRule, /font-size:\s*clamp\(/, 'El monto del card debe usar un tamaño de fuente fluido (clamp)');
+assert.match(cardValueRule, /overflow-wrap:\s*anywhere/, 'Debe poder partir un monto muy largo en vez de desbordar la card');
+const cardValueMutedRule = cssSource.slice(cssSource.indexOf('.card .value.muted {'), cssSource.indexOf('.card .value-sub {'));
+assert.match(cardValueMutedRule, /font-size:\s*clamp\(/, 'El valor "muted" (ej. proporción) también debe ser fluido');
+console.log('CSS: regla clamp + overflow-wrap de .card .value verificada (revisión visual pendiente en Chromium)');
 const slice = (from, to) => {
   const start = source.indexOf(from);
   const end = source.indexOf(to, start);
@@ -256,7 +268,7 @@ assert.match(api.describeForm('fixed-edit', customFixed, retainedCustom.payload)
 const markupApi = runInNewContext(`
 function todayLocalISO() { return '2026-10-17'; }
 const escapeHtml = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
-${slice('function formField(', 'function openForm(')}
+${slice('function formField(', 'async function openForm(')}
 ({ formMarkup })`, { DATA: { gastos: [] } });
 const fixedMarkup = markupApi.formMarkup('fixed-edit', customFixed);
 assert.match(fixedMarkup, /id="field-responsable"/);
@@ -851,3 +863,376 @@ assert.match(ingresosLiveHtml, /aria-label="Dar de baja ingreso 31 de JD" >Dar d
 console.log('Formularios: rutas, payloads y lectura posterior verificados con fixture de API sintética');
 console.log('Modal: ciclo completo (guardar/cancelar/reabrir) y escape de XSS en detalle de fijos verificados');
 console.log('Revisor d2efc768: fallback de proporción, meses futuros con cuotas, historial de fijos e income-delete verificados');
+
+// ── CATÁLOGO DE CATEGORÍAS DE GASTO (t_ce790609 #2) ─────────────────────────
+// GET /api/categories?tipo=Gasto lo implementa otra tarea en paralelo; acá se
+// prueba el consumo: select de categoría + select dependiente de subcategoría,
+// caché en memoria durante la sesión, fallback a texto libre sin romper el
+// formulario, y escape de nombres maliciosos del catálogo.
+
+const expenseFormSliceSetup = `
+${slice('const escapeHtml = ', 'const fmtARS = ')}
+${slice('function todayLocalISO(', 'function firstAvailableDate(')}
+${slice('async function fetchJSON(', 'function requireList(')}
+${slice('function requireList(', 'const MAX_SQLITE_ID = ')}
+${slice('const MAX_SQLITE_ID = ', 'function adaptLiveMovement(')}
+${slice('async function loadCategoriasGasto(', 'async function loadAll(')}
+${slice('function formField(', 'function routeForForm(')}
+${slice('function routeForForm(', 'function showWriteNotice(')}
+`;
+// El listener real de Escape/Tab del modal (atado a #form-modal, no a una
+// función): se aparta en un slice propio para que solo lo use el harness de
+// carrera, que sí simula addEventListener/dispatch de verdad.
+const modalKeydownSlice = slice("document.getElementById('form-modal').addEventListener('keydown'", '// ── VISTA GASTOS');
+const raceExpenseFormSliceSetup = expenseFormSliceSetup + modalKeydownSlice;
+function makeExpenseFormHarness() {
+  const calls = [];
+  const postQueue = [];
+  let categoriesReply = null; // null/'throw' → sin red; { status, body } → respuesta mockeada
+  const mockFetch = async (path, options = {}) => {
+    calls.push({ path, options });
+    if (path === '/api/categories?tipo=Gasto') {
+      if (!categoriesReply || categoriesReply === 'throw') throw new Error('Sin red en prueba sintética');
+      const { status, body } = categoriesReply;
+      return { ok: status >= 200 && status < 300, status, json: async () => body };
+    }
+    const next = postQueue.shift();
+    if (!next) throw new Error(`Mock sin respuesta: ${path}`);
+    return { ok: next.status >= 200 && next.status < 300, status: next.status, json: async () => next.body };
+  };
+  const elements = new Map();
+  const element = (id) => {
+    if (!elements.has(id)) elements.set(id, { textContent: '', innerHTML: '', hidden: false, disabled: false,
+      value: '', focus() {}, addEventListener() {}, querySelector: () => ({ focus() {} }), querySelectorAll: () => [] });
+    return elements.get(id);
+  };
+  const document = { getElementById: element, querySelectorAll: () => [], activeElement: null };
+  const api = runInNewContext(`'use strict';
+    let liveMode = true, writePending = false, reloadPending = false, reloadFailed = false;
+    let activeForm = null, categoriesGastoCache = null, activeExpenseCatalog = null;
+    const DATA = { gastos: [], ingresos: [], fijos: [] };
+    ${expenseFormSliceSetup}
+    ({ openForm, closeForm, formMarkup, onExpenseCategoriaChange, collectForm, writeForm })`,
+    { document, fetch: mockFetch, Date, Number, Math, String, Array, Set,
+      FormData: class { constructor(target) { this.target = target; } entries() { return Object.entries(this.target.values || {}); } } });
+  return { api, calls, postQueue, element, setCategoriesReply(reply) { categoriesReply = reply; } };
+}
+
+// 1) Catálogo disponible: <select> poblado desde la fixture real, y caché en
+//    memoria (una sola llamada al endpoint aunque el form se abra dos veces).
+const successForm = makeExpenseFormHarness();
+successForm.setCategoriesReply({ status: 200, body: categoriesGastoFixture });
+await successForm.api.openForm('expense');
+const categoriasHtml = successForm.element('form-fields').innerHTML;
+assert.match(categoriasHtml, /<select id="field-categoria"/);
+assert.doesNotMatch(categoriasHtml, /list="expense-categories"/, 'Con catálogo disponible no debe quedar el datalist de texto libre');
+for (const entry of categoriesGastoFixture.categories) {
+  assert.match(categoriasHtml, new RegExp(`<option value="${entry.categoria}">${entry.categoria}</option>`),
+    `Falta la categoría "${entry.categoria}" del catálogo en el select`);
+}
+assert.equal(successForm.calls.filter((c) => c.path === '/api/categories?tipo=Gasto').length, 1);
+await successForm.api.openForm('expense');
+assert.equal(successForm.calls.filter((c) => c.path === '/api/categories?tipo=Gasto').length, 1,
+  'Una segunda apertura del form no debe repetir el fetch: caché en memoria durante la sesión');
+
+// 2) Subcategoría dependiente: solo muestra las de la categoría elegida, y se
+//    repuebla (no acumula) al cambiar de categoría.
+successForm.element('field-categoria').value = 'Hogar';
+successForm.api.onExpenseCategoriaChange();
+let subcatHtml = successForm.element('field-subcategoria').innerHTML;
+const hogarEntry = categoriesGastoFixture.categories.find((c) => c.categoria === 'Hogar');
+for (const sub of hogarEntry.subcategorias) assert.match(subcatHtml, new RegExp(`>${sub}<`));
+assert.doesNotMatch(subcatHtml, />Supermercado</, 'No debe mezclar subcategorías de otra categoría');
+
+successForm.element('field-categoria').value = 'Comida';
+successForm.api.onExpenseCategoriaChange();
+subcatHtml = successForm.element('field-subcategoria').innerHTML;
+assert.match(subcatHtml, />Supermercado</);
+assert.doesNotMatch(subcatHtml, />Alquiler</, 'Cambiar de categoría repuebla la subcategoría en vez de acumularla');
+assert.match(subcatHtml, /<option value="">Sin subcategoría<\/option>/);
+
+// 3) El payload de POST /api/expenses sigue igual: categoria/subcategoria
+//    elegidas desde el catálogo viajan como texto plano, sin tocar el contrato.
+const chosenExpenseValues = { fecha: '2026-10-05', monto: '45.50', categoria: 'Hogar',
+  subcategoria: 'Alquiler', descripcion_original: 'Alquiler de octubre', medio_pago: 'Transferencia',
+  pagado_por: 'Común', tarjeta_id: '', tipo_proporcion: 'dinamico', proporcion_jd: '50',
+  proporcion_pinki: '50', cuotas_total: '1' };
+const { payload: chosenPayload, errors: chosenErrors } = successForm.api.collectForm('expense', null, chosenExpenseValues);
+assert.equal(Object.keys(chosenErrors).length, 0);
+assert.equal(chosenPayload.categoria, 'Hogar');
+assert.equal(chosenPayload.subcategoria, 'Alquiler');
+successForm.postQueue.push({ status: 201, body: { expenses: [{ id: 501, ...chosenPayload }] } });
+await successForm.api.writeForm('expense', null, chosenPayload);
+const expensePostCall = successForm.calls.at(-1);
+assert.equal(expensePostCall.path, '/api/expenses');
+const expensePostBody = JSON.parse(expensePostCall.options.body);
+assert.equal(expensePostBody.categoria, 'Hogar');
+assert.equal(expensePostBody.subcategoria, 'Alquiler');
+
+// 4) Fallback a texto libre si el catálogo no carga (red/HTTP) o viene vacío:
+//    el formulario sigue usable, con un aviso breve, sin romperse.
+const fallbackForm = makeExpenseFormHarness();
+fallbackForm.setCategoriesReply('throw');
+await fallbackForm.api.openForm('expense');
+let fallbackHtml = fallbackForm.element('form-fields').innerHTML;
+assert.doesNotMatch(fallbackHtml, /<select id="field-categoria"/);
+assert.match(fallbackHtml, /id="field-categoria"[^>]*list="expense-categories"/);
+assert.match(fallbackHtml, /No se pudo cargar el catálogo de categorías/);
+
+fallbackForm.setCategoriesReply({ status: 200, body: { categories: [] } });
+await fallbackForm.api.openForm('expense');
+fallbackHtml = fallbackForm.element('form-fields').innerHTML;
+assert.doesNotMatch(fallbackHtml, /<select id="field-categoria"/, 'Un catálogo vacío también debe caer al texto libre');
+assert.match(fallbackHtml, /No se pudo cargar el catálogo de categorías/);
+
+// 5) Escape de XSS: nombres maliciosos de categoría/subcategoría del catálogo
+//    no deben crear elementos al pintarse en los <select>.
+const xssForm = makeExpenseFormHarness();
+const maliciousCategoria = '<img src=x onerror=alert(1)>';
+const maliciousSubcategoria = '<svg onload=alert(2)>';
+xssForm.setCategoriesReply({ status: 200, body: { categories: [{ categoria: maliciousCategoria, subcategorias: [maliciousSubcategoria] }] } });
+await xssForm.api.openForm('expense');
+const xssFieldsHtml = xssForm.element('form-fields').innerHTML;
+assert.doesNotMatch(xssFieldsHtml, /<img/i);
+assert.match(xssFieldsHtml, /&lt;img src=x onerror=alert\(1\)&gt;/);
+xssForm.element('field-categoria').value = maliciousCategoria;
+xssForm.api.onExpenseCategoriaChange();
+const xssSubHtml = xssForm.element('field-subcategoria').innerHTML;
+assert.doesNotMatch(xssSubHtml, /<svg/i);
+assert.match(xssSubHtml, /&lt;svg onload=alert\(2\)&gt;/);
+
+console.log('Categorías de gasto: select dependiente, caché en memoria, payload POST, fallback a texto y escape de XSS verificados');
+
+// ── CARRERA ASYNC EN openForm (revisor 3f12e4c8, t_ce790609 #1) ─────────────
+// openForm('expense') espera el catálogo con `await`. Si dos aperturas se
+// superponen, el modal se cierra antes de resolver, o se abre otro formulario
+// mientras el catálogo sigue pendiente, una resolución tardía (éxito o fallo)
+// nunca debe reconstruir el DOM ni tocar activeForm de una apertura que ya no
+// es la vigente. A diferencia de makeExpenseFormHarness, acá el fetch de
+// categorías queda deliberadamente pendiente hasta que el test lo resuelve,
+// para poder ordenar las resoluciones fuera de orden.
+function makeRaceExpenseHarness() {
+  const calls = [];
+  const deferredCategories = [];
+  const mockFetch = async (path, options = {}) => {
+    calls.push({ path, options });
+    if (path === '/api/categories?tipo=Gasto') {
+      return new Promise((resolve, reject) => { deferredCategories.push({ resolve, reject }); });
+    }
+    throw new Error(`Mock sin respuesta: ${path}`);
+  };
+  const elements = new Map();
+  // addEventListener REAL (no-op descartado): guarda los handlers para poder
+  // despachar un keydown 'Escape' de verdad sobre #form-modal, en vez de
+  // llamar closeForm() directamente desde el test.
+  const element = (id) => {
+    if (!elements.has(id)) elements.set(id, { textContent: '', innerHTML: '', hidden: false, disabled: false,
+      value: '', isConnected: true, listeners: {}, focus() { document.activeElement = this; },
+      addEventListener(type, handler) { (this.listeners[type] ||= []).push(handler); },
+      querySelector: () => ({ focus() { document.activeElement = this; } }), querySelectorAll: () => [] });
+    return elements.get(id);
+  };
+  const document = { getElementById: element, querySelectorAll: () => [], activeElement: null };
+  const api = runInNewContext(`'use strict';
+    let liveMode = true, writePending = false, reloadPending = false, reloadFailed = false;
+    let activeForm = null, categoriesGastoCache = null, activeExpenseCatalog = null, currentView = 'gastos';
+    const DATA = { gastos: [], ingresos: [], fijos: [] };
+    ${raceExpenseFormSliceSetup}
+    ({ openForm, closeForm, formMarkup, onExpenseCategoriaChange, collectForm, writeForm,
+       get activeForm() { return activeForm; },
+       get activeExpenseCatalog() { return activeExpenseCatalog; } })`,
+    { document, fetch: mockFetch, Date, Number, Math, String, Array, Set,
+      FormData: class { constructor(target) { this.target = target; } entries() { return Object.entries(this.target.values || {}); } } });
+  return {
+    api, calls, element, document,
+    categoriesRequests() { return deferredCategories.length; },
+    resolveAt(index, body) { deferredCategories[index].resolve({ ok: true, status: 200, json: async () => body }); },
+    rejectAt(index, err) { deferredCategories[index].reject(err || new Error('Sin red en prueba sintética (tardía)')); },
+    // Despacha un keydown 'Escape' real sobre #form-modal usando el handler
+    // que app.js registró de verdad vía addEventListener.
+    dispatchEscape() {
+      const modal = element('form-modal');
+      const event = { key: 'Escape', preventDefault() {}, currentTarget: modal };
+      (modal.listeners.keydown || []).forEach((handler) => handler(event));
+    },
+  };
+}
+
+// 1) Doble apertura de 'expense' con resoluciones fuera de orden: la segunda
+//    resuelve OK primero; después, la primera falla tarde. La UI y el
+//    activeForm de la segunda deben quedar intactos, sin caer al fallback.
+const race1 = makeRaceExpenseHarness();
+const open1 = race1.api.openForm('expense');
+const open2 = race1.api.openForm('expense');
+assert.equal(race1.categoriesRequests(), 2, 'Dos aperturas en carrera deben disparar dos pedidos de catálogo');
+
+race1.resolveAt(1, categoriesGastoFixture);
+await open2;
+const htmlAfterSecond = race1.element('form-fields').innerHTML;
+assert.match(htmlAfterSecond, /<select id="field-categoria"/, 'La segunda apertura debe pintar el catálogo recibido');
+assert.equal(race1.element('form-modal').hidden, false);
+assert.equal(race1.api.activeForm.kind, 'expense');
+assert.equal(race1.api.activeForm.confirmed, false);
+assert.equal(Array.from(race1.api.activeExpenseCatalog).length, categoriesGastoFixture.categories.length);
+const activeFormSnapshotAfterSecond = JSON.stringify(race1.api.activeForm);
+const focusAfterSecond = race1.document.activeElement;
+assert.ok(focusAfterSecond, 'La segunda apertura exitosa debe mover el foco dentro del modal');
+
+race1.rejectAt(0, new Error('Sin red en prueba sintética (tardía)'));
+await open1;
+assert.equal(race1.element('form-fields').innerHTML, htmlAfterSecond,
+  'El fallo tardío de la primera apertura no debe reemplazar el formulario de la segunda por el fallback de texto libre');
+assert.doesNotMatch(race1.element('form-fields').innerHTML, /No se pudo cargar el catálogo/,
+  'No debe aparecer el aviso de fallback por una apertura que ya no es la vigente');
+assert.equal(race1.element('form-modal').hidden, false);
+assert.equal(JSON.stringify(race1.api.activeForm), activeFormSnapshotAfterSecond,
+  'activeForm de la segunda apertura debe quedar intacto ante el fallo tardío de la primera');
+assert.equal(race1.document.activeElement, focusAfterSecond, 'Un fallo tardío no debe robar el foco de la apertura vigente');
+
+// 2) Cancelar (closeForm(), como hace el click real de #form-close) antes de
+//    que resuelva el catálogo: la resolución tardía no debe reabrirlo ni
+//    modificar nada, y el foco debe haber vuelto al disparador original.
+const race2 = makeRaceExpenseHarness();
+const trigger = race2.element('add-expense-btn');
+race2.document.activeElement = trigger;
+const open3 = race2.api.openForm('expense');
+assert.equal(race2.categoriesRequests(), 1);
+assert.equal(race2.api.activeForm.returnFocus, trigger, 'openForm debe recordar el foco de origen');
+race2.api.closeForm();
+assert.equal(race2.element('form-modal').hidden, true);
+assert.equal(race2.api.activeForm, null);
+assert.equal(race2.document.activeElement, trigger, 'Cerrar (Escape) antes de resolver el catálogo debe devolver el foco al disparador');
+const fieldsHtmlBeforeLateResolve = race2.element('form-fields').innerHTML;
+
+race2.resolveAt(0, categoriesGastoFixture);
+await open3;
+assert.equal(race2.element('form-modal').hidden, true, 'Una resolución tardía no debe reabrir el modal');
+assert.equal(race2.element('form-fields').innerHTML, fieldsHtmlBeforeLateResolve,
+  'Una resolución tardía no debe reconstruir el formulario tras cerrar el modal');
+assert.equal(race2.api.activeForm, null, 'activeForm sigue en null: la apertura cerrada no se reinstala');
+assert.equal(race2.document.activeElement, trigger, 'La resolución tardía no debe robar el foco tras cerrar');
+
+// 3) Abrir otro formulario (ingreso) mientras el catálogo de gasto sigue
+//    pendiente: la resolución tardía no debe pisar el formulario vigente.
+const race3 = makeRaceExpenseHarness();
+const open4 = race3.api.openForm('expense');
+assert.equal(race3.categoriesRequests(), 1);
+race3.api.openForm('income');
+assert.equal(race3.element('form-title').textContent, 'Agregar ingreso');
+const incomeHtml = race3.element('form-fields').innerHTML;
+assert.match(incomeHtml, /id="field-persona"/);
+assert.equal(race3.api.activeForm.kind, 'income');
+
+race3.resolveAt(0, categoriesGastoFixture);
+await open4;
+assert.equal(race3.element('form-title').textContent, 'Agregar ingreso',
+  'El título debe seguir siendo el del formulario vigente (ingreso)');
+assert.equal(race3.element('form-fields').innerHTML, incomeHtml,
+  'El formulario de ingreso no debe reemplazarse por el de gasto cuando el catálogo resuelve tarde');
+assert.equal(race3.api.activeForm.kind, 'income');
+
+// 4) Escape REAL (keydown, no closeForm() directo) con el catálogo pendiente:
+//    el modal debe estar visible en estado de carga desde el primer instante
+//    (antes de que el catálogo resuelva), con foco dentro del modal y sin
+//    campos ni submit habilitados. El keydown debe pasar por el listener que
+//    app.js registró de verdad sobre #form-modal.
+const race4 = makeRaceExpenseHarness();
+const trigger4 = race4.element('add-expense-btn');
+race4.document.activeElement = trigger4;
+const open5 = race4.api.openForm('expense');
+assert.equal(race4.element('form-modal').hidden, false,
+  'El modal debe mostrarse de inmediato en estado de carga, sin esperar el catálogo');
+assert.match(race4.element('form-fields').innerHTML, /Cargando categorías/);
+assert.doesNotMatch(race4.element('form-fields').innerHTML, /<select|<input/,
+  'Durante la carga no debe haber campos editables');
+assert.equal(race4.element('form-submit').disabled, true, 'Sin submit habilitado durante la carga');
+assert.equal(race4.element('form-close').disabled, false, 'Cancelar debe quedar habilitado durante la carga');
+assert.equal(race4.document.activeElement, race4.element('form-close'),
+  'El foco debe quedar dentro del modal (en Cancelar) mientras carga el catálogo');
+
+race4.dispatchEscape();
+assert.equal(race4.element('form-modal').hidden, true, 'Escape real debe cerrar el modal con el catálogo pendiente');
+assert.equal(race4.api.activeForm, null, 'Escape invalida la apertura pendiente (activeForm = null)');
+assert.equal(race4.document.activeElement, trigger4, 'Escape debe devolver el foco al disparador original');
+const fieldsHtmlAfterEscape = race4.element('form-fields').innerHTML;
+
+race4.resolveAt(0, categoriesGastoFixture);
+await open5;
+assert.equal(race4.element('form-modal').hidden, true,
+  'La resolución tardía exitosa de una apertura cancelada con Escape no debe reabrir el modal');
+assert.equal(race4.element('form-fields').innerHTML, fieldsHtmlAfterEscape,
+  'No debe reconstruir el formulario tras un Escape real');
+assert.equal(race4.api.activeForm, null);
+assert.equal(race4.document.activeElement, trigger4, 'La resolución tardía no debe robar el foco tras Escape');
+
+// 5) Igual, pero el catálogo falla tarde después del Escape real: tampoco
+//    debe reabrir el modal ni mostrar el aviso de fallback.
+const race5 = makeRaceExpenseHarness();
+const trigger5 = race5.element('add-expense-btn');
+race5.document.activeElement = trigger5;
+const open6 = race5.api.openForm('expense');
+race5.dispatchEscape();
+assert.equal(race5.element('form-modal').hidden, true);
+const fieldsHtmlAfterEscape5 = race5.element('form-fields').innerHTML;
+
+race5.rejectAt(0, new Error('Sin red en prueba sintética (tardía)'));
+await open6;
+assert.equal(race5.element('form-modal').hidden, true, 'Un fallo tardío tras Escape no debe reabrir el modal');
+assert.equal(race5.element('form-fields').innerHTML, fieldsHtmlAfterEscape5,
+  'Un fallo tardío tras Escape no debe reconstruir el DOM');
+assert.doesNotMatch(race5.element('form-fields').innerHTML, /No se pudo cargar el catálogo/,
+  'No debe aparecer el aviso de fallback por una apertura ya cancelada');
+assert.equal(race5.api.activeForm, null);
+assert.equal(race5.document.activeElement, trigger5, 'El fallo tardío no debe robar el foco tras Escape');
+
+// 6) Doble apertura con catálogo pendiente (revisor bdc70c13, t_ce790609): la
+//    primera apertura mueve el foco a Cancelar mientras carga; una segunda
+//    openForm('expense') disparada en ese estado NO debe tomar Cancelar como
+//    disparador. El returnFocus debe seguir siendo "Agregar gasto", y Escape
+//    real debe devolver el foco ahí.
+const race6 = makeRaceExpenseHarness();
+const trigger6 = race6.element('add-expense-btn');
+race6.document.activeElement = trigger6;
+const open7 = race6.api.openForm('expense');
+assert.equal(race6.api.activeForm.returnFocus, trigger6, 'Primera apertura debe recordar el disparador original');
+assert.equal(race6.document.activeElement, race6.element('form-close'), 'La primera apertura mueve el foco a Cancelar mientras carga');
+
+const open8 = race6.api.openForm('expense');
+assert.equal(race6.categoriesRequests(), 2, 'La segunda apertura dispara un segundo pedido de catálogo');
+assert.equal(race6.api.activeForm.returnFocus, trigger6,
+  'Una segunda apertura con el modal ya abierto debe conservar el returnFocus original, no Cancelar');
+
+race6.dispatchEscape();
+assert.equal(race6.element('form-modal').hidden, true, 'Escape real debe cerrar el modal con dos aperturas pendientes');
+assert.equal(race6.api.activeForm, null);
+assert.equal(race6.document.activeElement, trigger6, 'Escape con dos aperturas pendientes debe devolver el foco al disparador original');
+
+race6.resolveAt(0, categoriesGastoFixture);
+race6.resolveAt(1, categoriesGastoFixture);
+await open7;
+await open8;
+assert.equal(race6.element('form-modal').hidden, true, 'Resoluciones tardías de ambas aperturas no deben reabrir el modal');
+assert.equal(race6.document.activeElement, trigger6, 'El foco sigue en el disparador original tras las resoluciones tardías');
+
+// 7) Igual, pero cerrando con Cancelar (closeForm()) en vez de Escape.
+const race7 = makeRaceExpenseHarness();
+const trigger7 = race7.element('add-expense-btn');
+race7.document.activeElement = trigger7;
+const open9 = race7.api.openForm('expense');
+const open10 = race7.api.openForm('expense');
+assert.equal(race7.api.activeForm.returnFocus, trigger7,
+  'Una segunda apertura con el modal ya abierto debe conservar el returnFocus original ante Cancelar también');
+
+race7.api.closeForm();
+assert.equal(race7.element('form-modal').hidden, true);
+assert.equal(race7.api.activeForm, null);
+assert.equal(race7.document.activeElement, trigger7, 'Cancelar con dos aperturas pendientes debe devolver el foco al disparador original');
+
+race7.resolveAt(0, categoriesGastoFixture);
+race7.resolveAt(1, categoriesGastoFixture);
+await open9;
+await open10;
+assert.equal(race7.element('form-modal').hidden, true, 'Resoluciones tardías tras Cancelar no deben reabrir el modal');
+assert.equal(race7.document.activeElement, trigger7, 'El foco sigue en el disparador original tras las resoluciones tardías');
+
+console.log('openForm: carrera entre aperturas de gasto resuelta por identidad (no por kind); cierre/Cancelar y apertura de otro formulario durante el await del catálogo, Escape real con estado de carga, y preservación del returnFocus original ante doble apertura, verificados');
