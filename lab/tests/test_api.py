@@ -77,6 +77,14 @@ class ApiTest(unittest.TestCase):
         payload.update(changes)
         return payload
 
+    def inventory(self, **changes):
+        payload = {
+            "nombre": "Notebook", "categoria": "Electrónica", "ubicacion": "Oficina",
+            "valor_estimado": 500, "fecha_adquisicion": "2026-03-01",
+        }
+        payload.update(changes)
+        return payload
+
     def fixed(self, **changes):
         payload = {
             "nombre": "Alquiler", "monto_estimado": 200,
@@ -95,7 +103,7 @@ class ApiTest(unittest.TestCase):
         status, body, headers = self.request("GET", "/api/health")
         self.assertEqual(status, 200)
         self.assertEqual(body, {
-            "ok": True, "capabilities": ["expenses", "income", "fixed"], "mode": "live",
+            "ok": True, "capabilities": ["expenses", "income", "fixed", "inventory"], "mode": "live",
         })
         self.assertTrue(headers["Content-Type"].startswith("application/json"))
         self.assertEqual(headers["Cache-Control"], "no-store")

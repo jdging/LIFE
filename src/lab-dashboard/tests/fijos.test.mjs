@@ -164,8 +164,8 @@ assert.match(canvas.error.textContent, /Chart\.js no cargó/);
 assert.equal((source.match(/new Chart\(/g) || []).length, 2, 'Sólo el helper y Fijos instancian Chart.js');
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-assert.equal((html.match(/role="tab"/g) || []).length, 5);
-assert.equal((html.match(/role="tab"[^>]*tabindex="-1"/g) || []).length, 4);
+assert.equal((html.match(/role="tab"/g) || []).length, 6);
+assert.equal((html.match(/role="tab"[^>]*tabindex="-1"/g) || []).length, 5);
 assert.match(source, /event\.key === 'ArrowRight'/);
 assert.match(source, /event\.key === 'ArrowLeft'/);
 assert.match(source, /event\.key === 'Home'/);

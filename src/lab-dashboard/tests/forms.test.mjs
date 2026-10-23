@@ -72,6 +72,7 @@ function cuotaLabel(row) { return row.cuota_nro + '/' + row.cuotas_total; }
 // falso "quedó en snapshot" en vez de ver la causa.
 const api = runInNewContext(`${prelude}
 ${slice('const MESES_LARGO = ', 'const MESES_CORTO = ')}
+${slice('const INVENTARIO_ESTADOS = ', 'const iconFor = ')}
 ${slice('const capitalize = ', 'const fmtARS = ')}
 ${slice('function todayLocalISO(', 'function shortMonth(')}
 ${slice('async function fetchJSON(', 'async function loadSnapshot(')}
@@ -90,7 +91,7 @@ ${slice('function renderDeudaCard(', 'function renderComposicion(')}
    saveAndReload, handleRetryReload, fijosVersionVigente, fijosHistorial, fijosTramos, fijosEvolutionData, adaptSummary,
    adaptCurrentDebt, getRowPct, fixedAllocation, getMonthProportion, renderDeudaCard,
    computePeriod, monthsWithData, todayLocalISO, filterGastosPeriod, filterCuotasComprometidas,
-   get state() { return { liveMode, authState, reloadFailed, snapshotCount, renderCount, period }; } })`,
+   get state() { return { liveMode, authState, reloadFailed, snapshotCount, renderCount, period, inventoryAvailable }; } })`,
 { fetch, document, Date, Number, Math });
 
 const expense = { id: 21, fecha: '2026-10-05T12:00:00', monto: 30, categoria: 'Comida',
@@ -1236,3 +1237,457 @@ assert.equal(race7.element('form-modal').hidden, true, 'Resoluciones tardías tr
 assert.equal(race7.document.activeElement, trigger7, 'El foco sigue en el disparador original tras las resoluciones tardías');
 
 console.log('openForm: carrera entre aperturas de gasto resuelta por identidad (no por kind); cierre/Cancelar y apertura de otro formulario durante el await del catálogo, Escape real con estado de carga, y preservación del returnFocus original ante doble apertura, verificados');
+
+// ── INVENTARIO (S4 cierre) ───────────────────────────────────────────────
+// inventoryAvailable es independiente de liveMode: si /api/health no declara
+// la capability 'inventory', el resto del dashboard sigue en vivo y solo la
+// pestaña Inventario queda en solo lectura/aviso (ver updateAvailability).
+reply('/api/health', 200, { ok: true, mode: 'live', capabilities: ['expenses', 'income', 'fixed'] });
+liveReplies();
+await api.loadAll();
+assert.equal(api.state.liveMode, true, 'Sin la capability inventory el resto del dashboard debe seguir en vivo');
+assert.equal(api.state.inventoryAvailable, false);
+assert.equal(api.DATA.inventario.length, 0);
+assert.equal(element('inventario-notice').hidden, false);
+assert.match(element('inventario-notice').textContent, /inventory/);
+assert.equal(calls.filter((call) => call.path === '/api/inventory').length, 0,
+  'Sin la capability inventory no debe pedirse /api/inventory');
+
+const inventoryItem = { id: 101, nombre: 'Notebook ThinkPad', categoria: 'Electrónica',
+  ubicacion: 'Living', valor_estimado: 450000, fecha_adquisicion: '2024-03-01', notas: 'Comprada usada' };
+reply('/api/health', 200, { ok: true, mode: 'live', capabilities: ['expenses', 'income', 'fixed', 'inventory'] });
+liveReplies();
+reply('/api/inventory', 200, { inventory: [inventoryItem] });
+await api.loadAll();
+assert.equal(api.state.liveMode, true);
+assert.equal(api.state.inventoryAvailable, true);
+assert.equal(api.DATA.inventario.length, 1);
+assert.equal(api.DATA.inventario[0].id, '101');
+assert.equal(element('inventario-notice').hidden, true);
+
+// Restablecer el estado "sin inventory" para no afectar al resto de las pruebas de api.loadAll.
+reply('/api/health', 200, { ok: true, mode: 'live', capabilities: ['expenses', 'income', 'fixed'] });
+liveReplies();
+await api.loadAll();
+
+// Payloads (POST/PATCH/DELETE) con funciones reales de collectForm/describeForm/routeForForm/writeForm.
+// Campos de paridad con el legacy (t_0e38e74e): precio_ars, cotizacion_usd_compra,
+// precio_usd_compra, proporcion_jd, precio_venta_estimado_usd, estado.
+const inventoryValues = { nombre: 'Notebook ThinkPad', categoria: 'Electrónica', ubicacion: 'Living',
+  valor_estimado: '450000', fecha_adquisicion: '2024-03-01', notas: 'Comprada usada',
+  precio_ars: '450000', cotizacion_usd_compra: '900', precio_usd_compra: '500',
+  precio_venta_estimado_usd: '400', proporcion_jd: '60', estado: 'Activo' };
+const collectedInventory = api.collectForm('inventory', null, inventoryValues);
+assert.equal(Object.keys(collectedInventory.errors).length, 0);
+assert.equal(collectedInventory.payload.nombre, 'Notebook ThinkPad');
+assert.equal(collectedInventory.payload.valor_estimado, 450000);
+assert.equal(collectedInventory.payload.precio_ars, 450000);
+assert.equal(collectedInventory.payload.cotizacion_usd_compra, 900);
+assert.equal(collectedInventory.payload.precio_usd_compra, 500);
+assert.equal(collectedInventory.payload.precio_venta_estimado_usd, 400);
+assert.equal(collectedInventory.payload.proporcion_jd, 60);
+assert.equal(collectedInventory.payload.estado, 'Activo');
+assert.ok(api.collectForm('inventory', null, { ...inventoryValues, nombre: '  ' }).errors.nombre);
+assert.ok(api.collectForm('inventory', null, { ...inventoryValues, valor_estimado: '-5' }).errors.valor_estimado);
+assert.ok(api.collectForm('inventory', null, { ...inventoryValues, valor_estimado: '0' }).errors.valor_estimado);
+assert.ok(api.collectForm('inventory', null, { ...inventoryValues, fecha_adquisicion: 'no-es-fecha' }).errors.fecha_adquisicion);
+assert.ok(api.collectForm('inventory', null, { ...inventoryValues, estado: 'Perdido' }).errors.estado,
+  'Un estado fuera de INVENTARIO_ESTADOS debe rechazarse');
+assert.ok(api.collectForm('inventory', null, { ...inventoryValues, proporcion_jd: '150' }).errors.proporcion_jd);
+assert.ok(api.collectForm('inventory', null, { ...inventoryValues, proporcion_jd: '-1' }).errors.proporcion_jd);
+assert.ok(api.collectForm('inventory', null, { ...inventoryValues, precio_ars: '-1' }).errors.precio_ars);
+assert.ok(api.collectForm('inventory', null, { ...inventoryValues, cotizacion_usd_compra: 'no-es-numero' }).errors.cotizacion_usd_compra);
+// Los montos opcionales de paridad admiten 0 (a diferencia de valor_estimado, que no).
+const zeroMoney = api.collectForm('inventory', null, { ...inventoryValues, precio_usd_compra: '0' });
+assert.equal(Object.keys(zeroMoney.errors).length, 0);
+assert.equal(zeroMoney.payload.precio_usd_compra, 0);
+const collectedInventoryNoFecha = api.collectForm('inventory', null,
+  { ...inventoryValues, fecha_adquisicion: '', precio_ars: '', cotizacion_usd_compra: '', precio_usd_compra: '',
+    precio_venta_estimado_usd: '', proporcion_jd: '', estado: '' });
+assert.equal(Object.keys(collectedInventoryNoFecha.errors).length, 0);
+for (const field of ['fecha_adquisicion', 'precio_ars', 'cotizacion_usd_compra', 'precio_usd_compra',
+  'precio_venta_estimado_usd', 'proporcion_jd', 'estado']) {
+  assert.equal(field in collectedInventoryNoFecha.payload, false,
+    `${field} es opcional: vacío no debe viajar en el payload`);
+}
+
+// Edición (t_0e38e74e, hallazgo 3 del revisor 46d4f3d5): vaciar un campo
+// opcional en 'inventory-edit' debe mandar `null` explícito para que el
+// PATCH lo borre, a diferencia del alta (arriba), que sigue omitiéndolo.
+const inventoryRowParaEdicion = { id: largeId, nombre: 'Notebook ThinkPad' };
+const collectedInventoryEditVaciado = api.collectForm('inventory-edit', inventoryRowParaEdicion,
+  { ...inventoryValues, categoria: '', ubicacion: '', fecha_adquisicion: '', notas: '',
+    precio_ars: '', cotizacion_usd_compra: '', precio_usd_compra: '',
+    precio_venta_estimado_usd: '', proporcion_jd: '' });
+assert.equal(Object.keys(collectedInventoryEditVaciado.errors).length, 0);
+for (const field of ['categoria', 'ubicacion', 'fecha_adquisicion', 'notas', 'precio_ars',
+  'cotizacion_usd_compra', 'precio_usd_compra', 'precio_venta_estimado_usd', 'proporcion_jd']) {
+  assert.equal(collectedInventoryEditVaciado.payload[field], null,
+    `${field} vaciado en una edición debe mandar null explícito, no omitirse`);
+}
+// 'estado' no tiene forma de quedar vacío en la UI (es un <select> con default
+// 'Activo'); se sigue mandando tal cual, sin lógica de null para este campo.
+assert.equal(collectedInventoryEditVaciado.payload.estado, 'Activo');
+
+const inventoryRow = { id: largeId, nombre: 'Notebook ThinkPad', categoria: 'Electrónica',
+  ubicacion: 'Living', valor_estimado: 450000, fecha_adquisicion: '2024-03-01', notas: 'Comprada usada',
+  estado: 'Vendido' };
+assert.match(api.describeForm('inventory', null, collectedInventory.payload), /Notebook ThinkPad/);
+assert.match(api.describeForm('inventory', null, collectedInventory.payload), /Estado Activo/);
+assert.match(api.describeForm('inventory', null, collectedInventory.payload), /U\$D 500 de compra/);
+assert.match(api.describeForm('inventory', null, collectedInventory.payload), /60% JD \/ 40% Pinki/);
+assert.match(api.describeForm('inventory-delete', inventoryRow, null), /Notebook ThinkPad/);
+assert.match(api.describeForm('inventory-delete', inventoryRow, null), /450000/);
+assert.match(api.describeForm('inventory-delete', inventoryRow, null), /estado Vendido/);
+assert.equal(api.routeForForm('inventory', null)[0], 'POST');
+assert.equal(api.routeForForm('inventory', null)[1], '/api/inventory');
+assert.equal(api.routeForForm('inventory-edit', { id: largeId })[1], `/api/inventory/${encodeURIComponent(largeId)}`);
+assert.equal(api.routeForForm('inventory-delete', { id: maxId })[1], `/api/inventory/${encodeURIComponent(maxId)}`);
+assert.throws(() => api.routeForForm('inventory-delete', { id: 9007199254740992 }), /inseguro/,
+  'El ID como string debe pasar por canonicalId también para inventario');
+
+reply('/api/inventory', 201, { inventory: { ...inventoryRow, id: largeId } });
+await api.writeForm('inventory', null, collectedInventory.payload);
+let inventoryCall = calls.at(-1);
+assert.equal(inventoryCall.path, '/api/inventory');
+assert.equal(inventoryCall.options.method, 'POST');
+assert.equal(inventoryCall.options.credentials, 'same-origin');
+assert.deepEqual(JSON.parse(inventoryCall.options.body), JSON.parse(JSON.stringify(collectedInventory.payload)));
+const sentInventoryBody = JSON.parse(inventoryCall.options.body);
+assert.equal(typeof sentInventoryBody.precio_ars, 'number');
+assert.equal(typeof sentInventoryBody.proporcion_jd, 'number');
+assert.equal(sentInventoryBody.estado, 'Activo');
+
+const collectedInventoryEdit = api.collectForm('inventory-edit', inventoryRow,
+  { ...inventoryValues, valor_estimado: '500000', estado: 'Vendido', proporcion_jd: '25' });
+reply(`/api/inventory/${largeId}`, 200, { inventory: { ...inventoryRow, valor_estimado: 500000, estado: 'Vendido' } });
+await api.writeForm('inventory-edit', inventoryRow, collectedInventoryEdit.payload);
+inventoryCall = calls.at(-1);
+assert.equal(inventoryCall.path, `/api/inventory/${largeId}`);
+assert.equal(inventoryCall.options.method, 'PATCH');
+assert.equal(JSON.parse(inventoryCall.options.body).valor_estimado, 500000);
+assert.equal(JSON.parse(inventoryCall.options.body).estado, 'Vendido');
+assert.equal(JSON.parse(inventoryCall.options.body).proporcion_jd, 25);
+
+reply(`/api/inventory/${largeId}`, 200, { inventory: { ...inventoryRow, fecha_adquisicion: null, precio_ars: null } });
+await api.writeForm('inventory-edit', inventoryRow, collectedInventoryEditVaciado.payload);
+inventoryCall = calls.at(-1);
+const vaciadoBody = JSON.parse(inventoryCall.options.body);
+assert.equal(vaciadoBody.fecha_adquisicion, null, 'El PATCH debe mandar null explícito, no omitir el campo vaciado');
+assert.equal(vaciadoBody.precio_ars, null);
+
+reply(`/api/inventory/${largeId}`, 200, { deleted: true, id: largeId });
+await api.writeForm('inventory-delete', inventoryRow, null);
+inventoryCall = calls.at(-1);
+assert.equal(inventoryCall.path, `/api/inventory/${largeId}`);
+assert.equal(inventoryCall.options.method, 'DELETE');
+assert.equal('body' in inventoryCall.options, false);
+
+console.log('Inventario: campos de paridad con el legacy (precio_ars, cotizacion_usd_compra, precio_usd_compra, proporcion_jd, precio_venta_estimado_usd, estado), validaciones de rango y escritura (POST/PATCH/DELETE) verificados con las funciones reales de app.js');
+
+// Sugerencia de USD de compra = ARS / cotización: no debe pisar un valor
+// ingresado a mano (t_0e38e74e, hallazgo 4 del revisor 46d4f3d5). Funciones
+// REALES de app.js (onInventoryUsdSugerido/onInventoryUsdEdited), con el
+// flag `inventoryUsdEditedManually` expuesto para asertar su estado.
+const usdFields = new Map([
+  ['field-precio_ars', { value: '' }],
+  ['field-cotizacion_usd_compra', { value: '' }],
+  ['field-precio_usd_compra', { value: '' }],
+]);
+const usdSugeridoApi = runInNewContext(`
+let inventoryUsdEditedManually = false;
+${slice('function onInventoryUsdSugerido(', 'function validFixedPercent(')}
+({ onInventoryUsdSugerido, onInventoryUsdEdited,
+   get manual() { return inventoryUsdEditedManually; },
+   set manual(v) { inventoryUsdEditedManually = v; } })`,
+  { document: { getElementById: (id) => usdFields.get(id) || null }, Number });
+
+usdFields.get('field-precio_ars').value = '1000';
+usdFields.get('field-cotizacion_usd_compra').value = '1000';
+usdSugeridoApi.onInventoryUsdSugerido();
+assert.equal(usdFields.get('field-precio_usd_compra').value, '1.00',
+  'Con el campo USD vacío, debe sugerir ARS / cotización');
+assert.equal(usdSugeridoApi.manual, false);
+
+// El usuario edita el USD a mano: no debe pisarse aunque cambien ARS/cotización.
+usdSugeridoApi.onInventoryUsdEdited();
+assert.equal(usdSugeridoApi.manual, true);
+usdFields.get('field-precio_usd_compra').value = '500';
+usdFields.get('field-precio_ars').value = '2000';
+usdSugeridoApi.onInventoryUsdSugerido();
+assert.equal(usdFields.get('field-precio_usd_compra').value, '500',
+  'Un USD editado a mano no debe pisarse al cambiar ARS/cotización, aunque el campo tenga contenido');
+
+// Si el usuario vacía el USD después de haberlo editado a mano, la
+// sugerencia vuelve a completarlo (campo vacío siempre dispara la sugerencia).
+usdFields.get('field-precio_usd_compra').value = '';
+usdSugeridoApi.onInventoryUsdSugerido();
+assert.equal(usdFields.get('field-precio_usd_compra').value, '2.00');
+
+console.log('Inventario: la sugerencia de USD de compra no pisa un valor editado a mano (onInventoryUsdSugerido/onInventoryUsdEdited) verificado con las funciones reales de app.js');
+
+// Fix al hallazgo 3 del revisor fc195491: si el bien ya tiene
+// precio_usd_compra != null al abrir el formulario de edición,
+// inventoryUsdEditedManually debe iniciar en `true` (no se autosugiere).
+// Solo se parte de `false` si el campo está vacío. Funciones REALES de
+// app.js (openForm/onInventoryUsdSugerido), con el flag expuesto.
+const usdPrefillElements = new Map();
+const usdPrefillElement = (id) => {
+  if (!usdPrefillElements.has(id)) usdPrefillElements.set(id, { textContent: '', innerHTML: '',
+    hidden: false, disabled: false, value: '', focus() {}, addEventListener() {},
+    querySelector: () => ({ focus() {} }), querySelectorAll: () => [] });
+  return usdPrefillElements.get(id);
+};
+const usdPrefillDocument = { getElementById: usdPrefillElement, querySelectorAll: () => [], activeElement: null };
+const bienConUsdPrecargado = { id: 201, nombre: 'Bien con USD precargado', categoria: 'Hogar',
+  precio_usd_compra: 500, precio_ars: 450000, cotizacion_usd_compra: 900, proporcion_jd: 50 };
+const bienSinUsd = { id: 202, nombre: 'Bien sin USD', categoria: 'Hogar',
+  precio_usd_compra: null, precio_ars: 450000, cotizacion_usd_compra: 900, proporcion_jd: 50 };
+const usdPrefillApi = runInNewContext(`
+let activeForm = null;
+let liveMode = true, writePending = false, reloadPending = false, reloadFailed = false, inventoryAvailable = true;
+const DATA = { gastos: [], ingresos: [], fijos: [], inventario: [bienConUsdPrecargado, bienSinUsd] };
+${slice('const MAX_SQLITE_ID = ', 'function adaptLiveMovement(')}
+${slice('const INVENTARIO_ESTADOS = ', 'const iconFor = ')}
+${slice('const escapeHtml = ', 'const fmtARS = ')}
+let inventoryUsdEditedManually = false;
+${slice('function formField(', 'function closeForm(')}
+${slice('function syncCustomProportion(', 'function validMoney(')}
+({ openForm, onInventoryUsdSugerido,
+   get manual() { return inventoryUsdEditedManually; } })`,
+  { document: usdPrefillDocument, bienConUsdPrecargado, bienSinUsd, Number });
+
+await usdPrefillApi.openForm('inventory-edit', 201);
+assert.equal(usdPrefillApi.manual, true,
+  'Con precio_usd_compra != null precargado, inventoryUsdEditedManually debe iniciar en true');
+usdPrefillElement('field-precio_ars').value = '999999';
+usdPrefillElement('field-cotizacion_usd_compra').value = '1';
+usdPrefillElement('field-precio_usd_compra').value = '500';
+usdPrefillApi.onInventoryUsdSugerido();
+assert.equal(usdPrefillElement('field-precio_usd_compra').value, '500',
+  'Un USD precargado al abrir el formulario no debe pisarse al cambiar ARS/cotización');
+
+await usdPrefillApi.openForm('inventory-edit', 202);
+assert.equal(usdPrefillApi.manual, false,
+  'Con el campo vacío (precio_usd_compra=null), inventoryUsdEditedManually debe iniciar en false y sí autosugerir');
+
+console.log('Inventario: inventoryUsdEditedManually se inicializa según precio_usd_compra precargado al editar (hallazgo 3 del revisor fc195491) verificado con openForm real de app.js');
+
+// Fix al hallazgo 4 del revisor fc195491: proporcion_jd=null en edición debe
+// quedar vacío con placeholder, nunca precargado en 50 — en el alta sigue el
+// default 50. Verificado directamente sobre formMarkup (función pura).
+const inventoryMarkupApi = runInNewContext(`
+function todayLocalISO() { return '2026-10-17'; }
+const escapeHtml = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+${slice('const INVENTARIO_ESTADOS = ', 'const iconFor = ')}
+${slice('function formField(', 'async function openForm(')}
+({ formMarkup })`, { DATA: { inventario: [] } });
+
+const bienSinProporcion = { id: 55, nombre: 'Bien sin dato', categoria: 'Hogar', proporcion_jd: null };
+const markupSinProporcion = inventoryMarkupApi.formMarkup('inventory-edit', bienSinProporcion);
+assert.match(markupSinProporcion, /id="field-proporcion_jd"[^>]*value=""/,
+  'proporcion_jd=null en edición no debe precargarse en 50');
+assert.match(markupSinProporcion, /placeholder="sin dato, 50\/50 por defecto en cálculos"/);
+
+const bienConProporcion = { id: 56, nombre: 'Bien con dato', categoria: 'Hogar', proporcion_jd: 30 };
+const markupConProporcion = inventoryMarkupApi.formMarkup('inventory-edit', bienConProporcion);
+assert.match(markupConProporcion, /id="field-proporcion_jd"[^>]*value="30"/);
+assert.doesNotMatch(markupConProporcion, /placeholder="sin dato/);
+
+const markupAlta = inventoryMarkupApi.formMarkup('inventory', null);
+assert.match(markupAlta, /id="field-proporcion_jd"[^>]*value="50"/,
+  'El alta sigue precargando el default 50, solo la edición respeta el null');
+
+console.log('Inventario: proporcion_jd=null en edición queda vacío con placeholder en vez de 50 (hallazgo 4 del revisor fc195491) verificado con formMarkup real de app.js');
+
+// ── INVENTARIO: cards (cotización + reparto JD/Pinki), filtro de estado y
+// escape de XSS en descripción/notas ────────────────────────────────────────
+// renderInventarioView y sus helpers (renderInventarioOptions, renderInventarioCards,
+// getInventarioCotizacion/setInventarioCotizacion, setInventarioFiltroEstado) se
+// verifican con las funciones REALES de app.js, no copias.
+const inventarioElements = new Map();
+const inventarioElement = (id) => {
+  if (!inventarioElements.has(id)) inventarioElements.set(id, { textContent: '', innerHTML: '', hidden: false, value: '' });
+  return inventarioElements.get(id);
+};
+const estadoFilterButtons = ['Activo', 'Vendido', 'Donado', 'Desechado', ''].map((estado) => ({
+  dataset: { estado }, active: false,
+  classList: { toggle(name, value) { if (name === 'active') this.owner.active = value; } },
+  setAttribute() {},
+}));
+estadoFilterButtons.forEach((b) => { b.classList.owner = b; });
+const inventarioDocument = {
+  getElementById: inventarioElement,
+  querySelectorAll: (selector) => selector === '#inventario-estado-filter .persona-btn' ? estadoFilterButtons : [],
+  activeElement: null,
+};
+const inventarioData = { inventario: [] };
+let inventarioStore = {};
+const inventarioLocalStorage = {
+  getItem: (key) => (key in inventarioStore ? inventarioStore[key] : null),
+  setItem: (key, value) => { inventarioStore[key] = String(value); },
+};
+const inventarioApi = runInNewContext(`
+let liveMode = true, inventoryAvailable = true, writePending = false, reloadPending = false, reloadFailed = false;
+let currentView = 'inventario', inventarioFiltroEstado = 'Activo';
+function fmtARS(value) { return '$' + value; }
+function fmtUSD(value) { return 'U$D ' + value; }
+${slice('const INVENTARIO_ESTADOS = ', 'const iconFor = ')}
+${slice('const escapeHtml = ', 'const fmtARS = ')}
+${slice('const MAX_SQLITE_ID = ', 'function adaptLiveMovement(')}
+${slice('function getInventarioCotizacion(', '// ── IMPRIMIR')}
+({ renderInventarioView, renderInventarioCards, setInventarioCotizacion, setInventarioFiltroEstado,
+   getInventarioCotizacion, setLive(v) { liveMode = v; }, setInventoryAvailable(v) { inventoryAvailable = v; },
+   get filtroEstado() { return inventarioFiltroEstado; } })`,
+  { document: inventarioDocument, DATA: inventarioData, localStorage: inventarioLocalStorage });
+
+const invItemJD = { id: 101, nombre: 'Notebook ThinkPad', categoria: 'Electrónica', ubicacion: 'Living',
+  valor_estimado: 450000, fecha_adquisicion: '2024-03-01', notas: 'Comprada usada',
+  precio_usd_compra: 500, proporcion_jd: 60, estado: 'Activo', precio_venta_estimado_usd: 420 };
+const invItemXss = { id: '102', nombre: 'Bicicleta <img src=x onerror=alert(1)>', categoria: 'Deporte',
+  ubicacion: '<svg onload=alert(2)>Garage', valor_estimado: 120000, fecha_adquisicion: '',
+  notas: '<script>alert(3)</script> cuidado con el freno',
+  precio_ars: 120000, cotizacion_usd_compra: 1000, estado: 'Vendido' };
+const invItemDonado = { id: 103, nombre: 'Silla rota', categoria: 'Hogar', ubicacion: 'Depósito',
+  valor_estimado: 30000, estado: 'Donado' };
+inventarioData.inventario = [invItemJD, invItemXss, invItemDonado];
+
+inventarioApi.setInventarioCotizacion('1000');
+assert.equal(inventarioApi.getInventarioCotizacion(), 1000);
+inventarioApi.renderInventarioView();
+
+// Barra de cotización (editable, persistida) + 4 cards con el reparto JD/Pinki,
+// filtro de estado "Activo" por defecto.
+assert.equal(inventarioApi.filtroEstado, 'Activo');
+assert.equal(inventarioElement('inv-total-usd').textContent, 'U$D 500');
+assert.equal(inventarioElement('inv-total-ars').textContent, '≈ $500000 ARS hoy');
+assert.equal(inventarioElement('inv-jd-usd').textContent, 'U$D 300');
+assert.equal(inventarioElement('inv-jd-ars').textContent, '≈ $300000 ARS hoy');
+assert.equal(inventarioElement('inv-pinki-usd').textContent, 'U$D 200');
+assert.equal(inventarioElement('inv-pinki-ars').textContent, '≈ $200000 ARS hoy');
+assert.equal(inventarioElement('inv-count-activos').textContent, '1');
+assert.match(inventarioElement('inv-count-sub').textContent, /1 bien activo/);
+assert.equal(inventarioElement('inventario-cotizacion-input').value, 1000);
+
+const inventarioHtml = inventarioElement('inventario-content').innerHTML;
+assert.match(inventarioHtml, /Notebook ThinkPad/);
+assert.doesNotMatch(inventarioHtml, /Bicicleta/, 'El filtro Activo por defecto debe excluir los bienes Vendidos/Donados');
+assert.match(inventarioHtml, /U\$D 500/);
+assert.match(inventarioHtml, /60%/);
+assert.match(inventarioHtml, /40%/);
+assert.match(inventarioHtml, /U\$D 420/, 'La reventa estimada debe listarse en la tabla');
+assert.match(inventarioHtml, /2024-03-01/);
+
+// Cambiar la cotización recalcula el ARS de las cards sin tocar el USD.
+inventarioApi.setInventarioCotizacion('2000');
+assert.equal(inventarioElement('inv-total-usd').textContent, 'U$D 500', 'El USD no depende de la cotización de hoy');
+assert.equal(inventarioElement('inv-total-ars').textContent, '≈ $1000000 ARS hoy');
+assert.equal(inventarioElement('inventario-cotizacion-input').value, 2000);
+// Una cotización inválida se ignora y conserva la anterior.
+inventarioApi.setInventarioCotizacion('-5');
+assert.equal(inventarioApi.getInventarioCotizacion(), 2000);
+inventarioApi.setInventarioCotizacion('no es un número');
+assert.equal(inventarioApi.getInventarioCotizacion(), 2000);
+inventarioApi.setInventarioCotizacion('1000');
+
+// Filtro por estado: Vendidos, Donados y Todos.
+inventarioApi.setInventarioFiltroEstado('Vendido');
+assert.equal(inventarioApi.filtroEstado, 'Vendido');
+let invFiltered = inventarioElement('inventario-content').innerHTML;
+assert.match(invFiltered, /Bicicleta/);
+assert.doesNotMatch(invFiltered, /Notebook ThinkPad/);
+assert.equal(inventarioElement('inv-count-activos').textContent, '1',
+  'El card de ítems activos cuenta TODO el inventario en Activo, sin importar el filtro de estado elegido');
+assert.equal(estadoFilterButtons.find((b) => b.dataset.estado === 'Vendido').active, true);
+assert.equal(estadoFilterButtons.find((b) => b.dataset.estado === 'Activo').active, false);
+
+inventarioApi.setInventarioFiltroEstado('Donado');
+invFiltered = inventarioElement('inventario-content').innerHTML;
+assert.match(invFiltered, /Silla rota/);
+assert.doesNotMatch(invFiltered, /Notebook ThinkPad|Bicicleta/);
+
+inventarioApi.setInventarioFiltroEstado('');
+assert.equal(inventarioApi.filtroEstado, '');
+invFiltered = inventarioElement('inventario-content').innerHTML;
+assert.match(invFiltered, /Notebook ThinkPad/);
+assert.match(invFiltered, /Bicicleta/);
+assert.match(invFiltered, /Silla rota/);
+assert.equal(inventarioElement('inventario-count').textContent, '3 de 3');
+// Reparto JD/Pinki agregado: explícito (60/40) para Notebook + default 50/50
+// (marcado "sin dato") para Bicicleta, que no tiene proporcion_jd. Silla rota
+// no tiene precio_usd_compra NI precio_ars/cotizacion_usd_compra: no aporta
+// USD conocido (hallazgo 2 del revisor 46d4f3d5 — antes se inventaba un
+// valor convirtiendo valor_estimado con la cotización de HOY, lo que hacía
+// parecer un recálculo real donde no lo había). Por eso el total/reparto
+// solo suma Notebook (500) + Bicicleta (120) = 620, y el card avisa que 1
+// bien quedó sin USD.
+assert.equal(inventarioElement('inv-total-usd').textContent, 'U$D 620');
+assert.equal(inventarioElement('inv-jd-usd').textContent, 'U$D 360');
+assert.equal(inventarioElement('inv-pinki-usd').textContent, 'U$D 260');
+assert.match(inventarioElement('inv-count-sub').textContent, /1 sin USD/);
+assert.match(invFiltered, /sin USD/,
+  'Silla rota, sin ningún dato de USD, debe mostrar "sin USD" en la tabla en vez de un monto inventado');
+assert.match(invFiltered, /\(sin dato\)/,
+  'Bicicleta, sin proporcion_jd, debe marcar el reparto 50/50 como "sin dato"');
+
+// XSS: nombre, ubicación y notas deben llegar escapados al innerHTML (filtro "Todos" vigente).
+assert.doesNotMatch(invFiltered, /<img/i, 'El nombre con XSS no debe crear un <img>');
+assert.match(invFiltered, /&lt;img src=x onerror=alert\(1\)&gt;/);
+assert.doesNotMatch(invFiltered, /<svg/i, 'La ubicación con XSS no debe crear un <svg>');
+assert.match(invFiltered, /&lt;svg onload=alert\(2\)&gt;/);
+assert.doesNotMatch(invFiltered, /<script/i, 'Las notas con XSS no deben crear un <script>');
+assert.match(invFiltered, /&lt;script&gt;alert\(3\)&lt;\/script&gt;/);
+
+// Filtros de categoría/ubicación/búsqueda se aplican sobre el estado ya filtrado.
+inventarioElement('inventario-filtro-categoria').value = 'Deporte';
+inventarioApi.renderInventarioView();
+invFiltered = inventarioElement('inventario-content').innerHTML;
+assert.doesNotMatch(invFiltered, /Notebook ThinkPad|Silla rota/, 'El filtro de categoría debe excluir los bienes de otra categoría');
+assert.match(invFiltered, /Bicicleta/);
+assert.match(inventarioElement('inventario-count').textContent, /1 de 3/);
+inventarioElement('inventario-filtro-categoria').value = '';
+
+inventarioElement('inventario-filtro-ubicacion').value = invItemXss.ubicacion;
+inventarioApi.renderInventarioView();
+invFiltered = inventarioElement('inventario-content').innerHTML;
+assert.doesNotMatch(invFiltered, /Notebook ThinkPad|Silla rota/, 'El filtro de ubicación debe excluir los bienes de otra ubicación');
+assert.match(invFiltered, /Bicicleta/);
+inventarioElement('inventario-filtro-ubicacion').value = '';
+
+inventarioElement('inventario-search').value = 'freno';
+inventarioApi.renderInventarioView();
+invFiltered = inventarioElement('inventario-content').innerHTML;
+assert.match(invFiltered, /Bicicleta/, 'La búsqueda por notas debe filtrar aunque no coincida el nombre');
+assert.doesNotMatch(invFiltered, /Notebook ThinkPad|Silla rota/);
+inventarioElement('inventario-search').value = 'esto no existe en ningún bien';
+inventarioApi.renderInventarioView();
+assert.match(inventarioElement('inventario-content').innerHTML, /Sin bienes que coincidan/);
+inventarioElement('inventario-search').value = '';
+inventarioApi.setInventarioFiltroEstado('Activo');
+
+// Botones de escritura: habilitados en vivo, deshabilitados si falta la capability inventory.
+inventarioData.inventario = [invItemJD];
+inventarioApi.renderInventarioView();
+let invButtonsHtml = inventarioElement('inventario-content').innerHTML;
+assert.match(invButtonsHtml, /aria-label="Editar bien Notebook ThinkPad" >Editar<\/button>/);
+assert.match(invButtonsHtml, /aria-label="Dar de baja bien Notebook ThinkPad" >Dar de baja<\/button>/);
+assert.match(invButtonsHtml, /data-requires="inventory"/);
+inventarioApi.setInventoryAvailable(false);
+inventarioApi.renderInventarioView();
+invButtonsHtml = inventarioElement('inventario-content').innerHTML;
+assert.match(invButtonsHtml, /aria-label="Editar bien Notebook ThinkPad" disabled>Editar<\/button>/,
+  'Sin la capability inventory los botones de escritura deben quedar deshabilitados aunque el resto esté en vivo');
+inventarioApi.setInventoryAvailable(true);
+
+// Modo snapshot: sin datos (no hay data/inventario.json) y en solo lectura.
+inventarioData.inventario = [];
+inventarioApi.renderInventarioView();
+assert.equal(inventarioElement('inv-total-usd').textContent, 'U$D 0');
+assert.equal(inventarioElement('inv-count-activos').textContent, '0');
+assert.match(inventarioElement('inventario-content').innerHTML, /Todavía no hay bienes cargados/);
+inventarioApi.setLive(false);
+inventarioApi.renderInventarioView();
+assert.match(inventarioElement('inventario-content').innerHTML, /Snapshot de solo lectura/,
+  'En modo snapshot debe avisar que no hay datos sin conexión autenticada, no "todavía no hay bienes"');
+
+console.log('Inventario: cards con cotización editable (localStorage), reparto JD/Pinki, filtro por estado (default Activo) y escape de XSS en nombre/ubicación/notas verificados con las funciones reales de app.js');

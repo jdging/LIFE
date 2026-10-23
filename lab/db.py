@@ -37,8 +37,18 @@ Tablas (esquema reconciliado con LIFE-lab-propuesta.md sección 3):
       Crypto/Otro), misma lógica que `ingresos`.
     - estado_conversacional: estado del flujo multi-turno por chat_id.
     - recetas / receta_ingredientes: recetario de ejemplo (Fase 3).
-    - inventario_bienes: bienes del hogar (Fase 3, sin lógica de negocio
-      todavía — solo CRUD básico, ver README).
+    - inventario_bienes: bienes del hogar (Fase 3). Extendida (t_0e38e74e,
+      fix de alcance por decisión del coordinador: revierte la decisión
+      previa de no agregar estos campos) con las columnas financieras del
+      legacy real (`reference-legacy/inventario-setup.js`): `precio_ars`,
+      `cotizacion_usd_compra`, `precio_usd_compra`, `proporcion_jd` (reparto
+      JD/Pinki, 0-100), `precio_venta_estimado_usd` y `estado` (Activo/
+      Vendido/Donado/Desechado) — ver README sección "Inventario: paridad
+      con el legacy" y `_migrar_columnas_inventario_bienes`. Mapeo con los
+      nombres del legacy: `nombre` = `descripcion`, `fecha_adquisicion` =
+      `fecha_compra` — mismos datos; esta base ya usaba `nombre`/
+      `fecha_adquisicion` antes de esta extensión y no se renombran columnas
+      ni campos de API para no romper el CRUD existente.
     - inventario_cocina: stock de ingredientes disponibles (Fase 3).
     - lista_compras: items pendientes de comprar (Fase 3).
 
@@ -56,7 +66,13 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Optional
 
-from validaciones import validar_expense, validar_gasto_fijo, validar_ingreso
+from validaciones import (
+    _es_fecha_iso,
+    _es_numero,
+    validar_expense,
+    validar_gasto_fijo,
+    validar_ingreso,
+)
 
 DEFAULT_DB_PATH = str(Path(__file__).parent / "data" / "lasso.sqlite")
 
@@ -312,6 +328,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     _migrar_columnas_lista_compras(conn)
     _migrar_columnas_recetas(conn)
     _migrar_columnas_ingresos(conn)
+    _migrar_columnas_inventario_bienes(conn)
 
 
 def _migrar_columnas_lista_compras(conn: sqlite3.Connection) -> None:
@@ -422,6 +439,64 @@ def _migrar_columnas_gastos_fijos(conn: sqlite3.Connection) -> None:
     conn.execute(
         "UPDATE gastos_fijos SET fijo_grupo_id = id WHERE fijo_grupo_id IS NULL"
     )
+    conn.commit()
+
+
+INVENTARIO_ESTADOS = ("Activo", "Vendido", "Donado", "Desechado")
+
+
+def _migrar_columnas_inventario_bienes(conn: sqlite3.Connection) -> None:
+    """Agrega a `inventario_bienes` las columnas de soft delete y de paridad
+    financiera con el legacy si faltan (t_0e38e74e).
+
+    Mismo patrón que `_migrar_columnas_ingresos`: ALTER TABLE ADD COLUMN
+    retrocompatible en vez de recrear la tabla, para no perder datos ya
+    migrados por `migrar_datos_reales.migrar_inventario_bienes`. Idempotente:
+    solo agrega las columnas que todavía no existen.
+
+    Decisión de columnas (reversión de una decisión previa de esta misma
+    tarea, por indicación del coordinador — Juan pidió explícitamente
+    paridad con la pestaña legacy, BRIEF.md punto 1): el legacy
+    (`reference-legacy/inventario-setup.js` / `inventario-index.html`)
+    expone `precio_ars`, `cotizacion_usd_compra`, `precio_usd_compra`,
+    `proporcion_jd`, `precio_venta_estimado_usd` y `estado`. Todas se
+    agregan acá como columnas nullable — nunca `NOT NULL` a nivel SQL —
+    porque:
+      - Los registros ya migrados por `migrar_inventario_bienes` no tienen
+        estos valores en columnas estructuradas (están, si existen, como
+        texto libre dentro de `notas`); esta migración NO los retro-parsea
+        desde `notas` — son columnas nuevas que arrancan en `NULL` para
+        filas preexistentes, no un backfill automático.
+      - Los defaults de negocio (`proporcion_jd=50`, `estado='Activo'`)
+        se aplican en `insert_inventario_bien` (capa Python) cuando el
+        caller no los especifica, no en el `ALTER TABLE` — así una fila
+        vieja sin estos valores queda en `NULL` en vez de asumir
+        silenciosamente "Activo"/"50% JD" para datos que nunca se
+        declararon.
+
+    `estado` se valida contra `INVENTARIO_ESTADOS` en
+    `validar_inventario_bien`, no con un `CHECK` de SQL — mismo criterio que
+    el resto del esquema (ver `PAGADO_POR_VALIDOS` en validaciones.py).
+
+    Mapeo con los nombres del legacy (ver módulo, encabezado): `nombre` =
+    `descripcion`, `fecha_adquisicion` = `fecha_compra`. No se agregan
+    columnas duplicadas para esos dos campos — ya existían con estos nombres
+    antes de esta extensión.
+    """
+    existentes = _column_names(conn, "inventario_bienes")
+    columnas_nuevas = (
+        ("deleted_at", "TEXT"),
+        ("deleted_by", "TEXT"),
+        ("precio_ars", "REAL"),
+        ("cotizacion_usd_compra", "REAL"),
+        ("precio_usd_compra", "REAL"),
+        ("proporcion_jd", "REAL"),
+        ("precio_venta_estimado_usd", "REAL"),
+        ("estado", "TEXT"),
+    )
+    for columna, definicion in columnas_nuevas:
+        if columna not in existentes:
+            conn.execute(f"ALTER TABLE inventario_bienes ADD COLUMN {columna} {definicion}")
     conn.commit()
 
 
@@ -895,13 +970,129 @@ def marcar_receta_real(conn: sqlite3.Connection, receta_id: int) -> None:
 
 # --- Inventario de bienes ------------------------------------------------
 
+INVENTARIO_CAMPOS_EDITABLES = (
+    "nombre", "categoria", "ubicacion", "valor_estimado", "fecha_adquisicion", "notas",
+    "precio_ars", "cotizacion_usd_compra", "precio_usd_compra", "proporcion_jd",
+    "precio_venta_estimado_usd", "estado",
+)
+
+
+def validar_inventario_bien(bien: dict) -> list:
+    """Valida un payload de alta/edición de `inventario_bienes`, mismas
+    convenciones que `validar_ingreso`/`validar_expense` (ver validaciones.py).
+
+    Reglas (t_0e38e74e):
+      - `nombre` obligatorio, no vacío.
+      - `valor_estimado` obligatorio, numérico finito, > 0 — mismo criterio
+        que `monto` en gastos/ingresos: un bien sin valor estimado no aporta
+        nada al total que muestra la pestaña.
+      - `categoria`/`ubicacion`/`notas`: opcionales, pero si se especifican
+        no pueden ser strings vacíos (excepto `notas`, que admite cualquier
+        texto, incluido vacío, porque es de uso libre).
+      - `fecha_adquisicion`: opcional, si se especifica debe ser fecha ISO
+        'YYYY-MM-DD' válida.
+      - `precio_ars`, `cotizacion_usd_compra`, `precio_usd_compra`,
+        `precio_venta_estimado_usd`: opcionales (paridad con el legacy, ver
+        `_migrar_columnas_inventario_bienes`); si se especifican deben ser
+        numéricos finitos y >= 0 (admiten 0, a diferencia de `valor_estimado`
+        — un bien puede tener cotización o precio de reventa en 0 mientras
+        se completa el dato, nunca negativo).
+      - `proporcion_jd`: opcional (default 50 al crear si no viene, ver
+        `insert_inventario_bien`); si se especifica debe ser numérico finito
+        entre 0 y 100 inclusive. Pinki = 100 - proporcion_jd, igual que el
+        legacy — no se guarda una columna separada para Pinki.
+      - `estado`: opcional (default 'Activo' al crear si no viene); si se
+        especifica debe ser uno de `INVENTARIO_ESTADOS`.
+
+    Devuelve una lista de errores (vacía si el payload es válido). No muta
+    `bien` ni toca la base de datos.
+    """
+    errores = []
+
+    nombre = bien.get("nombre")
+    if not isinstance(nombre, str) or not nombre.strip():
+        errores.append("nombre es obligatorio y no puede estar vacío.")
+
+    valor_estimado = bien.get("valor_estimado")
+    if not _es_numero(valor_estimado):
+        errores.append("valor_estimado es obligatorio y debe ser numérico.")
+    elif valor_estimado <= 0:
+        errores.append("valor_estimado debe ser mayor a 0.")
+
+    categoria = bien.get("categoria")
+    if categoria is not None and (not isinstance(categoria, str) or not categoria.strip()):
+        errores.append("categoria, si se especifica, no puede estar vacía.")
+
+    ubicacion = bien.get("ubicacion")
+    if ubicacion is not None and (not isinstance(ubicacion, str) or not ubicacion.strip()):
+        errores.append("ubicacion, si se especifica, no puede estar vacía.")
+
+    fecha_adquisicion = bien.get("fecha_adquisicion")
+    if fecha_adquisicion is not None and not _es_fecha_iso(fecha_adquisicion):
+        errores.append(
+            f"fecha_adquisicion, si se especifica, debe ser fecha ISO 'YYYY-MM-DD' "
+            f"válida (recibido {fecha_adquisicion!r})."
+        )
+
+    notas = bien.get("notas")
+    if notas is not None and not isinstance(notas, str):
+        errores.append("notas, si se especifica, debe ser texto.")
+
+    for campo in ("precio_ars", "cotizacion_usd_compra", "precio_usd_compra", "precio_venta_estimado_usd"):
+        valor = bien.get(campo)
+        if valor is None:
+            continue
+        if not _es_numero(valor):
+            errores.append(f"{campo}, si se especifica, debe ser numérico.")
+        elif valor < 0:
+            errores.append(f"{campo} debe ser mayor o igual a 0.")
+
+    proporcion_jd = bien.get("proporcion_jd")
+    if proporcion_jd is not None:
+        if not _es_numero(proporcion_jd):
+            errores.append("proporcion_jd, si se especifica, debe ser numérico.")
+        elif not (0 <= proporcion_jd <= 100):
+            errores.append("proporcion_jd debe estar entre 0 y 100.")
+
+    estado = bien.get("estado")
+    if estado is not None and estado not in INVENTARIO_ESTADOS:
+        errores.append(
+            f"estado, si se especifica, debe ser uno de {INVENTARIO_ESTADOS} (recibido {estado!r})."
+        )
+
+    return errores
+
 
 def insert_inventario_bien(conn: sqlite3.Connection, bien: dict) -> int:
+    """Inserta un bien de inventario. Valida con `_validar_inventario_bien`
+    antes de insertar — misma barrera no negociable que `insert_gasto`/
+    `insert_ingreso` (ver esas funciones), aplicada acá dentro de `db.py`
+    para que ningún caller pueda saltearla.
+
+    Defaults de negocio (t_0e38e74e, paridad con el legacy): si no vienen en
+    `bien`, `proporcion_jd` se guarda en `50` y `estado` en `'Activo'` — se
+    chequea `is None` explícitamente (no `bien.get(...) or default`) porque
+    `proporcion_jd=0` (100% Pinki) es un valor válido y no debe pisarse por
+    ser falsy.
+    """
+    errores = validar_inventario_bien(bien)
+    if errores:
+        raise ValueError(f"Bien de inventario inválido: {errores}")
+
+    proporcion_jd = bien.get("proporcion_jd")
+    if proporcion_jd is None:
+        proporcion_jd = 50
+    estado = bien.get("estado")
+    if estado is None:
+        estado = "Activo"
+
     cursor = conn.execute(
         """
         INSERT INTO inventario_bienes
-            (nombre, categoria, ubicacion, valor_estimado, fecha_adquisicion, notas)
-        VALUES (?, ?, ?, ?, ?, ?)
+            (nombre, categoria, ubicacion, valor_estimado, fecha_adquisicion, notas,
+             precio_ars, cotizacion_usd_compra, precio_usd_compra, proporcion_jd,
+             precio_venta_estimado_usd, estado)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             bien["nombre"],
@@ -910,21 +1101,131 @@ def insert_inventario_bien(conn: sqlite3.Connection, bien: dict) -> int:
             bien.get("valor_estimado"),
             bien.get("fecha_adquisicion"),
             bien.get("notas"),
+            bien.get("precio_ars"),
+            bien.get("cotizacion_usd_compra"),
+            bien.get("precio_usd_compra"),
+            proporcion_jd,
+            bien.get("precio_venta_estimado_usd"),
+            estado,
         ),
     )
     conn.commit()
     return cursor.lastrowid
 
 
-def get_inventario_bienes(conn: sqlite3.Connection, categoria: Optional[str] = None) -> list:
+def get_inventario_bienes(
+    conn: sqlite3.Connection,
+    categoria: Optional[str] = None,
+    incluir_borrados: bool = False,
+) -> list:
+    """Devuelve bienes de inventario ordenados por id.
+
+    Por default excluye los bienes con `deleted_at IS NOT NULL` (soft
+    delete, ver `eliminar_inventario_bien_logico`). Pasar
+    `incluir_borrados=True` para incluirlos también (p.ej. para una vista
+    de auditoría/papelera).
+    """
+    condiciones = []
+    parametros: list = []
     if categoria is not None:
-        rows = conn.execute(
-            "SELECT * FROM inventario_bienes WHERE categoria = ? ORDER BY id",
-            (categoria,),
-        ).fetchall()
-    else:
-        rows = conn.execute("SELECT * FROM inventario_bienes ORDER BY id").fetchall()
+        condiciones.append("categoria = ?")
+        parametros.append(categoria)
+    if not incluir_borrados:
+        condiciones.append("deleted_at IS NULL")
+
+    where = f" WHERE {' AND '.join(condiciones)}" if condiciones else ""
+    rows = conn.execute(
+        f"SELECT * FROM inventario_bienes{where} ORDER BY id", parametros
+    ).fetchall()
     return [dict(row) for row in rows]
+
+
+def actualizar_inventario_bien(conn: sqlite3.Connection, bien_id: int, cambios: dict) -> None:
+    """Edición parcial de un bien de inventario existente.
+
+    Mismo contrato que `actualizar_ingreso`: campos editables limitados a
+    `INVENTARIO_CAMPOS_EDITABLES`, valida el estado RESULTANTE (fila actual
+    + `cambios` superpuestos) antes de aplicar nada, y rechaza `cambios`
+    vacío o con claves no editables. Lanza `ValueError` si el bien no
+    existe, si ya está borrado lógicamente (debe restaurarse primero, lo
+    que hoy no existe), o si la validación falla.
+    """
+    if not cambios:
+        raise ValueError(
+            "actualizar_inventario_bien requiere al menos un campo en `cambios` "
+            "(no se aceptan ediciones vacías)."
+        )
+
+    claves_invalidas = set(cambios) - set(INVENTARIO_CAMPOS_EDITABLES)
+    if claves_invalidas:
+        raise ValueError(
+            f"Campos no editables en actualizar_inventario_bien: {sorted(claves_invalidas)} "
+            f"(editables: {INVENTARIO_CAMPOS_EDITABLES})."
+        )
+
+    fila = conn.execute("SELECT * FROM inventario_bienes WHERE id = ?", (bien_id,)).fetchone()
+    if fila is None:
+        raise ValueError(f"No existe ningún bien de inventario con id={bien_id}.")
+    if fila["deleted_at"] is not None:
+        raise ValueError(f"No se puede editar el bien de inventario id={bien_id}: está borrado.")
+
+    resultante = {**dict(fila), **cambios}
+    errores = validar_inventario_bien(resultante)
+    if errores:
+        raise ValueError(f"Edición de bien de inventario inválida: {errores}")
+
+    columnas = ", ".join(f"{campo} = ?" for campo in cambios)
+    valores = list(cambios.values()) + [bien_id]
+    conn.execute(f"UPDATE inventario_bienes SET {columnas} WHERE id = ?", valores)
+    conn.commit()
+
+
+# --- Soft delete de inventario_bienes + auditoría ---------------------------
+
+
+def eliminar_inventario_bien_logico(conn: sqlite3.Connection, bien_id: int, actor: str) -> None:
+    """Marca `inventario_bienes.id = bien_id` como borrado lógico (soft delete).
+
+    Mismo contrato que `eliminar_ingreso_logico` (ver esa función para el
+    detalle de atomicidad y de la condición de carrera): no borra la fila
+    físicamente, deja rastro en `auditoria` con el snapshot previo de la
+    fila, y levanta `ValueError` si el bien no existe o ya estaba borrado
+    — incluyendo el caso de doble baja concurrente, detectado por
+    `cursor.rowcount != 1` en el `UPDATE` condicionado a `deleted_at IS
+    NULL`. Si falla el `INSERT` en `auditoria` después del `UPDATE`, se
+    hace `rollback()` explícito antes de propagar la excepción.
+    """
+    fila = conn.execute("SELECT * FROM inventario_bienes WHERE id = ?", (bien_id,)).fetchone()
+    if fila is None:
+        raise ValueError(f"No existe ningún bien de inventario con id={bien_id}.")
+    if fila["deleted_at"] is not None:
+        raise ValueError(f"El bien de inventario id={bien_id} ya está borrado.")
+
+    snapshot_antes = json.dumps(dict(fila), ensure_ascii=False)
+    ahora = _now()
+
+    try:
+        cursor = conn.execute(
+            "UPDATE inventario_bienes SET deleted_at = ?, deleted_by = ? "
+            "WHERE id = ? AND deleted_at IS NULL",
+            (ahora, actor, bien_id),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError(
+                f"El bien de inventario id={bien_id} ya fue borrado por otra operación "
+                "concurrente (detectado al aplicar la baja)."
+            )
+        conn.execute(
+            """
+            INSERT INTO auditoria (tabla, fila_id, accion, actor, antes_json, despues_json, creado_en)
+            VALUES ('inventario_bienes', ?, 'baja', ?, ?, NULL, ?)
+            """,
+            (bien_id, actor, snapshot_antes, ahora),
+        )
+    except Exception:
+        conn.rollback()
+        raise
+    conn.commit()
 
 
 # --- Inventario de cocina ------------------------------------------------

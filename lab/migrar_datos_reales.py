@@ -6,8 +6,16 @@ usando el esquema de `db.py`, sin modificarlo. Ver README.md para el detalle
 completo del mapeo de campos y las decisiones tomadas.
 
 Uso: `python3 migrar_datos_reales.py` desde este workdir.
+
+Backfill legacy de inventario (t_0e38e74e, hallazgo 1 del revisor
+46d4f3d5), para bases donde `inventario_bienes` ya fue migrado con el
+código viejo: `python3 migrar_datos_reales.py --backfill-legacy` (dry-run
+por default, imprime el resumen sin escribir nada) o
+`python3 migrar_datos_reales.py --backfill-legacy --apply` para aplicar los
+cambios de verdad. Ver `backfill_inventario_legacy`.
 """
 
+import argparse
 import json
 from datetime import date, timedelta
 from pathlib import Path
@@ -299,6 +307,16 @@ def _convertir_fecha_bien(valor):
 
 
 def _armar_notas_inventario(fila: dict) -> str:
+    """Reconstruye el bloque de texto que el migrador VIEJO (anterior a
+    t_0e38e74e, hallazgo 1 del revisor 46d4f3d5) escribía en `notas` en vez
+    de columnas estructuradas, pisando por completo la nota real.
+
+    Ya no se usa para migrar de cero (ver `migrar_inventario_bienes`, que
+    ahora llena columnas): queda solo como firma para que
+    `backfill_inventario_legacy` reconozca, en una base ya migrada con el
+    código viejo, qué filas todavía tienen ese bloque sin tocar y puedan
+    recuperar la nota real + los datos estructurados desde `inventario_raw`.
+    """
     cotizacion = fila.get("cotizacion_usd_compra")
     precio_usd = fila.get("precio_usd_compra")
     proporcion_jd = fila.get("proporcion_jd")
@@ -321,11 +339,25 @@ def _armar_notas_inventario(fila: dict) -> str:
     )
 
 
+INVENTARIO_COLUMNAS_LEGACY = (
+    "precio_ars", "cotizacion_usd_compra", "precio_usd_compra",
+    "proporcion_jd", "precio_venta_estimado_usd", "estado",
+)
+
+
 def migrar_inventario_bienes(conn, filas: list) -> int:
     """Migra `inventario_bienes`, idempotente por clave natural (sin `origen`).
 
     Misma estrategia que `migrar_gastos_fijos`: clave natural (nombre,
     categoria, fecha_adquisicion), borrado + reinserción por fila.
+
+    Paridad financiera con el legacy (t_0e38e74e, corrección del hallazgo 1
+    del revisor 46d4f3d5): `precio_ars`, `cotizacion_usd_compra`,
+    `precio_usd_compra`, `proporcion_jd`, `precio_venta_estimado_usd` y
+    `estado` se escriben en sus columnas estructuradas, no solo en `notas`.
+    `notas` queda con la nota real de `inventario_raw` únicamente — ya no
+    con el bloque generado por `_armar_notas_inventario` (eso era lo que
+    pisaba la nota real por completo en el migrador viejo).
     """
     migrados = 0
     for fila in filas:
@@ -341,18 +373,155 @@ def migrar_inventario_bienes(conn, filas: list) -> int:
             "AND fecha_adquisicion IS ?",
             (nombre, categoria, fecha),
         )
-        db.insert_inventario_bien(
-            conn,
-            {
-                "nombre": nombre,
-                "categoria": categoria,
-                "valor_estimado": fila.get("precio_ars"),
-                "fecha_adquisicion": fecha,
-                "notas": _armar_notas_inventario(fila),
-            },
-        )
+        bien = {
+            "nombre": nombre,
+            "categoria": categoria,
+            "valor_estimado": fila.get("precio_ars"),
+            "fecha_adquisicion": fecha,
+            "notas": fila.get("notas"),
+        }
+        for columna in INVENTARIO_COLUMNAS_LEGACY:
+            bien[columna] = fila.get(columna)
+        db.insert_inventario_bien(conn, bien)
         migrados += 1
     return migrados
+
+
+def backfill_inventario_legacy(conn, inventario_raw: dict) -> dict:
+    """Completa paridad financiera retroactiva en bases donde
+    `inventario_bienes` ya fue migrado con el migrador VIEJO (antes de
+    t_0e38e74e, hallazgo 1 del revisor 46d4f3d5): esas filas solo tienen la
+    cotización/USD/reparto/reventa/estado como texto libre dentro de
+    `notas` (ver `_armar_notas_inventario`), nunca en columnas estructuradas.
+
+    No borra ni reinserta nada — solo hace `UPDATE` columna por columna.
+    Pensada para correr una sola vez sobre la base real ya en producción,
+    pero es segura de correr más veces (ver abajo):
+
+      - Emparejamiento por identidad: (nombre == descripcion,
+        fecha_adquisicion == fecha_compra convertida, categoria ==
+        categoria). Sin match o con más de un bien para la misma clave: se
+        cuenta en el resumen y NO se toca nada (ambigüedad no se resuelve
+        sola) — ver hallazgo 1 del revisor fc195491 (match por nombre+fecha
+        sin categoría podía emparejar con el bien equivocado).
+      - Procedencia (decisión del coordinador, hallazgos 1 y 2 del revisor
+        fc195491): además del emparejamiento por identidad, un bien SOLO es
+        elegible si su `notas` actual es EXACTAMENTE el bloque que
+        `_armar_notas_inventario` genera para esta misma fila del raw. Esa
+        es la única prueba de que el bien nunca fue tocado desde la web (la
+        web nunca escribe ese bloque) y de que los valores que el bloque
+        encierra (cotización, USD de compra, reparto, reventa, estado)
+        coinciden con los del raw actual. Si la nota fue editada, limpiada
+        por un backfill anterior, o el raw tiene valores distintos a los
+        que el bloque encierra, NO es elegible: se omite por completo (ni
+        columnas ni notas) y se cuenta en
+        `bienes_sin_procedencia_legacy`.
+      - Procedencia financiera (hallazgo 1 del revisor e54e9da9): la nota
+        legacy intacta no prueba por sí sola que `valor_estimado` siga
+        siendo el `precio_ars` original — el formulario web permite editar
+        únicamente el valor estimado y reenviar la nota legacy sin cambios.
+        Por eso, además de la nota exacta, se exige que
+        `bien["valor_estimado"]` coincida con `fila["precio_ars"]` (con
+        tolerancia 0,01, por redondeos de punto flotante). Si no coincide,
+        el bien no es elegible: se omite por completo y se cuenta en
+        `bienes_editados_en_web`.
+      - Para cada bien elegible, solo escribe en las columnas de
+        `INVENTARIO_COLUMNAS_LEGACY` que están en NULL en la base — nunca
+        pisa un valor ya cargado por la web (el chequeo es `IS NULL` sobre
+        la fila actual, no sobre el valor nuevo: un `0` cargado por la web
+        para esa columna no se toca). Después reemplaza `notas` por la nota
+        real de `inventario_raw` (o `NULL` si tampoco había), limpiando el
+        bloque para que un bien ya procesado nunca vuelva a ser elegible.
+      - Idempotente y respeta vaciados posteriores desde la web: una vez
+        limpiado el bloque, `notas` ya no coincide con
+        `_armar_notas_inventario(fila)` en ninguna corrida futura, así que
+        el bien deja de ser elegible para siempre — incluso si la web vació
+        después alguna de las columnas ya completadas (no se repueblan).
+
+    No hace `commit()`: el caller decide (dry-run = rollback, --apply =
+    commit), igual que el resto de operaciones multi-fila sensibles de este
+    módulo.
+
+    Devuelve un resumen:
+      {'bienes_actualizados', 'campos_completados' (dict columna->cantidad),
+       'notas_limpiadas', 'bienes_sin_match', 'bienes_con_match_ambiguo',
+       'bienes_sin_procedencia_legacy', 'bienes_editados_en_web'}.
+    """
+    existentes = db.get_inventario_bienes(conn, incluir_borrados=True)
+    por_clave: dict = {}
+    for row in existentes:
+        clave = (row["nombre"], row["fecha_adquisicion"], row["categoria"])
+        por_clave.setdefault(clave, []).append(row)
+
+    resumen = {
+        "bienes_actualizados": 0,
+        "campos_completados": {columna: 0 for columna in INVENTARIO_COLUMNAS_LEGACY},
+        "notas_limpiadas": 0,
+        "bienes_sin_match": 0,
+        "bienes_con_match_ambiguo": 0,
+        "bienes_sin_procedencia_legacy": 0,
+        "bienes_editados_en_web": 0,
+    }
+
+    for fila in inventario_raw.get("Inventario", []):
+        if fila.get("borrado"):
+            continue
+
+        nombre = fila["descripcion"]
+        fecha = _convertir_fecha_bien(fila.get("fecha_compra"))
+        categoria = fila.get("categoria")
+        candidatos = por_clave.get((nombre, fecha, categoria), [])
+
+        if not candidatos:
+            resumen["bienes_sin_match"] += 1
+            continue
+        if len(candidatos) > 1:
+            resumen["bienes_con_match_ambiguo"] += 1
+            continue
+
+        bien = candidatos[0]
+
+        if bien["notas"] != _armar_notas_inventario(fila):
+            resumen["bienes_sin_procedencia_legacy"] += 1
+            continue
+
+        precio_ars_raw = fila.get("precio_ars")
+        valor_estimado = bien["valor_estimado"]
+        if (
+            precio_ars_raw is None
+            or valor_estimado is None
+            or abs(valor_estimado - precio_ars_raw) > 0.01
+        ):
+            resumen["bienes_editados_en_web"] += 1
+            continue
+
+        cambios = {}
+        for columna in INVENTARIO_COLUMNAS_LEGACY:
+            if bien[columna] is not None:
+                continue  # nunca pisa lo ya cargado (incluido un 0 real).
+            valor_raw = fila.get(columna)
+            if valor_raw is None:
+                continue
+            cambios[columna] = valor_raw
+
+        nota_real = fila.get("notas")
+        if nota_real != bien["notas"]:
+            cambios["notas"] = nota_real
+            resumen["notas_limpiadas"] += 1
+
+        if not cambios:
+            continue
+
+        conn.execute(
+            f"UPDATE inventario_bienes SET {', '.join(f'{c} = ?' for c in cambios)} WHERE id = ?",
+            (*cambios.values(), bien["id"]),
+        )
+        resumen["bienes_actualizados"] += 1
+        for columna in cambios:
+            if columna in resumen["campos_completados"]:
+                resumen["campos_completados"][columna] += 1
+
+    return resumen
 
 
 # --- Orquestación ------------------------------------------------------
@@ -414,9 +583,56 @@ def _imprimir_resumen(resumen: dict, tarjetas_total: int, categorias_total: int)
     print(f"Total ARS de ingresos migrados: {resumen['total_ingresos_ars']:,.2f}")
 
 
+def _imprimir_resumen_backfill(resumen: dict, aplicado: bool) -> None:
+    encabezado = "aplicado" if aplicado else "DRY-RUN (nada se escribió; agregá --apply para aplicar)"
+    print(f"=== Backfill legacy de inventario_bienes: {encabezado} ===")
+    print(f"Bienes actualizados:        {resumen['bienes_actualizados']}")
+    for columna, cantidad in resumen["campos_completados"].items():
+        print(f"  {columna}: {cantidad} completados")
+    print(f"Notas limpiadas (nota real recuperada): {resumen['notas_limpiadas']}")
+    print(f"Sin match en inventario_bienes:         {resumen['bienes_sin_match']}")
+    print(f"Con match ambiguo (no se tocaron):      {resumen['bienes_con_match_ambiguo']}")
+    print(f"Sin procedencia legacy (nota editada/vaciada o raw distinto, no se tocaron): {resumen['bienes_sin_procedencia_legacy']}")
+    print(f"Editados en la web (valor_estimado != precio_ars del raw, no se tocaron): {resumen['bienes_editados_en_web']}")
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Migra datos reales de LIFE (Finanzas + Inventario) a SQLite."
+    )
+    parser.add_argument(
+        "--backfill-legacy", action="store_true",
+        help=(
+            "En vez de migrar todo de cero, completa paridad financiera legacy "
+            "de inventario_bienes ya migrados con el código viejo (ver "
+            "backfill_inventario_legacy)."
+        ),
+    )
+    parser.add_argument(
+        "--apply", action="store_true",
+        help=(
+            "Solo junto con --backfill-legacy: aplica los cambios de verdad. "
+            "Sin esta flag, --backfill-legacy corre en modo dry-run (no escribe "
+            "nada) e imprime el resumen igual."
+        ),
+    )
+    args = parser.parse_args()
+    if args.apply and not args.backfill_legacy:
+        parser.error("--apply solo tiene efecto junto con --backfill-legacy.")
+
     conn = db.get_connection()
     db.init_db(conn)
+
+    if args.backfill_legacy:
+        inventario_raw = _cargar_json(INVENTARIO_PATH)
+        resumen = backfill_inventario_legacy(conn, inventario_raw)
+        if args.apply:
+            conn.commit()
+        else:
+            conn.rollback()
+        conn.close()
+        _imprimir_resumen_backfill(resumen, aplicado=args.apply)
+        return
 
     finanzas_raw = _cargar_json(FINANZAS_PATH)
     inventario_raw = _cargar_json(INVENTARIO_PATH)

@@ -138,6 +138,10 @@ test('every contracted method forwards the exact path and query to the configure
     ['POST', '/api/income', '{}'],
     ['PATCH', '/api/income/2', '{}'],
     ['DELETE', '/api/income/2'],
+    ['GET', '/api/inventory'],
+    ['POST', '/api/inventory', '{}'],
+    ['PATCH', '/api/inventory/2', '{}'],
+    ['DELETE', '/api/inventory/2'],
     ['GET', '/api/fixed?dateISO=2026-10-17'],
     ['POST', '/api/fixed', '{}'],
     ['GET', '/api/fixed/versions'],
@@ -179,6 +183,8 @@ test('known paths reject wrong methods with Allow; unknown paths stay 404', asyn
     ['/api/expenses/1', 'GET', 'DELETE'],
     ['/api/income', 'DELETE', 'GET, POST'],
     ['/api/income/1', 'GET', 'PATCH, DELETE'],
+    ['/api/inventory', 'DELETE', 'GET, POST'],
+    ['/api/inventory/1', 'GET', 'PATCH, DELETE'],
     ['/api/fixed', 'DELETE', 'GET, POST'],
     ['/api/fixed/versions', 'POST', 'GET'],
     ['/api/fixed/range', 'PATCH', 'GET'],
@@ -188,9 +194,10 @@ test('known paths reject wrong methods with Allow; unknown paths stay 404', asyn
     ['/api/categories', 'POST', 'GET'],
   ];
   const unknown = [
-    '/api/gastos', '/api/ingresos', '/api/fijos', '/api/expenses/F-1',
-    '/api/expenses/0', '/api/income/-1', '/api/fixed/0/historial',
-    '/api/fixed/1/versions', '/api/fixed/1%2Fhistorial', '/api/unknown', '/api',
+    '/api/gastos', '/api/ingresos', '/api/fijos', '/api/inventario', '/api/expenses/F-1',
+    '/api/expenses/0', '/api/income/-1', '/api/inventory/0', '/api/inventory/-1',
+    '/api/fixed/0/historial', '/api/fixed/1/versions', '/api/fixed/1%2Fhistorial',
+    '/api/unknown', '/api',
   ];
   let calls = 0;
   await withHarness(async () => {
@@ -217,7 +224,7 @@ test('query whitelist validates names, multiplicity, dates, and method scope', a
     '/api/fixed/range?fromISO=2026-10-01&toISO=2026-10-32',
     '/api/fixed/versions?dateISO=2026-10-01', '/api/fixed/1/historial?x=1',
     '/api/summary?month=%ZZ', '/api/summary?month=2026-00',
-    '/api/expenses/1?month=2026-10',
+    '/api/expenses/1?month=2026-10', '/api/inventory?month=2026-10',
     '/api/categories?tag=x', '/api/categories?tipo=Gasto&tipo=Ingreso',
     '/api/categories?tipo=Factura',
   ];

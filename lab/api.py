@@ -21,7 +21,7 @@ import re
 import sqlite3
 import sys
 from datetime import date
-from decimal import Decimal, DecimalException
+from decimal import ROUND_HALF_UP, Decimal, DecimalException
 from urllib.parse import parse_qs
 from uuid import uuid4
 from wsgiref.simple_server import make_server
@@ -72,6 +72,18 @@ ALLOWED_INCOME_CREATE_FIELDS = {
 INCOME_EDITABLE_FIELDS = {
     "fecha", "monto", "moneda", "categoria", "persona", "descripcion_original",
 }
+ALLOWED_INVENTORY_FIELDS = {
+    "nombre", "categoria", "ubicacion", "valor_estimado", "fecha_adquisicion", "notas",
+    "precio_ars", "cotizacion_usd_compra", "precio_usd_compra", "proporcion_jd",
+    "precio_venta_estimado_usd", "estado",
+}
+INVENTORY_EDITABLE_FIELDS = set(ALLOWED_INVENTORY_FIELDS)
+# Campos monetarios opcionales de paridad con el legacy (t_0e38e74e): a
+# diferencia de `valor_estimado`, admiten 0 (ver `validar_inventario_bien`
+# en db.py) — por eso se validan con `positive=False`.
+INVENTORY_MONEY_OPTIONAL_FIELDS = (
+    "precio_ars", "cotizacion_usd_compra", "precio_usd_compra", "precio_venta_estimado_usd",
+)
 ALLOWED_FIXED_CREATE_FIELDS = {
     "nombre", "monto_estimado", "periodicidad", "vigente_desde", "responsable",
     "tipo_proporcion", "proporcion_jd",
@@ -137,6 +149,44 @@ def _valid_optional_strings(data, fields):
     )
 
 
+def _valid_optional_money(data, fields, *, positive=False):
+    """Igual que `_valid_money`, pero para campos opcionales de un payload
+    (presentes o no en `data`). `None` siempre es válido (campo omitido);
+    si el campo está presente con un valor, debe cumplir el formato general
+    de montos (finito, hasta dos decimales, dentro de `MAX_MONEY`).
+    """
+    return all(
+        data[field] is None or _valid_money(data[field], positive=positive)
+        for field in fields if field in data
+    )
+
+
+def _sugerir_precio_usd_compra(payload):
+    """Completa `payload['precio_usd_compra']` in-place cuando llegan
+    `precio_ars` y `cotizacion_usd_compra` sin `precio_usd_compra` explícito
+    (brief t_0e38e74e punto 2: paridad con el legacy, que deja esta cuenta
+    en manos del frontend — acá se adelanta en el servidor para que la
+    sugerencia quede persistida igual si el cliente no la calculó).
+
+    No hace nada si `precio_usd_compra` ya viene en el payload (nunca pisa
+    un valor explícito, incluido `0`), si falta alguno de los dos datos de
+    origen, o si no son monetariamente válidos (ver `_valid_money`) —
+    `cotizacion_usd_compra` además debe ser estrictamente positiva para
+    poder dividir. Redondeo a 2 decimales con `ROUND_HALF_UP`, igual
+    criterio que `insert_gasto_con_cuotas` para montos.
+    """
+    if "precio_usd_compra" in payload:
+        return
+    precio_ars = payload.get("precio_ars")
+    cotizacion = payload.get("cotizacion_usd_compra")
+    if not _valid_money(precio_ars, positive=False) or not _valid_money(cotizacion, positive=True):
+        return
+    sugerido = (Decimal(str(precio_ars)) / Decimal(str(cotizacion))).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    payload["precio_usd_compra"] = float(sugerido)
+
+
 class _RequestContext:
     def __init__(self, method, path, query, path_params, body, headers):
         self.method = method
@@ -161,6 +211,10 @@ class _App:
         ("POST", re.compile(r"^/api/income$"), "create_income"),
         ("PATCH", re.compile(r"^/api/income/(?P<id>\d+)$"), "update_income"),
         ("DELETE", re.compile(r"^/api/income/(?P<id>\d+)$"), "delete_income"),
+        ("GET", re.compile(r"^/api/inventory$"), "list_inventory"),
+        ("POST", re.compile(r"^/api/inventory$"), "create_inventory"),
+        ("PATCH", re.compile(r"^/api/inventory/(?P<id>\d+)$"), "update_inventory"),
+        ("DELETE", re.compile(r"^/api/inventory/(?P<id>\d+)$"), "delete_inventory"),
         ("GET", re.compile(r"^/api/fixed/versions$"), "list_fixed_versions"),
         ("GET", re.compile(r"^/api/fixed/range$"), "fixed_range"),
         ("GET", re.compile(r"^/api/fixed/(?P<id>\d+)/historial$"), "fixed_historial"),
@@ -356,7 +410,7 @@ class _App:
     def health(self, ctx, conn, start_response):
         return self._json(start_response, 200, {
             "ok": True,
-            "capabilities": ["expenses", "income", "fixed"],
+            "capabilities": ["expenses", "income", "fixed", "inventory"],
             "mode": "live",
         })
 
@@ -538,6 +592,119 @@ class _App:
         except ValueError:
             return self._error(start_response, 409, "no se pudo borrar el ingreso.")
         return self._json(start_response, 200, {"deleted": True, "id": income_id})
+
+    # --- inventory ----------------------------------------------------------
+
+    def list_inventory(self, ctx, conn, start_response):
+        unknown = self._unknown_fields(ctx.query.keys(), set())
+        if unknown:
+            return self._error(start_response, 400, "parámetros de query desconocidos.")
+        rows = db.get_inventario_bienes(conn)
+        for row in rows:
+            _stored_money(row["valor_estimado"])
+        return self._json(start_response, 200, {"inventory": rows})
+
+    def create_inventory(self, ctx, conn, start_response):
+        data, err = self._parse_json(ctx, start_response)
+        if err is not None:
+            return err
+        unknown = self._unknown_fields(data.keys(), ALLOWED_INVENTORY_FIELDS)
+        if unknown:
+            return self._error(start_response, 400, "campos desconocidos.")
+        if "fecha_adquisicion" in data and not _is_iso_date(data["fecha_adquisicion"]):
+            return self._error(start_response, 400, "fecha_adquisicion debe ser 'YYYY-MM-DD' válida.")
+        if not _valid_optional_strings(data, {"categoria", "ubicacion", "notas"}):
+            return self._error(start_response, 400, "campos de texto inválidos.")
+        if not _valid_optional_money(data, INVENTORY_MONEY_OPTIONAL_FIELDS):
+            return self._error(start_response, 400, "campos monetarios fuera de rango o con más de dos decimales.")
+        _sugerir_precio_usd_compra(data)
+        errores = db.validar_inventario_bien(data)
+        if errores:
+            return self._error(start_response, 400, "payload de bien de inventario inválido.")
+        if not _valid_money(data.get("valor_estimado")):
+            return self._error(start_response, 400, "valor_estimado fuera de rango o con más de dos decimales.")
+
+        try:
+            nuevo_id = db.insert_inventario_bien(conn, dict(data))
+        except OverflowError:
+            return self._error(start_response, 400, "valor_estimado fuera de rango.")
+        except ValueError:
+            return self._error(start_response, 409, "no se pudo crear el bien de inventario.")
+
+        creado = next(row for row in db.get_inventario_bienes(conn) if row["id"] == nuevo_id)
+        return self._json(start_response, 201, {"inventory": creado})
+
+    def update_inventory(self, ctx, conn, start_response):
+        bien_id = int(ctx.path_params["id"])
+        data, err = self._parse_json(ctx, start_response)
+        if err is not None:
+            return err
+        unknown = self._unknown_fields(data.keys(), INVENTORY_EDITABLE_FIELDS)
+        if unknown:
+            return self._error(start_response, 400, "campos desconocidos.")
+        if not data:
+            return self._error(start_response, 400, "se requiere al menos un campo para editar.")
+        # A diferencia del alta, el PATCH acepta `fecha_adquisicion: null`
+        # explícito para permitir vaciar el campo (t_0e38e74e, hallazgo 3 del
+        # revisor 46d4f3d5): solo se valida el formato ISO cuando viene con
+        # un valor no nulo.
+        if (
+            "fecha_adquisicion" in data
+            and data["fecha_adquisicion"] is not None
+            and not _is_iso_date(data["fecha_adquisicion"])
+        ):
+            return self._error(start_response, 400, "fecha_adquisicion debe ser 'YYYY-MM-DD' válida.")
+        if not _valid_optional_strings(data, {"categoria", "ubicacion", "notas"}):
+            return self._error(start_response, 400, "campos de texto inválidos.")
+        if not _valid_optional_money(data, INVENTORY_MONEY_OPTIONAL_FIELDS):
+            return self._error(start_response, 400, "campos monetarios fuera de rango o con más de dos decimales.")
+        _sugerir_precio_usd_compra(data)
+
+        existentes = db.get_inventario_bienes(conn)
+        fila = next((row for row in existentes if row["id"] == bien_id), None)
+        if fila is None:
+            return self._error(start_response, 404, f"no existe bien de inventario id={bien_id}.")
+
+        resultante = {**fila, **data}
+        errores = db.validar_inventario_bien(resultante)
+        if errores:
+            return self._error(start_response, 400, "edición de bien de inventario inválida.")
+        if not _valid_money(resultante.get("valor_estimado")):
+            return self._error(start_response, 400, "valor_estimado fuera de rango o con más de dos decimales.")
+
+        try:
+            db.actualizar_inventario_bien(conn, bien_id, data)
+        except OverflowError:
+            return self._error(start_response, 400, "valor_estimado fuera de rango.")
+        except ValueError:
+            return self._error(start_response, 409, "no se pudo editar el bien de inventario.")
+
+        actualizado = next(row for row in db.get_inventario_bienes(conn) if row["id"] == bien_id)
+        return self._json(start_response, 200, {"inventory": actualizado})
+
+    def delete_inventory(self, ctx, conn, start_response):
+        bien_id = int(ctx.path_params["id"])
+        # Mismo patrón que delete_income: reservar el escritor antes de leer
+        # evita una promoción de snapshot obsoleto si dos conexiones intentan
+        # borrar la misma fila a la vez.
+        conn.execute("BEGIN IMMEDIATE")
+        fila = conn.execute(
+            "SELECT deleted_at, valor_estimado FROM inventario_bienes WHERE id = ?", (bien_id,)
+        ).fetchone()
+        if fila is None:
+            conn.rollback()
+            return self._error(start_response, 404, f"no existe bien de inventario id={bien_id}.")
+        if fila["deleted_at"] is not None:
+            conn.rollback()
+            return self._error(start_response, 404, f"no existe bien de inventario id={bien_id}.")
+        if not _valid_money(fila["valor_estimado"]):
+            conn.rollback()
+            return self._error(start_response, 422, "datos almacenados inválidos.")
+        try:
+            db.eliminar_inventario_bien_logico(conn, bien_id, SERVER_ACTOR)
+        except ValueError:
+            return self._error(start_response, 409, "no se pudo borrar el bien de inventario.")
+        return self._json(start_response, 200, {"deleted": True, "id": bien_id})
 
     # --- fixed ----------------------------------------------------------
 

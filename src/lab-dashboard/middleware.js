@@ -94,6 +94,8 @@ const PROXY_ROUTES = [
   { pattern: /^\/api\/expenses\/[1-9]\d*$/, methods: ['DELETE'], query: {} },
   { pattern: /^\/api\/income$/, methods: ['GET', 'POST'], query: {} },
   { pattern: /^\/api\/income\/[1-9]\d*$/, methods: ['PATCH', 'DELETE'], query: {} },
+  { pattern: /^\/api\/inventory$/, methods: ['GET', 'POST'], query: {} },
+  { pattern: /^\/api\/inventory\/[1-9]\d*$/, methods: ['PATCH', 'DELETE'], query: {} },
   { pattern: /^\/api\/fixed$/, methods: ['GET', 'POST'], query: { GET: { dateISO: 'date' } } },
   { pattern: /^\/api\/fixed\/versions$/, methods: ['GET'], query: {} },
   { pattern: /^\/api\/fixed\/range$/, methods: ['GET'], query: { GET: { fromISO: 'date', toISO: 'date' } }, requiredQuery: ['fromISO', 'toISO'] },

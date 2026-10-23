@@ -823,6 +823,93 @@ button.card:active {
   font-style: italic;
 }
 
+/* ---- Inventario ---- */
+
+.cotizacion-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 18px;
+  padding: 12px 16px;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+.cotizacion-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--ink-soft);
+}
+
+.cotizacion-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.cotizacion-input-wrap:focus-within {
+  border-color: var(--green-deep);
+}
+
+.cotizacion-prefix,
+.cotizacion-suffix {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+#inventario-cotizacion-input {
+  width: 90px;
+  min-height: 32px;
+  border: none;
+  background: none;
+  outline: none;
+  color: var(--ink);
+  font-family: 'Work Sans', sans-serif;
+  font-size: 14px;
+  text-align: right;
+}
+
+.cotizacion-note {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.card-jd .value,
+.card-pinki .value {
+  font-size: clamp(16px, 4.6vw, 24px);
+}
+
+.card-jd { border-top: 3px solid var(--terracotta); }
+.card-pinki { border-top: 3px solid var(--mustard); }
+.card-total-usd { border-top: 3px solid var(--green-deep); }
+
+.inventario-filters {
+  margin-bottom: 14px;
+}
+
+.inventario-valor {
+  font-family: 'Fraunces', serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--green-deep);
+  margin: 6px 0;
+}
+
+.inventario-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
 /* ---- Tabla: filtros y extras ---- */
 
 .table-header {
@@ -932,6 +1019,10 @@ tfoot td {
 
 .td-muted {
   color: var(--ink-faint);
+}
+
+.td-ubicacion::before {
+  content: '📍 ';
 }
 
 .td-amount {

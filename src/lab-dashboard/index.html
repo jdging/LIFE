@@ -25,6 +25,7 @@
     <button class="tab-btn" id="tab-fijos" role="tab" aria-selected="false" aria-controls="view-fijos" tabindex="-1" onclick="switchView('fijos')">🏠 Fijos</button>
     <button class="tab-btn" id="tab-supermercado" role="tab" aria-selected="false" aria-controls="view-supermercado" tabindex="-1" onclick="switchView('supermercado')">🛒 Supermercado</button>
     <button class="tab-btn" id="tab-recetas" role="tab" aria-selected="false" aria-controls="view-recetas" tabindex="-1" onclick="switchView('recetas')">🍲 Recetas</button>
+    <button class="tab-btn" id="tab-inventario" role="tab" aria-selected="false" aria-controls="view-inventario" tabindex="-1" onclick="switchView('inventario')">📦 Inventario</button>
   </nav>
   <p id="api-status" class="api-status" role="status" aria-live="polite">Comprobando conexión autenticada…</p>
   <div id="write-notice" class="write-notice" role="status" aria-live="polite" hidden></div>
@@ -301,6 +302,75 @@
       </div>
       <div id="recetas-content">Cargando…</div>
     </div><!-- /view-recetas -->
+
+    <!-- ── VISTA INVENTARIO ─────────────────────────────────────── -->
+    <div class="view" id="view-inventario" role="tabpanel" aria-labelledby="tab-inventario" hidden>
+      <div class="section-header">
+        <h2 class="section-title">Inventario</h2>
+        <button type="button" class="btn-print" data-write-action data-requires="inventory" onclick="openForm('inventory')" disabled>Agregar bien</button>
+      </div>
+
+      <p class="form-help" id="inventario-notice" role="status" hidden></p>
+
+      <div class="cotizacion-bar" id="inventario-cotizacion-bar">
+        <span class="cotizacion-label">Cotización USD hoy</span>
+        <div class="cotizacion-input-wrap">
+          <span class="cotizacion-prefix">$</span>
+          <input type="number" id="inventario-cotizacion-input" min="1" step="1" inputmode="decimal"
+            aria-label="Cotización USD a pesos de hoy" oninput="setInventarioCotizacion(this.value)">
+          <span class="cotizacion-suffix">ARS / USD</span>
+        </div>
+        <span class="cotizacion-note">Convierte los USD de las cards y la tabla a pesos de hoy. Se guarda en este navegador.</span>
+      </div>
+
+      <section class="cards" id="inventario-cards">
+        <div class="card card-total-usd">
+          <span class="card-icon" aria-hidden="true">📦</span>
+          <div class="label">Inventario total (USD)</div>
+          <div class="value" id="inv-total-usd">—</div>
+          <div class="value-sub" id="inv-total-ars"></div>
+        </div>
+        <div class="card card-jd">
+          <span class="card-icon" aria-hidden="true">🧑</span>
+          <div class="label">JD</div>
+          <div class="value" id="inv-jd-usd">—</div>
+          <div class="value-sub" id="inv-jd-ars"></div>
+        </div>
+        <div class="card card-pinki">
+          <span class="card-icon" aria-hidden="true">🧑</span>
+          <div class="label">Pinki</div>
+          <div class="value" id="inv-pinki-usd">—</div>
+          <div class="value-sub" id="inv-pinki-ars"></div>
+        </div>
+        <div class="card">
+          <span class="card-icon" aria-hidden="true">✅</span>
+          <div class="label">Ítems activos</div>
+          <div class="value" id="inv-count-activos">—</div>
+          <div class="value-sub" id="inv-count-sub"></div>
+        </div>
+      </section>
+
+      <div class="persona-filter" role="group" aria-label="Filtro por estado" id="inventario-estado-filter">
+        <button type="button" class="persona-btn active" data-estado="Activo" aria-pressed="true" onclick="setInventarioFiltroEstado('Activo')">Activos</button>
+        <button type="button" class="persona-btn" data-estado="Vendido" aria-pressed="false" onclick="setInventarioFiltroEstado('Vendido')">Vendidos</button>
+        <button type="button" class="persona-btn" data-estado="Donado" aria-pressed="false" onclick="setInventarioFiltroEstado('Donado')">Donados</button>
+        <button type="button" class="persona-btn" data-estado="Desechado" aria-pressed="false" onclick="setInventarioFiltroEstado('Desechado')">Desechados</button>
+        <button type="button" class="persona-btn" data-estado="" aria-pressed="false" onclick="setInventarioFiltroEstado('')">Todos</button>
+      </div>
+
+      <div class="table-filters inventario-filters">
+        <input type="search" id="inventario-search" class="search-input" placeholder="Buscar por nombre o notas…" aria-label="Buscar bien" oninput="renderInventarioView()">
+        <label for="inventario-filtro-categoria">Categoría:
+          <select id="inventario-filtro-categoria" onchange="renderInventarioView()"><option value="">Todas las categorías</option></select>
+        </label>
+        <label for="inventario-filtro-ubicacion">Ubicación:
+          <select id="inventario-filtro-ubicacion" onchange="renderInventarioView()"><option value="">Todas las ubicaciones</option></select>
+        </label>
+        <span class="table-count" id="inventario-count"></span>
+      </div>
+
+      <div id="inventario-content">Cargando…</div>
+    </div><!-- /view-inventario -->
 
     <!-- ── VISTA PRESUPUESTO ────────────────────────────────────── -->
     <div class="view" id="view-presupuesto" role="tabpanel" aria-label="Presupuesto (sin destino visible por ahora)" hidden>

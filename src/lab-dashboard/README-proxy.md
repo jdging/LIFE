@@ -24,6 +24,8 @@ La continuación al recurso estático llama a `next()` de `@vercel/functions`, s
 | `/api/expenses/:id` | `DELETE` | Ninguna |
 | `/api/income` | `GET`, `POST` | Ninguna |
 | `/api/income/:id` | `PATCH`, `DELETE` | Ninguna |
+| `/api/inventory` | `GET`, `POST` | Ninguna |
+| `/api/inventory/:id` | `PATCH`, `DELETE` | Ninguna |
 | `/api/fixed` | `GET`, `POST` | `dateISO=YYYY-MM-DD` opcional sólo en `GET` |
 | `/api/fixed/versions` | `GET` | Ninguna |
 | `/api/fixed/range` | `GET` | `fromISO` y `toISO` obligatorias, fechas `YYYY-MM-DD` |
@@ -33,6 +35,8 @@ La continuación al recurso estático llama a `next()` de `@vercel/functions`, s
 | `/api/categories` | `GET` | `tipo` opcional en el proxy, debe ser `Gasto`, `Ingreso` o `Inversión` si está presente |
 
 `:id` es un entero decimal positivo. No se admiten IDs de texto como `F-1`, aliases en español, parámetros desconocidos ni parámetros repetidos. La query permitida se conserva en la URL upstream sin traducir nombres. Una ruta desconocida devuelve `404`; un método no admitido sobre una ruta conocida devuelve `405` con `Allow`; una query inválida devuelve `400`. La API real valida el contenido de los JSON y los campos de dominio.
+
+El allowlist de `/api/inventory` y `/api/inventory/:id` en `middleware.js` es por **ruta y método**, no por campo del body: el proxy reenvía el JSON entrante sin inspeccionar sus claves (ver "Límites y seguridad" — solo revisa tamaño, forma JSON/UTF-8 y, en la respuesta upstream, que no se filtren secretos). Por eso los seis campos de paridad con el legacy agregados en `lab/db.py`/`lab/api.py` (t_0e38e74e: `precio_ars`, `cotizacion_usd_compra`, `precio_usd_compra`, `proporcion_jd`, `precio_venta_estimado_usd`, `estado` — mapeo completo y validaciones en `lab/README-api.md`) viajan transparentes a través de este proxy sin requerir ningún cambio en `middleware.js` ni en su allowlist de rutas/métodos/query.
 
 La cookie firmada y vigente se exige tanto para lecturas como para escrituras. Sin sesión válida, `/api/*` responde `401` JSON. Si una lectura trae `Origin`, debe coincidir exactamente con el origen de `request.url`. Para `POST`, `PATCH` y `DELETE`, ese `Origin` es obligatorio. `Referer`, `Host` y headers forwarded no sustituyen esa comprobación.
 

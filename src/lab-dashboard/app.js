@@ -23,6 +23,9 @@ const PALETTE = ['#7c9a6b', '#c97d55', '#d1a13f', '#8a6fa0', '#8a8a5c', '#a9926f
 const INK = '#332d22';
 const LINE = '#e6dcc4';
 const FONT = { family: 'Work Sans', size: 11 };
+const INVENTARIO_ESTADOS = ['Activo', 'Vendido', 'Donado', 'Desechado'];
+const INVENTARIO_COTIZACION_STORAGE_KEY = 'life_inventario_cotizacion_usd_ars';
+const INVENTARIO_COTIZACION_DEFAULT = 1200;
 
 const iconFor = (categoria) => CATEGORY_ICONS[categoria] || '🔸';
 const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -34,6 +37,8 @@ const fmtARSExact = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
 const fmtARSCompact = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', notation: 'compact', maximumFractionDigits: 1 }).format(parseFloat(n) || 0);
+const fmtUSD = (n) =>
+  'U$D ' + new Intl.NumberFormat('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(parseFloat(n) || 0);
 const paletteColors = (n) => Array.from({ length: n }, (_, i) => PALETTE[i % PALETTE.length]);
 
 function thisMonth() {
@@ -109,6 +114,7 @@ function getMonthProportion(month) {
 const DATA = {
   gastos: [], ingresos: [], fijos: [], resumen: [], deudaPendiente: null,
   loadErrors: {}, compras: null, comprasError: null, recetas: null, recetasError: null,
+  inventario: [],
 };
 const charts = {};
 let period = null;
@@ -116,7 +122,7 @@ let currentView = 'gastos';
 // Destinos con pestaña visible en nav.view-tabs. 'inversiones' y 'presupuesto'
 // siguen en el DOM (código/panel conservado) pero switchView los ignora: no
 // tienen botón de tab y no deben quedar accesibles desde la navegación.
-const VISIBLE_VIEWS = ['gastos', 'ingresos', 'fijos', 'supermercado', 'recetas'];
+const VISIBLE_VIEWS = ['gastos', 'ingresos', 'fijos', 'supermercado', 'recetas', 'inventario'];
 const ALL_VIEWS = [...VISIBLE_VIEWS, 'inversiones', 'presupuesto'];
 let comprasLoaded = false;
 let recetasLoaded = false;
@@ -132,6 +138,10 @@ let fijosMode = 'vigentes';
 let fijosSelectedGroup = null;
 let fijosChart = null;
 let liveMode = false;
+// Independiente de liveMode: 'inventory' puede faltar en /api/health.capabilities
+// (API más vieja o versión parcialmente desplegada) sin que el resto del dashboard
+// deje de estar en vivo — ver loadAll/updateAvailability.
+let inventoryAvailable = false;
 let authState = 'unknown';
 let writePending = false;
 let reloadPending = false;
@@ -139,6 +149,12 @@ let reloadFailed = false;
 let activeForm = null;
 let categoriesGastoCache = null;
 let activeExpenseCatalog = null;
+let inventarioFiltroEstado = 'Activo';
+// True si el usuario tipeó directamente en el campo USD de compra del
+// formulario de inventario abierto: mientras esté en true, la sugerencia
+// automática (onInventoryUsdSugerido) no pisa lo que escribió (t_0e38e74e,
+// hallazgo 4 del revisor 46d4f3d5). Se resetea en cada apertura del form.
+let inventoryUsdEditedManually = false;
 const TABLE_KEY_MAP = { monto_total: 'monto', pago: 'pagado_por' };
 
 // ── CARGA DE DATOS ───────────────────────────────────────────────────────
@@ -190,6 +206,15 @@ function adaptLiveFixed(row) {
   return { ...row, id, fijo_grupo_id: row.fijo_grupo_id == null ? null : canonicalId(row.fijo_grupo_id) };
 }
 
+function adaptLiveInventario(row) {
+  const id = canonicalId(row?.id);
+  if (typeof row?.nombre !== 'string' || !row.nombre.trim()) throw new Error('Bien de inventario sin nombre.');
+  if (typeof row?.valor_estimado !== 'number' || !Number.isFinite(row.valor_estimado) || row.valor_estimado <= 0) {
+    throw new Error('Bien de inventario con valor estimado inválido.');
+  }
+  return { ...row, id };
+}
+
 function adaptSummary(row) {
   if (!row || typeof row.month !== 'string' || !validDate(`${row.month}-01`) ||
       !row.proportion || typeof row.proportion !== 'object') {
@@ -233,8 +258,9 @@ function adaptCurrentDebt(value) {
 
 async function loadLive() {
   const currentMonth = thisMonth();
-  const [expenses, income, versions, summary, currentSummary] = await Promise.all([
+  const [expenses, income, inventory, versions, summary, currentSummary] = await Promise.all([
     fetchJSON('/api/expenses'), fetchJSON('/api/income'),
+    inventoryAvailable ? fetchJSON('/api/inventory') : Promise.resolve(null),
     fetchJSON('/api/fixed/versions'), fetchJSON('/api/summary'),
     fetchJSON(`/api/summary?month=${currentMonth}`),
   ]);
@@ -248,6 +274,9 @@ async function loadLive() {
   const next = {
     gastos: requireList(expenses, 'expenses').map(adaptLiveMovement),
     ingresos: requireList(income, 'income').map(adaptLiveMovement),
+    // Si la API no declaró la capability 'inventory', la pestaña queda vacía
+    // y en solo lectura/aviso (ver renderInventarioView) sin afectar liveMode.
+    inventario: inventoryAvailable ? requireList(inventory, 'inventory').map(adaptLiveInventario) : [],
     fijos: requireList(versions, 'versions').map(adaptLiveFixed),
     resumen: months,
   };
@@ -273,6 +302,10 @@ async function loadSnapshot() {
   DATA.fijos = f.status === 'fulfilled' ? f.value : [];
   DATA.resumen = r.status === 'fulfilled' ? r.value : [];
   DATA.deudaPendiente = d.status === 'fulfilled' ? d.value : null;
+  // Sin equivalente de snapshot para inventario (tabla nueva, sin archivo
+  // data/inventario.json): esta pestaña queda vacía y de solo lectura hasta
+  // que vuelva la conexión autenticada (ver renderInventarioView).
+  DATA.inventario = [];
   DATA.loadErrors = {
     gastos: g.status === 'rejected',
     ingresos: i.status === 'rejected',
@@ -302,19 +335,25 @@ async function loadCategoriasGasto() {
 async function loadAll() {
   authState = 'unavailable';
   liveMode = false;
+  inventoryAvailable = false;
   updateAvailability();
   try {
     const health = await fetchJSON('/api/health');
+    // 'inventory' queda afuera de este chequeo a propósito: el modo live del
+    // resto del dashboard no puede depender de una capability que es propia
+    // de una sola pestaña (ver inventoryAvailable, más abajo).
     if (health?.ok !== true || health.mode !== 'live' ||
         !Array.isArray(health.capabilities) ||
         !['expenses', 'income', 'fixed'].every((cap) => health.capabilities.includes(cap))) {
       throw new Error('API no disponible para formularios');
     }
+    inventoryAvailable = health.capabilities.includes('inventory');
     authState = 'authenticated';
     await loadLive();
   } catch (error) {
     if (error.status === 401) authState = 'unavailable';
     liveMode = false;
+    inventoryAvailable = false;
     reloadFailed = false;
     await loadSnapshot();
   }
@@ -343,8 +382,18 @@ function updateAvailability() {
       : 'Modo snapshot · solo lectura. La conexión autenticada no está disponible; no se pueden guardar cambios.');
   status.classList.toggle('status-live', liveMode);
   document.querySelectorAll('[data-write-action]').forEach((button) => {
-    button.disabled = !liveMode || writePending || reloadPending || reloadFailed;
+    // Los botones marcados data-requires="inventory" (alta/edición/baja de
+    // bienes) se deshabilitan también si falta esa capability puntual, sin
+    // afectar al resto de los botones de escritura (ver inventoryAvailable).
+    const needsInventory = button.dataset.requires === 'inventory';
+    button.disabled = !liveMode || (needsInventory && !inventoryAvailable)
+      || writePending || reloadPending || reloadFailed;
   });
+  const invNotice = document.getElementById('inventario-notice');
+  if (invNotice) {
+    invNotice.hidden = !liveMode || inventoryAvailable;
+    invNotice.textContent = 'La API no informó la capability "inventory": esta pestaña queda en solo lectura hasta que esté disponible. El resto del dashboard sigue en vivo.';
+  }
   document.querySelector('.fijos-snapshot').textContent = liveMode
     ? (reloadFailed ? 'La recarga falló; los datos visibles pueden estar desactualizados.'
       : 'Datos en vivo. Cada cambio de un fijo conserva las versiones anteriores.')
@@ -388,6 +437,7 @@ function renderView(v) {
   else if (v === 'fijos') renderFijosView();
   else if (v === 'supermercado') ensureComprasLoaded();
   else if (v === 'recetas') ensureRecetasLoaded();
+  else if (v === 'inventario') renderInventarioView();
   // Inversiones y Presupuesto se quedan en el estado vacío ya maquetado en index.html.
 }
 
@@ -923,6 +973,35 @@ function formMarkup(kind, row, categoriesCatalog) {
   if (kind === 'expense-delete') return `<p>Se dará de baja únicamente esta fila: ${escapeHtml(row.descripcion_original || row.categoria)} · ${escapeHtml(row.fecha)} · cuota ${cuotaLabel(row)} · ${fmtARSExact(row.monto)}. Las demás cuotas permanecen.</p>`;
   if (kind === 'income-delete') return `<p>Se dará de baja el ingreso de ${escapeHtml(row.persona)}: ${escapeHtml(row.descripcion_original || row.categoria)} · ${escapeHtml(row.fecha)} · ${fmtARSExact(row.monto)}.${row.categoria === 'Salario' ? ' Es un ingreso de Salario: esta baja puede cambiar la proporción del mes y las deudas.' : ''}</p>`;
   if (kind === 'fixed-delete') return `<p>La baja de ${escapeHtml(row.nombre)} crea una versión inactiva. El historial permanece.</p>${formField('fecha_baja', 'Fecha de baja', todayLocalISO(), 'date', 'required')}`;
+  if (kind === 'inventory-delete') return `<p>Se dará de baja el bien "${escapeHtml(row.nombre)}"${row.categoria ? ` (${escapeHtml(row.categoria)})` : ''}, valor estimado ${fmtARSExact(row.valor_estimado)}.</p>`;
+  if (kind === 'inventory' || kind === 'inventory-edit') {
+    const categorias = [...new Set(DATA.inventario.map((it) => it.categoria).filter(Boolean))].sort();
+    const ubicaciones = [...new Set(DATA.inventario.map((it) => it.ubicacion).filter(Boolean))].sort();
+    // proporcion_jd=null en edición (hallazgo 4 del revisor fc195491): el campo
+    // queda vacío con placeholder, nunca precargado en 50 — precargarlo en 50
+    // haría que editar cualquier otro campo lo mande como un 50/50 declarado,
+    // perdiendo el estado "sin dato" que la tabla preserva. En el alta (row
+    // null) sigue el default 50 que ya existía.
+    const proporcionSinDato = kind === 'inventory-edit' && row && row.proporcion_jd === null;
+    const pctJD = proporcionSinDato ? '' : (row?.proporcion_jd ?? 50);
+    const pctJDExtra = 'min="0" max="100" step="any" inputmode="decimal" oninput="onInventoryProporcionChange()"' +
+      (proporcionSinDato ? ' placeholder="sin dato, 50/50 por defecto en cálculos"' : '');
+    return `${formField('nombre', 'Descripción', row?.nombre || '', 'text', 'required')}
+      ${formField('categoria', 'Categoría', row?.categoria || '', 'text', 'list="inventario-categorias"')}
+      <datalist id="inventario-categorias">${categorias.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
+      ${formField('ubicacion', 'Ubicación', row?.ubicacion || '', 'text', 'list="inventario-ubicaciones"')}
+      <datalist id="inventario-ubicaciones">${ubicaciones.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
+      ${formField('valor_estimado', 'Valor estimado (ARS)', row?.valor_estimado ?? '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
+      ${formField('fecha_adquisicion', 'Fecha de compra (opcional)', row?.fecha_adquisicion || '', 'date')}
+      ${formField('precio_ars', 'ARS pagado en la compra (opcional)', row?.precio_ars ?? '', 'number', 'min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdSugerido()"')}
+      ${formField('cotizacion_usd_compra', 'Cotización USD al comprar (opcional)', row?.cotizacion_usd_compra ?? '', 'number', 'min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdSugerido()"')}
+      ${formField('precio_usd_compra', 'USD de compra (sugerido = ARS / cotización)', row?.precio_usd_compra ?? '', 'number', 'min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdEdited()"')}
+      <div id="inventory-proportion">${formField('proporcion_jd', 'JD (%)', pctJD, 'number', pctJDExtra)}
+      <p class="form-help">Pinki: <output id="inventory-pinki-percent" aria-live="polite">${pctJD !== '' && Number.isFinite(Number(pctJD)) ? `${100 - Number(pctJD)}%` : '—'}</output></p></div>
+      ${formField('precio_venta_estimado_usd', 'Precio de reventa estimado (USD, opcional)', row?.precio_venta_estimado_usd ?? '', 'number', 'min="0" max="1000000000000" step="0.01"')}
+      ${formSelect('estado', 'Estado', INVENTARIO_ESTADOS, row?.estado || 'Activo')}
+      ${formField('notas', 'Notas', row?.notas || '')}`;
+  }
   if (kind === 'expense') {
     const cards = [...new Set(DATA.gastos.map((item) => item.tarjeta_id).filter(Boolean))].sort();
     const categoryFields = categoriesCatalog ? formExpenseCategorySelects(categoriesCatalog) : formExpenseCategoryText();
@@ -970,15 +1049,31 @@ function formMarkup(kind, row, categoriesCatalog) {
 
 async function openForm(kind, id = null) {
   if (!liveMode || writePending || reloadPending || reloadFailed) return;
-  const source = kind.startsWith('expense') ? DATA.gastos : kind.startsWith('income') ? DATA.ingresos : DATA.fijos;
+  if (kind.startsWith('inventory') && !inventoryAvailable) return;
+  const source = kind.startsWith('expense') ? DATA.gastos
+    : kind.startsWith('income') ? DATA.ingresos
+    : kind.startsWith('inventory') ? DATA.inventario
+    : DATA.fijos;
   const row = id === null ? null : source.find((item) => canonicalId(item.id) === canonicalId(id));
   if (id !== null && !row) return;
+  // Si el bien ya tiene precio_usd_compra != null al abrir el formulario de
+  // edición (hallazgo 3 del revisor fc195491), arranca en `true`: no se
+  // autosugiere sobre un USD ya explícito. Solo se arranca en `false` (y se
+  // autosugiere) cuando el campo está vacío — alta, o edición sin ese dato.
+  if (kind.startsWith('inventory')) {
+    inventoryUsdEditedManually = row != null && row.precio_usd_compra !== null && row.precio_usd_compra !== undefined;
+  }
   // Si ya hay una apertura en curso (modal abierto o cargando), el foco actual
   // está dentro del modal (ej: #form-close) y no es un disparador real: se
   // conserva el returnFocus original en vez de reemplazarlo.
   const returnFocus = activeForm ? activeForm.returnFocus : document.activeElement;
   const form = activeForm = { kind, row, returnFocus, confirmed: false, payload: null };
-  const titles = { expense: 'Agregar gasto', 'expense-delete': 'Dar de baja una cuota', income: 'Agregar ingreso', 'income-edit': 'Editar ingreso', 'income-delete': 'Dar de baja ingreso', fixed: 'Agregar fijo', 'fixed-edit': 'Crear versión de fijo', 'fixed-delete': 'Dar de baja fijo' };
+  const titles = {
+    expense: 'Agregar gasto', 'expense-delete': 'Dar de baja una cuota',
+    income: 'Agregar ingreso', 'income-edit': 'Editar ingreso', 'income-delete': 'Dar de baja ingreso',
+    inventory: 'Agregar bien', 'inventory-edit': 'Editar bien', 'inventory-delete': 'Dar de baja bien',
+    fixed: 'Agregar fijo', 'fixed-edit': 'Crear versión de fijo', 'fixed-delete': 'Dar de baja fijo',
+  };
   document.getElementById('form-title').textContent = titles[kind];
   document.getElementById('form-intro').textContent = kind.includes('delete') ? 'Revisá qué cambio se aplicará.' : 'Completá los datos y revisá el resumen antes de guardar.';
   document.getElementById('form-errors').textContent = '';
@@ -1061,6 +1156,41 @@ function syncCustomProportion() {
   pinki.textContent = !fixedCustom.hidden && validFixedPercent(raw) ? `${100 - value}%` : '—';
 }
 
+// Sugerencia en vivo de precio_usd_compra = precio_ars / cotizacion_usd_compra
+// (brief t_0e38e74e punto 3: "sugerencia de USD = ARS / cotización"). Solo
+// sugiere — nunca pisa un USD que el usuario ya haya completado a mano
+// (hallazgo 4 del revisor 46d4f3d5): si el campo tiene contenido Y el
+// usuario lo tocó directamente (ver onInventoryUsdEdited), se deja intacto.
+function onInventoryUsdSugerido() {
+  const arsInput = document.getElementById('field-precio_ars');
+  const cotInput = document.getElementById('field-cotizacion_usd_compra');
+  const usdInput = document.getElementById('field-precio_usd_compra');
+  if (!arsInput || !cotInput || !usdInput) return;
+  if (usdInput.value.trim() && inventoryUsdEditedManually) return;
+  const ars = Number(arsInput.value);
+  const cot = Number(cotInput.value);
+  if (Number.isFinite(ars) && ars > 0 && Number.isFinite(cot) && cot > 0) {
+    usdInput.value = (ars / cot).toFixed(2);
+  }
+}
+
+// Marca que el usuario escribió directamente en el campo USD de compra, para
+// que onInventoryUsdSugerido deje de pisarlo mientras tenga contenido.
+function onInventoryUsdEdited() {
+  inventoryUsdEditedManually = true;
+}
+
+// Muestra el % de Pinki al lado del de JD, igual que en el reparto de fijos
+// (ver syncCustomProportion) pero sin deshabilitar nada: proporcion_jd es
+// siempre editable en el formulario de inventario.
+function onInventoryProporcionChange() {
+  const jdInput = document.getElementById('field-proporcion_jd');
+  const pinkiOutput = document.getElementById('inventory-pinki-percent');
+  if (!jdInput || !pinkiOutput) return;
+  const value = Number(jdInput.value);
+  pinkiOutput.textContent = validFixedPercent(jdInput.value) ? `${100 - value}%` : '—';
+}
+
 function validFixedPercent(raw) {
   if (typeof raw !== 'string' || !/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(raw)) return false;
   const value = Number(raw);
@@ -1073,6 +1203,15 @@ function validMoney(raw) {
   return Number.isFinite(value) && value > 0 && value <= 1e12;
 }
 
+// Igual que validMoney, pero admite 0 — para los campos monetarios opcionales
+// de paridad con el legacy (precio_ars, cotizacion_usd_compra, etc.), que en
+// el servidor se validan con positive=False (ver api.py, INVENTORY_MONEY_OPTIONAL_FIELDS).
+function validMoneyOptional(raw) {
+  if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(String(raw))) return false;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 && value <= 1e12;
+}
+
 function validDate(raw) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return false;
   const date = new Date(`${raw}T00:00:00Z`);
@@ -1081,6 +1220,59 @@ function validDate(raw) {
 
 function collectForm(kind, row, values) {
   const errors = {};
+  // Inventario tiene su propia forma (campos y fecha opcional distintos de
+  // gastos/ingresos/fijos): se resuelve aparte en vez de forzarla en la
+  // lógica genérica de dateKey/moneyKey de abajo, pensada para esos tres.
+  if (kind.startsWith('inventory')) {
+    if (kind === 'inventory-delete') return { payload: null, errors };
+    if (!values.nombre?.trim()) errors.nombre = 'Ingresá una descripción.';
+    if (!validMoney(values.valor_estimado)) {
+      errors.valor_estimado = 'Ingresá un valor positivo, finito, de hasta 2 decimales y máximo 1 billón.';
+    }
+    if (values.fecha_adquisicion?.trim() && !validDate(values.fecha_adquisicion)) {
+      errors.fecha_adquisicion = 'Ingresá una fecha válida o dejala vacía.';
+    }
+    // Campos de paridad con el legacy (t_0e38e74e): todos opcionales. Si se
+    // completan, deben respetar el mismo formato de monto que valor_estimado,
+    // pero admitiendo 0 (ver validMoneyOptional / INVENTORY_MONEY_OPTIONAL_FIELDS en api.py).
+    for (const field of ['precio_ars', 'cotizacion_usd_compra', 'precio_usd_compra', 'precio_venta_estimado_usd']) {
+      if (values[field]?.trim() && !validMoneyOptional(values[field])) {
+        errors[field] = 'Ingresá un monto válido (≥ 0, hasta 2 decimales, máximo 1 billón) o dejalo vacío.';
+      }
+    }
+    if (values.proporcion_jd?.trim() && !validFixedPercent(values.proporcion_jd)) {
+      errors.proporcion_jd = 'Ingresá un porcentaje de JD entre 0 y 100, o dejalo vacío.';
+    }
+    if (values.estado && !INVENTARIO_ESTADOS.includes(values.estado)) {
+      errors.estado = 'Elegí un estado válido.';
+    }
+    const payload = { nombre: values.nombre.trim(), valor_estimado: Number(values.valor_estimado) };
+    // En edición, vaciar un campo opcional lo manda explícito en `null` para
+    // que el PATCH lo borre (api.py acepta `null` para todos los opcionales
+    // de inventario, t_0e38e74e hallazgo 3 del revisor 46d4f3d5); en el alta
+    // se sigue omitiendo sin más — no hay nada previo que borrar.
+    const isEdit = kind === 'inventory-edit';
+    if (values.categoria?.trim()) payload.categoria = values.categoria.trim();
+    else if (isEdit) payload.categoria = null;
+    if (values.ubicacion?.trim()) payload.ubicacion = values.ubicacion.trim();
+    else if (isEdit) payload.ubicacion = null;
+    if (values.fecha_adquisicion?.trim()) payload.fecha_adquisicion = values.fecha_adquisicion;
+    else if (isEdit) payload.fecha_adquisicion = null;
+    if (values.notas?.trim()) payload.notas = values.notas.trim();
+    else if (isEdit) payload.notas = null;
+    if (values.precio_ars?.trim()) payload.precio_ars = Number(values.precio_ars);
+    else if (isEdit) payload.precio_ars = null;
+    if (values.cotizacion_usd_compra?.trim()) payload.cotizacion_usd_compra = Number(values.cotizacion_usd_compra);
+    else if (isEdit) payload.cotizacion_usd_compra = null;
+    if (values.precio_usd_compra?.trim()) payload.precio_usd_compra = Number(values.precio_usd_compra);
+    else if (isEdit) payload.precio_usd_compra = null;
+    if (values.precio_venta_estimado_usd?.trim()) payload.precio_venta_estimado_usd = Number(values.precio_venta_estimado_usd);
+    else if (isEdit) payload.precio_venta_estimado_usd = null;
+    if (values.proporcion_jd?.trim()) payload.proporcion_jd = Number(values.proporcion_jd);
+    else if (isEdit) payload.proporcion_jd = null;
+    if (values.estado) payload.estado = values.estado;
+    return { payload, errors };
+  }
   const dateKey = kind === 'fixed-delete' ? 'fecha_baja' : kind.startsWith('fixed') ? 'vigente_desde' : 'fecha';
   if (kind !== 'expense-delete' && kind !== 'income-delete' && !validDate(values[dateKey])) errors[dateKey] = 'Ingresá una fecha válida.';
   if (kind.endsWith('delete')) return { payload: kind === 'fixed-delete' ? { fecha_baja: values.fecha_baja } : null, errors };
@@ -1145,6 +1337,8 @@ function describeForm(kind, row, payload) {
   if (kind === 'expense') return `Gasto ${payload.categoria}${payload.subcategoria ? ` / ${payload.subcategoria}` : ''}: ${fmtARSExact(payload.monto)}, ${payload.fecha}, ${payload.cuotas_total} cuota(s). ${payload.descripcion_original || 'Sin descripción'}. Medio: ${payload.medio_pago}${payload.tarjeta_id ? `, tarjeta ${payload.tarjeta_id}` : ''}. Pagó ${payload.pagado_por}; reparto ${payload.tipo_proporcion}${payload.tipo_proporcion === 'custom' ? ` (${payload.proporcion_jd}% JD / ${payload.proporcion_pinki}% Pinki)` : ''}.`;
   if (kind === 'income-delete') return `Baja del ingreso de ${row.persona} del ${row.fecha}, ${fmtARSExact(row.monto)}.${row.categoria === 'Salario' ? ' Es un ingreso de Salario: puede cambiar la proporción del mes y las deudas.' : ''}`;
   if (kind.startsWith('income')) return `${kind === 'income-edit' ? 'Editar' : 'Agregar'} ingreso ${payload.categoria} de ${payload.persona}: ${fmtARSExact(payload.monto)} el ${payload.fecha}. ${payload.descripcion_original || 'Sin descripción'}.${row?.categoria === 'Salario' || payload.categoria === 'Salario' ? ' Este cambio salarial puede modificar las proporciones de los meses afectados y sus deudas.' : ''}`;
+  if (kind === 'inventory-delete') return `Baja del bien "${row.nombre}"${row.categoria ? ` (${row.categoria})` : ''}, valor estimado ${fmtARSExact(row.valor_estimado)}, estado ${row.estado || 'Activo'}.`;
+  if (kind.startsWith('inventory')) return `${kind === 'inventory-edit' ? 'Editar' : 'Agregar'} bien "${payload.nombre}"${payload.categoria ? ` · ${payload.categoria}` : ''}${payload.ubicacion ? ` · ${payload.ubicacion}` : ''}: ${fmtARSExact(payload.valor_estimado)}${payload.fecha_adquisicion ? ` · adquirido ${payload.fecha_adquisicion}` : ''}. Estado ${payload.estado || 'Activo'}${payload.precio_usd_compra != null ? `, U$D ${payload.precio_usd_compra} de compra` : ''}${payload.proporcion_jd != null ? `, reparto ${payload.proporcion_jd}% JD / ${100 - payload.proporcion_jd}% Pinki` : ''}.`;
   const fixedSplit = payload.responsable === 'Común'
     ? payload.tipo_proporcion === 'custom' ? `${payload.proporcion_jd}% JD / ${100 - payload.proporcion_jd}% Pinki`
       : payload.tipo_proporcion === 'dinamica' ? 'dinámico según salarios' : fijosRepartoLabel(row)
@@ -1158,16 +1352,22 @@ function routeForForm(kind, row) {
   if (kind === 'income') return ['POST', '/api/income'];
   if (kind === 'income-edit') return ['PATCH', `/api/income/${encodeURIComponent(canonicalId(row.id))}`];
   if (kind === 'income-delete') return ['DELETE', `/api/income/${encodeURIComponent(canonicalId(row.id))}`];
+  if (kind === 'inventory') return ['POST', '/api/inventory'];
+  if (kind === 'inventory-edit') return ['PATCH', `/api/inventory/${encodeURIComponent(canonicalId(row.id))}`];
+  if (kind === 'inventory-delete') return ['DELETE', `/api/inventory/${encodeURIComponent(canonicalId(row.id))}`];
   if (kind === 'fixed') return ['POST', '/api/fixed'];
   return [kind === 'fixed-delete' ? 'DELETE' : 'PATCH', `/api/fixed/${encodeURIComponent(canonicalId(row.id))}`];
 }
 
 function verifiedWriteEnvelope(kind, row, result) {
   try {
-    if (kind === 'expense-delete' || kind === 'income-delete') return result?.deleted === true && canonicalId(result.id) === canonicalId(row.id);
+    if (kind === 'expense-delete' || kind === 'income-delete' || kind === 'inventory-delete') {
+      return result?.deleted === true && canonicalId(result.id) === canonicalId(row.id);
+    }
     if (kind === 'expense') return Array.isArray(result?.expenses) && result.expenses.length > 0 &&
       result.expenses.every((expense) => !!canonicalId(expense?.id));
     if (kind.startsWith('income')) return !!canonicalId(result?.income?.id);
+    if (kind.startsWith('inventory')) return !!canonicalId(result?.inventory?.id);
     canonicalId(result?.fixed?.id);
     if (result.fixed.fijo_grupo_id != null) canonicalId(result.fixed.fijo_grupo_id);
     return true;
@@ -1252,6 +1452,7 @@ async function handleFormSubmit(event) {
   event.preventDefault();
   if (!activeForm || !liveMode || writePending || reloadPending || reloadFailed) return;
   const { kind, row } = activeForm;
+  if (kind.startsWith('inventory') && !inventoryAvailable) return;
   const errorBox = document.getElementById('form-errors');
   errorBox.textContent = '';
   if (!activeForm.confirmed) {
@@ -2066,6 +2267,196 @@ function renderRecetasList() {
       </ul>
       ${r.notas ? `<div class="receta-notas">${escapeHtml(r.notas)}</div>` : ''}
     </article>`).join('')}</div>`;
+}
+
+// ── VISTA INVENTARIO ─────────────────────────────────────────────────────
+
+// Cotización USD→ARS "de hoy": persiste en localStorage (brief t_0e38e74e
+// punto 3), nunca en DATA.inventario — es un dato de UI, no del dominio.
+function getInventarioCotizacion() {
+  try {
+    const stored = parseFloat(localStorage.getItem(INVENTARIO_COTIZACION_STORAGE_KEY));
+    if (Number.isFinite(stored) && stored > 0) return stored;
+  } catch { /* localStorage puede no estar disponible (modo privado, etc.) */ }
+  return INVENTARIO_COTIZACION_DEFAULT;
+}
+
+function setInventarioCotizacion(raw) {
+  const value = parseFloat(raw);
+  if (!Number.isFinite(value) || value <= 0) return;
+  try { localStorage.setItem(INVENTARIO_COTIZACION_STORAGE_KEY, String(value)); } catch { /* ver getInventarioCotizacion */ }
+  if (currentView === 'inventario') renderInventarioView();
+}
+
+function setInventarioFiltroEstado(estado) {
+  inventarioFiltroEstado = estado;
+  if (currentView === 'inventario') renderInventarioView();
+}
+
+// USD "de compra" de un bien, misma cuenta que el legacy (usdCompra en
+// reference-legacy/inventario-index.html): precio_usd_compra si viene
+// explícito (incluido 0: se chequea con Number.isFinite, nunca `> 0`, para
+// no tratar un 0 real como "sin dato" — hallazgo 2 del revisor 46d4f3d5); si
+// falta, se deriva de precio_ars/cotizacion_usd_compra (la cotización de LA
+// COMPRA, no la de hoy). Si tampoco hay esos dos datos, devuelve `null`: no
+// hay forma de saber el USD sin inventar un valor mezclando el valor en ARS
+// con la cotización de HOY (eso haría parecer un recálculo real donde no lo
+// hay). El caller decide cómo mostrar `null` (p.ej. "sin USD").
+function inventarioUsdCompra(item) {
+  const explicito = parseFloat(item.precio_usd_compra);
+  if (item.precio_usd_compra !== null && item.precio_usd_compra !== undefined && Number.isFinite(explicito)) {
+    return explicito;
+  }
+  const ars = parseFloat(item.precio_ars);
+  const cotCompra = parseFloat(item.cotizacion_usd_compra);
+  if (item.precio_ars !== null && item.precio_ars !== undefined && Number.isFinite(ars) && Number.isFinite(cotCompra) && cotCompra > 0) {
+    return ars / cotCompra;
+  }
+  return null;
+}
+
+// proporcion_jd es nullable (bienes migrados antes de esta extensión o sin
+// backfill legacy aplicado): sin valor numérico válido entre 0 y 100, se
+// asume 50/50 — mismo default que insert_inventario_bien aplica al crear un
+// bien nuevo sin especificarlo. `inventarioProporcionSinDato` identifica ese
+// caso para marcarlo como "sin dato" en vez de aparentar un reparto real.
+function inventarioPctJD(item) {
+  const pct = parseFloat(item.proporcion_jd);
+  return Number.isFinite(pct) && pct >= 0 && pct <= 100 ? pct : 50;
+}
+
+function inventarioProporcionSinDato(item) {
+  const pct = parseFloat(item.proporcion_jd);
+  return !(Number.isFinite(pct) && pct >= 0 && pct <= 100);
+}
+
+// Repuebla los <select> de categoría/ubicación con los valores presentes en
+// DATA.inventario, preservando la selección actual si sigue siendo válida.
+function renderInventarioOptions() {
+  const catSelect = document.getElementById('inventario-filtro-categoria');
+  const locSelect = document.getElementById('inventario-filtro-ubicacion');
+  if (!catSelect || !locSelect) return;
+  const categorias = [...new Set(DATA.inventario.map((item) => item.categoria).filter(Boolean))].sort();
+  const ubicaciones = [...new Set(DATA.inventario.map((item) => item.ubicacion).filter(Boolean))].sort();
+  const catValue = catSelect.value;
+  const locValue = locSelect.value;
+  catSelect.innerHTML = '<option value="">Todas las categorías</option>' +
+    categorias.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  locSelect.innerHTML = '<option value="">Todas las ubicaciones</option>' +
+    ubicaciones.map((u) => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+  if (categorias.includes(catValue)) catSelect.value = catValue;
+  if (ubicaciones.includes(locValue)) locSelect.value = locValue;
+}
+
+// Las 4 cards reflejan el filtro de ESTADO actual (igual que el legacy, cuyo
+// render() recalcula sobre `filtered` = items del estado elegido), pero no los
+// filtros de búsqueda/categoría/ubicación de la tabla — mismo criterio que el
+// resto de los cards de totales del dashboard. La 4ta card ("Ítems activos")
+// es la excepción: cuenta TODO DATA.inventario en estado Activo, sin importar
+// qué pestaña de estado esté seleccionada (igual que el legacy).
+function renderInventarioCards(items, cotizacionHoy) {
+  // Solo suma bienes con USD conocido (hallazgo 2 del revisor 46d4f3d5): un
+  // bien sin precio_usd_compra ni precio_ars/cotizacion_usd_compra no aporta
+  // $0 reales, aporta "no sabemos" — sumarlo como 0 subestimaría el total
+  // silenciosamente. `sinUsdCount` avisa cuántos quedaron afuera de la suma.
+  const conUsd = items.filter((item) => inventarioUsdCompra(item) !== null);
+  const sinUsdCount = items.length - conUsd.length;
+  const totalUsd = conUsd.reduce((acc, item) => acc + inventarioUsdCompra(item), 0);
+  const jdUsd = conUsd.reduce((acc, item) => acc + inventarioUsdCompra(item) * inventarioPctJD(item) / 100, 0);
+  const pinkiUsd = totalUsd - jdUsd;
+  const activos = DATA.inventario.filter((item) => (item.estado || 'Activo') === 'Activo').length;
+
+  document.getElementById('inv-total-usd').textContent = fmtUSD(totalUsd);
+  document.getElementById('inv-total-ars').textContent = `≈ ${fmtARS(totalUsd * cotizacionHoy)} ARS hoy`;
+  document.getElementById('inv-jd-usd').textContent = fmtUSD(jdUsd);
+  document.getElementById('inv-jd-ars').textContent = `≈ ${fmtARS(jdUsd * cotizacionHoy)} ARS hoy`;
+  document.getElementById('inv-pinki-usd').textContent = fmtUSD(pinkiUsd);
+  document.getElementById('inv-pinki-ars').textContent = `≈ ${fmtARS(pinkiUsd * cotizacionHoy)} ARS hoy`;
+  document.getElementById('inv-count-activos').textContent = String(activos);
+  const avisoSinUsd = sinUsdCount > 0 ? ` · ${sinUsdCount} sin USD` : '';
+  document.getElementById('inv-count-sub').textContent = `${activos} bien${activos === 1 ? '' : 'es'} activo${activos === 1 ? '' : 's'}${avisoSinUsd}`;
+}
+
+function renderInventarioView() {
+  renderInventarioOptions();
+  const content = document.getElementById('inventario-content');
+  if (!content) return;
+
+  const cotizacionHoy = getInventarioCotizacion();
+  const cotizacionInput = document.getElementById('inventario-cotizacion-input');
+  // No pisar el input mientras el usuario está escribiendo en él.
+  if (cotizacionInput && document.activeElement !== cotizacionInput) cotizacionInput.value = cotizacionHoy;
+
+  document.querySelectorAll('#inventario-estado-filter .persona-btn').forEach((b) => {
+    const active = b.dataset.estado === inventarioFiltroEstado;
+    b.classList.toggle('active', active);
+    b.setAttribute('aria-pressed', String(active));
+  });
+
+  const estadoRows = inventarioFiltroEstado
+    ? DATA.inventario.filter((item) => (item.estado || 'Activo') === inventarioFiltroEstado)
+    : DATA.inventario;
+  renderInventarioCards(estadoRows, cotizacionHoy);
+
+  const query = (document.getElementById('inventario-search')?.value || '').trim().toLowerCase();
+  const catFiltro = document.getElementById('inventario-filtro-categoria')?.value || '';
+  const locFiltro = document.getElementById('inventario-filtro-ubicacion')?.value || '';
+
+  const rows = estadoRows.filter((item) => {
+    if (catFiltro && item.categoria !== catFiltro) return false;
+    if (locFiltro && item.ubicacion !== locFiltro) return false;
+    if (query) {
+      const haystack = `${item.nombre || ''} ${item.notas || ''}`.toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  }).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+
+  const countEl = document.getElementById('inventario-count');
+  if (countEl) countEl.textContent = `${rows.length} de ${estadoRows.length}`;
+
+  const disabled = !liveMode || !inventoryAvailable || writePending || reloadPending || reloadFailed;
+
+  if (!DATA.inventario.length) {
+    content.innerHTML = liveMode
+      ? '<div class="empty-state">Todavía no hay bienes cargados.</div>'
+      : '<div class="empty-state">Snapshot de solo lectura: sin datos de inventario disponibles sin conexión autenticada.</div>';
+    return;
+  }
+  if (!rows.length) {
+    content.innerHTML = '<div class="empty-state">Sin bienes que coincidan con la búsqueda o los filtros.</div>';
+    return;
+  }
+
+  content.innerHTML = `<div class="table-scroll"><table id="tabla-inventario">
+    <thead><tr>
+      <th>Descripción</th><th>Categoría</th><th>Fecha</th><th>Estado</th>
+      <th class="td-amount">USD</th><th class="td-amount">% JD</th><th class="td-amount">% Pinki</th>
+      <th class="td-amount">Reventa (USD)</th><th>Acciones</th>
+    </tr></thead>
+    <tbody>${rows.map((item) => {
+      const usd = inventarioUsdCompra(item);
+      const pctJD = inventarioPctJD(item);
+      const pctPinki = 100 - pctJD;
+      const sinProporcion = inventarioProporcionSinDato(item);
+      const reventa = parseFloat(item.precio_venta_estimado_usd);
+      const estado = item.estado || 'Activo';
+      return `<tr>
+        <td data-label="Descripción"><strong>${escapeHtml(item.nombre)}</strong>${item.ubicacion ? `<div class="td-muted td-ubicacion">${escapeHtml(item.ubicacion)}</div>` : ''}${item.notas ? `<div class="td-muted">${escapeHtml(item.notas)}</div>` : ''}</td>
+        <td data-label="Categoría" class="td-muted">${escapeHtml(item.categoria)}</td>
+        <td data-label="Fecha" class="td-muted">${item.fecha_adquisicion ? escapeHtml(item.fecha_adquisicion) : 'Sin fecha de adquisición registrada'}</td>
+        <td data-label="Estado"><span class="pill">${escapeHtml(estado)}</span></td>
+        <td data-label="USD" class="td-amount">${usd === null ? '<span class="td-muted">sin USD</span>' : fmtUSD(usd)}</td>
+        <td data-label="% JD" class="td-amount">${pctJD}%${sinProporcion ? ' <span class="td-muted">(sin dato)</span>' : ''}</td>
+        <td data-label="% Pinki" class="td-amount">${pctPinki}%${sinProporcion ? ' <span class="td-muted">(sin dato)</span>' : ''}</td>
+        <td data-label="Reventa (USD)" class="td-amount">${Number.isFinite(reventa) && reventa > 0 ? fmtUSD(reventa) : '—'}</td>
+        <td data-label="Acciones">
+          <button type="button" class="fijos-secondary table-action" data-write-action data-requires="inventory" data-id="${escapeHtml(canonicalId(item.id))}" onclick="openForm('inventory-edit', this.dataset.id)" aria-label="Editar bien ${escapeHtml(item.nombre)}" ${disabled ? 'disabled' : ''}>Editar</button>
+          <button type="button" class="fijos-secondary table-action" data-write-action data-requires="inventory" data-id="${escapeHtml(canonicalId(item.id))}" onclick="openForm('inventory-delete', this.dataset.id)" aria-label="Dar de baja bien ${escapeHtml(item.nombre)}" ${disabled ? 'disabled' : ''}>Dar de baja</button>
+        </td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
 }
 
 // ── IMPRIMIR / PDF (GASTOS) ──────────────────────────────────────────────
