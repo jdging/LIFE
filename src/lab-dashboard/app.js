@@ -150,6 +150,12 @@ let activeForm = null;
 let categoriesGastoCache = null;
 let activeExpenseCatalog = null;
 let inventarioFiltroEstado = 'Activo';
+// Filas de la tabla de inventario actualmente en el DOM: {id, usd, pctJD}.
+// setInventarioCotizacion() la recorre para recalcular Reventa/Venta JD/Pinki
+// por id (document.getElementById) en vez de reconstruir la tabla — así un
+// cambio de cotización (global o en cualquier fila) no le hace perder el foco
+// al input que el usuario está tipeando (brief t_0e38e74e v2, punto 1).
+let inventarioRowsRendered = [];
 // True si el usuario tipeó directamente en el campo USD de compra del
 // formulario de inventario abierto: mientras esté en true, la sugerencia
 // automática (onInventoryUsdSugerido) no pisa lo que escribió (t_0e38e74e,
@@ -2281,11 +2287,48 @@ function getInventarioCotizacion() {
   return INVENTARIO_COTIZACION_DEFAULT;
 }
 
+// Único "Cot. hoy" para toda la tabla (como el legacy): este handler sirve
+// tanto para el input de la barra superior como para el input inline de CADA
+// fila (mismo patrón que onCotizacionChange en reference-legacy/inventario-
+// index.html). En vez de volver a renderizar toda la vista (lo que reconstruye
+// los <input> y le hace perder el foco/cursor al que el usuario está
+// tipeando), actualiza en el lugar: sincroniza el resto de los inputs "Cot.
+// hoy" sin tocar el que tiene el foco (document.activeElement), vuelve a
+// pintar las 4 cards (no tienen inputs, así que no hay foco que perder) y
+// recalcula sólo las celdas Reventa/Venta JD/Venta Pinki de cada fila por id —
+// el resto de las columnas (ARS pagado, USD compra, % JD/Pinki, ARS JD/Pinki)
+// no depende de la cotización de hoy.
 function setInventarioCotizacion(raw) {
   const value = parseFloat(raw);
   if (!Number.isFinite(value) || value <= 0) return;
   try { localStorage.setItem(INVENTARIO_COTIZACION_STORAGE_KEY, String(value)); } catch { /* ver getInventarioCotizacion */ }
-  if (currentView === 'inventario') renderInventarioView();
+  if (currentView !== 'inventario') return;
+
+  const globalInput = document.getElementById('inventario-cotizacion-input');
+  if (globalInput && document.activeElement !== globalInput) globalInput.value = value;
+  inventarioRowsRendered.forEach((row) => {
+    const input = document.getElementById(`inv-cot-${row.id}`);
+    if (input && document.activeElement !== input) input.value = value;
+  });
+
+  const estadoRows = inventarioFiltroEstado
+    ? DATA.inventario.filter((item) => (item.estado || 'Activo') === inventarioFiltroEstado)
+    : DATA.inventario;
+  renderInventarioCards(estadoRows, value);
+
+  inventarioRowsRendered.forEach((row) => {
+    if (row.usd === null) return;
+    const pctPinki = 100 - row.pctJD;
+    const reventa = row.usd * value;
+    const ventaJD = row.usd * value * row.pctJD / 100;
+    const ventaPinki = row.usd * value * pctPinki / 100;
+    const reventaEl = document.getElementById(`inv-reventa-${row.id}`);
+    const jdEl = document.getElementById(`inv-venta-jd-${row.id}`);
+    const pinkiEl = document.getElementById(`inv-venta-pinki-${row.id}`);
+    if (reventaEl) reventaEl.textContent = fmtARS(Math.round(reventa));
+    if (jdEl) jdEl.textContent = fmtARS(Math.round(ventaJD));
+    if (pinkiEl) pinkiEl.textContent = fmtARS(Math.round(ventaPinki));
+  });
 }
 
 function setInventarioFiltroEstado(estado) {
@@ -2301,7 +2344,7 @@ function setInventarioFiltroEstado(estado) {
 // COMPRA, no la de hoy). Si tampoco hay esos dos datos, devuelve `null`: no
 // hay forma de saber el USD sin inventar un valor mezclando el valor en ARS
 // con la cotización de HOY (eso haría parecer un recálculo real donde no lo
-// hay). El caller decide cómo mostrar `null` (p.ej. "sin USD").
+// hay). El caller lo muestra como "—" (brief t_0e38e74e v2, punto 1).
 function inventarioUsdCompra(item) {
   const explicito = parseFloat(item.precio_usd_compra);
   if (item.precio_usd_compra !== null && item.precio_usd_compra !== undefined && Number.isFinite(explicito)) {
@@ -2318,16 +2361,11 @@ function inventarioUsdCompra(item) {
 // proporcion_jd es nullable (bienes migrados antes de esta extensión o sin
 // backfill legacy aplicado): sin valor numérico válido entre 0 y 100, se
 // asume 50/50 — mismo default que insert_inventario_bien aplica al crear un
-// bien nuevo sin especificarlo. `inventarioProporcionSinDato` identifica ese
-// caso para marcarlo como "sin dato" en vez de aparentar un reparto real.
+// bien nuevo sin especificarlo, y que la fórmula del legacy (proporcion_jd ??
+// 50).
 function inventarioPctJD(item) {
   const pct = parseFloat(item.proporcion_jd);
   return Number.isFinite(pct) && pct >= 0 && pct <= 100 ? pct : 50;
-}
-
-function inventarioProporcionSinDato(item) {
-  const pct = parseFloat(item.proporcion_jd);
-  return !(Number.isFinite(pct) && pct >= 0 && pct <= 100);
 }
 
 // Repuebla los <select> de categoría/ubicación con los valores presentes en
@@ -2354,29 +2392,37 @@ function renderInventarioOptions() {
 // resto de los cards de totales del dashboard. La 4ta card ("Ítems activos")
 // es la excepción: cuenta TODO DATA.inventario en estado Activo, sin importar
 // qué pestaña de estado esté seleccionada (igual que el legacy).
+// `inventarioUsdCompra(item) || 0`: un bien sin USD conocido no aporta nada a
+// la suma (sumar 0 u omitirlo da el mismo total) — no hace falta filtrar la
+// lista aparte, igual que usdCompra() en el legacy (siempre devuelve un
+// número, nunca null).
 function renderInventarioCards(items, cotizacionHoy) {
-  // Solo suma bienes con USD conocido (hallazgo 2 del revisor 46d4f3d5): un
-  // bien sin precio_usd_compra ni precio_ars/cotizacion_usd_compra no aporta
-  // $0 reales, aporta "no sabemos" — sumarlo como 0 subestimaría el total
-  // silenciosamente. `sinUsdCount` avisa cuántos quedaron afuera de la suma.
-  const conUsd = items.filter((item) => inventarioUsdCompra(item) !== null);
-  const sinUsdCount = items.length - conUsd.length;
-  const totalUsd = conUsd.reduce((acc, item) => acc + inventarioUsdCompra(item), 0);
-  const jdUsd = conUsd.reduce((acc, item) => acc + inventarioUsdCompra(item) * inventarioPctJD(item) / 100, 0);
+  const totalUsd = items.reduce((acc, item) => acc + (inventarioUsdCompra(item) || 0), 0);
+  const jdUsd = items.reduce((acc, item) => acc + (inventarioUsdCompra(item) || 0) * inventarioPctJD(item) / 100, 0);
   const pinkiUsd = totalUsd - jdUsd;
   const activos = DATA.inventario.filter((item) => (item.estado || 'Activo') === 'Activo').length;
 
-  document.getElementById('inv-total-usd').textContent = fmtUSD(totalUsd);
-  document.getElementById('inv-total-ars').textContent = `≈ ${fmtARS(totalUsd * cotizacionHoy)} ARS hoy`;
-  document.getElementById('inv-jd-usd').textContent = fmtUSD(jdUsd);
-  document.getElementById('inv-jd-ars').textContent = `≈ ${fmtARS(jdUsd * cotizacionHoy)} ARS hoy`;
-  document.getElementById('inv-pinki-usd').textContent = fmtUSD(pinkiUsd);
-  document.getElementById('inv-pinki-ars').textContent = `≈ ${fmtARS(pinkiUsd * cotizacionHoy)} ARS hoy`;
+  // Math.round antes de formatear: igual que el legacy (fmtARS/fmtUSD ahí
+  // redondean siempre a entero), para que coincida con la captura de Juan.
+  document.getElementById('inv-total-usd').textContent = fmtUSD(Math.round(totalUsd));
+  document.getElementById('inv-total-ars').textContent = `≈ ${fmtARS(Math.round(totalUsd * cotizacionHoy))} ARS hoy`;
+  document.getElementById('inv-jd-usd').textContent = fmtUSD(Math.round(jdUsd));
+  document.getElementById('inv-jd-ars').textContent = `≈ ${fmtARS(Math.round(jdUsd * cotizacionHoy))} ARS hoy`;
+  document.getElementById('inv-pinki-usd').textContent = fmtUSD(Math.round(pinkiUsd));
+  document.getElementById('inv-pinki-ars').textContent = `≈ ${fmtARS(Math.round(pinkiUsd * cotizacionHoy))} ARS hoy`;
   document.getElementById('inv-count-activos').textContent = String(activos);
-  const avisoSinUsd = sinUsdCount > 0 ? ` · ${sinUsdCount} sin USD` : '';
-  document.getElementById('inv-count-sub').textContent = `${activos} bien${activos === 1 ? '' : 'es'} activo${activos === 1 ? '' : 's'}${avisoSinUsd}`;
+  document.getElementById('inv-count-sub').textContent = `${activos} bien${activos === 1 ? '' : 'es'} activo${activos === 1 ? '' : 's'}`;
 }
 
+// Tabla idéntica al legacy (columnas y orden — brief t_0e38e74e v2, punto 1),
+// más la columna Reventa (ARS hoy) que agregó Juan en el ajuste final (QA de
+// Juan 2026-10-23): Descripción | Categoría | Fecha | ARS pagado | Cot. compra |
+// USD compra | % JD | % Pinki | ARS JD | ARS Pinki | Cot. hoy |
+// Reventa (ARS hoy) | Venta JD | Venta Pinki | Estado | acciones. La
+// ubicación y las notas van como subtexto bajo la descripción (no son columna
+// propia del legacy). Reventa = USD de compra (el mismo que usan Venta
+// JD/Pinki, incluido el derivado) × la cotización de hoy, sin repartir por
+// persona.
 function renderInventarioView() {
   renderInventarioOptions();
   const content = document.getElementById('inventario-content');
@@ -2418,44 +2464,72 @@ function renderInventarioView() {
   const disabled = !liveMode || !inventoryAvailable || writePending || reloadPending || reloadFailed;
 
   if (!DATA.inventario.length) {
+    inventarioRowsRendered = [];
     content.innerHTML = liveMode
       ? '<div class="empty-state">Todavía no hay bienes cargados.</div>'
       : '<div class="empty-state">Snapshot de solo lectura: sin datos de inventario disponibles sin conexión autenticada.</div>';
     return;
   }
   if (!rows.length) {
+    inventarioRowsRendered = [];
     content.innerHTML = '<div class="empty-state">Sin bienes que coincidan con la búsqueda o los filtros.</div>';
     return;
   }
 
+  const rowsForLiveUpdate = [];
+  const bodyHtml = rows.map((item) => {
+    const rowId = canonicalId(item.id);
+    const ars = parseFloat(item.precio_ars) || 0;
+    const cotCompra = parseFloat(item.cotizacion_usd_compra) || 0;
+    const usd = inventarioUsdCompra(item);
+    const pctJD = inventarioPctJD(item);
+    const pctPinki = 100 - pctJD;
+    const arsJD = ars * pctJD / 100;
+    const arsPinki = ars * pctPinki / 100;
+    const reventa = usd === null ? null : usd * cotizacionHoy;
+    const ventaJD = usd === null ? null : usd * cotizacionHoy * pctJD / 100;
+    const ventaPinki = usd === null ? null : usd * cotizacionHoy * pctPinki / 100;
+    const estado = item.estado || 'Activo';
+    rowsForLiveUpdate.push({ id: rowId, usd, pctJD });
+
+    return `<tr>
+      <td data-label="Descripción" class="td-desc"><strong>${escapeHtml(item.nombre)}</strong>${item.ubicacion ? `<div class="td-muted td-ubicacion">${escapeHtml(item.ubicacion)}</div>` : ''}${item.notas ? `<div class="td-muted">${escapeHtml(item.notas)}</div>` : ''}</td>
+      <td data-label="Categoría" class="td-muted">${escapeHtml(item.categoria)}</td>
+      <td data-label="Fecha" class="td-muted">${escapeHtml(item.fecha_adquisicion ? item.fecha_adquisicion.slice(0, 7) : null)}</td>
+      <td data-label="ARS pagado" class="td-amount">${ars ? fmtARS(Math.round(ars)) : '—'}</td>
+      <td data-label="Cot. compra" class="td-amount td-muted">${cotCompra ? fmtARS(Math.round(cotCompra)) : '—'}</td>
+      <td data-label="USD compra" class="td-amount">${usd === null ? '—' : fmtUSD(Math.round(usd))}</td>
+      <td data-label="% JD" class="td-amount td-muted">${pctJD}%</td>
+      <td data-label="% Pinki" class="td-amount td-muted">${pctPinki}%</td>
+      <td data-label="ARS JD" class="td-amount inv-color-jd">${ars ? fmtARS(Math.round(arsJD)) : '—'}</td>
+      <td data-label="ARS Pinki" class="td-amount inv-color-pinki">${ars ? fmtARS(Math.round(arsPinki)) : '—'}</td>
+      <td data-label="Cot. hoy" class="td-amount">
+        <input type="number" class="cot-inline" id="inv-cot-${rowId}" value="${cotizacionHoy}" min="1" step="1"
+          oninput="setInventarioCotizacion(this.value)" aria-label="Cotización de hoy para ${escapeHtml(item.nombre)}">
+      </td>
+      <td data-label="Reventa (ARS hoy)" class="td-amount" id="inv-reventa-${rowId}">${reventa === null ? '—' : fmtARS(Math.round(reventa))}</td>
+      <td data-label="Venta JD" class="td-amount inv-color-jd" id="inv-venta-jd-${rowId}">${ventaJD === null ? '—' : fmtARS(Math.round(ventaJD))}</td>
+      <td data-label="Venta Pinki" class="td-amount inv-color-pinki" id="inv-venta-pinki-${rowId}">${ventaPinki === null ? '—' : fmtARS(Math.round(ventaPinki))}</td>
+      <td data-label="Estado"><span class="badge badge-${estado.toLowerCase()}">${escapeHtml(estado.toUpperCase())}</span></td>
+      <td data-label="Acciones">
+        <button type="button" class="fijos-secondary table-action" data-write-action data-requires="inventory" data-id="${escapeHtml(rowId)}" onclick="openForm('inventory-edit', this.dataset.id)" aria-label="Editar bien ${escapeHtml(item.nombre)}" ${disabled ? 'disabled' : ''}>Editar</button>
+        <button type="button" class="fijos-secondary table-action btn-delete" data-write-action data-requires="inventory" data-id="${escapeHtml(rowId)}" onclick="openForm('inventory-delete', this.dataset.id)" aria-label="Borrar bien ${escapeHtml(item.nombre)}" ${disabled ? 'disabled' : ''}>borrar</button>
+      </td>
+    </tr>`;
+  }).join('');
+  inventarioRowsRendered = rowsForLiveUpdate;
+
   content.innerHTML = `<div class="table-scroll"><table id="tabla-inventario">
     <thead><tr>
-      <th>Descripción</th><th>Categoría</th><th>Fecha</th><th>Estado</th>
-      <th class="td-amount">USD</th><th class="td-amount">% JD</th><th class="td-amount">% Pinki</th>
-      <th class="td-amount">Reventa (USD)</th><th>Acciones</th>
+      <th>Descripción</th><th>Categoría</th><th>Fecha</th>
+      <th class="td-amount">ARS pagado</th><th class="td-amount">Cot. compra</th><th class="td-amount">USD compra</th>
+      <th class="td-amount">% JD</th><th class="td-amount">% Pinki</th>
+      <th class="td-amount">ARS JD</th><th class="td-amount">ARS Pinki</th>
+      <th class="td-amount">Cot. hoy</th><th class="td-amount">Reventa (ARS hoy)</th>
+      <th class="td-amount">Venta JD</th><th class="td-amount">Venta Pinki</th>
+      <th>Estado</th><th>Acciones</th>
     </tr></thead>
-    <tbody>${rows.map((item) => {
-      const usd = inventarioUsdCompra(item);
-      const pctJD = inventarioPctJD(item);
-      const pctPinki = 100 - pctJD;
-      const sinProporcion = inventarioProporcionSinDato(item);
-      const reventa = parseFloat(item.precio_venta_estimado_usd);
-      const estado = item.estado || 'Activo';
-      return `<tr>
-        <td data-label="Descripción"><strong>${escapeHtml(item.nombre)}</strong>${item.ubicacion ? `<div class="td-muted td-ubicacion">${escapeHtml(item.ubicacion)}</div>` : ''}${item.notas ? `<div class="td-muted">${escapeHtml(item.notas)}</div>` : ''}</td>
-        <td data-label="Categoría" class="td-muted">${escapeHtml(item.categoria)}</td>
-        <td data-label="Fecha" class="td-muted">${item.fecha_adquisicion ? escapeHtml(item.fecha_adquisicion) : 'Sin fecha de adquisición registrada'}</td>
-        <td data-label="Estado"><span class="pill">${escapeHtml(estado)}</span></td>
-        <td data-label="USD" class="td-amount">${usd === null ? '<span class="td-muted">sin USD</span>' : fmtUSD(usd)}</td>
-        <td data-label="% JD" class="td-amount">${pctJD}%${sinProporcion ? ' <span class="td-muted">(sin dato)</span>' : ''}</td>
-        <td data-label="% Pinki" class="td-amount">${pctPinki}%${sinProporcion ? ' <span class="td-muted">(sin dato)</span>' : ''}</td>
-        <td data-label="Reventa (USD)" class="td-amount">${Number.isFinite(reventa) && reventa > 0 ? fmtUSD(reventa) : '—'}</td>
-        <td data-label="Acciones">
-          <button type="button" class="fijos-secondary table-action" data-write-action data-requires="inventory" data-id="${escapeHtml(canonicalId(item.id))}" onclick="openForm('inventory-edit', this.dataset.id)" aria-label="Editar bien ${escapeHtml(item.nombre)}" ${disabled ? 'disabled' : ''}>Editar</button>
-          <button type="button" class="fijos-secondary table-action" data-write-action data-requires="inventory" data-id="${escapeHtml(canonicalId(item.id))}" onclick="openForm('inventory-delete', this.dataset.id)" aria-label="Dar de baja bien ${escapeHtml(item.nombre)}" ${disabled ? 'disabled' : ''}>Dar de baja</button>
-        </td>
-      </tr>`;
-    }).join('')}</tbody>
+    <tbody>${bodyHtml}</tbody>
   </table></div>`;
 }
 

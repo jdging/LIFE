@@ -895,6 +895,52 @@ button.card:active {
   margin-bottom: 14px;
 }
 
+/* Colores de la tabla de inventario, iguales al legacy (brief t_0e38e74e v2,
+   punto 1): JD #7aa3b8, Pinki #b87ab0, Cot. hoy con el acento del tema. */
+.inv-color-jd    { color: #7aa3b8; }
+.inv-color-pinki { color: #b87ab0; }
+
+#tabla-inventario { min-width: 1220px; }
+
+.td-desc { max-width: 220px; }
+
+.cot-inline {
+  width: 72px;
+  min-height: 32px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  color: var(--green-deep);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: right;
+  padding: 2px 4px;
+}
+
+.cot-inline:focus-visible {
+  outline: 2px solid var(--green-deep);
+  outline-offset: 1px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.badge-activo    { color: var(--green-deep); border-color: rgba(95, 125, 82, 0.35); background: rgba(95, 125, 82, 0.12); }
+.badge-vendido   { color: #8a6a1f; border-color: rgba(209, 161, 63, 0.4); background: rgba(209, 161, 63, 0.16); }
+.badge-donado    { color: #3f6e86; border-color: rgba(122, 163, 184, 0.4); background: rgba(122, 163, 184, 0.16); }
+.badge-desechado { color: var(--ink-faint); border-color: var(--line); background: transparent; }
+
+.btn-delete { color: var(--danger); border-color: rgba(194, 95, 74, 0.35); }
+.btn-delete:hover { background: rgba(194, 95, 74, 0.1); }
+
 .inventario-valor {
   font-family: 'Fraunces', serif;
   font-size: 18px;
@@ -1225,6 +1271,21 @@ footer {
   .fijos-versions-table tr { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; background: var(--paper-raised); padding: 8px; }
   .fijos-versions-table td { border: 0; padding: 4px 8px; }
   .fijos-versions-table td::before { content: attr(data-label) ': '; color: var(--ink-soft); font-size: 12px; font-weight: 600; }
+
+  /* Inventario: a diferencia de #tabla-gastos/#tabla-ingresos, esta tabla NO
+     se apila en mobile — scroll horizontal contenido en .table-scroll (la
+     página no se desborda) con la primera columna (Descripción) fija, como
+     pidió Juan al comparar con el legacy (brief t_0e38e74e v2, punto 3). */
+  #tabla-inventario th:first-child,
+  #tabla-inventario td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--paper-raised);
+  }
+  #tabla-inventario tbody tr:hover td:first-child {
+    background: var(--paper-deep);
+  }
 }
 
 /* ---- Resumen imprimible (Gastos → Imprimir / Guardar PDF) ---- */

@@ -1505,9 +1505,31 @@ console.log('Inventario: proporcion_jd=null en edición queda vacío con placeho
 // renderInventarioView y sus helpers (renderInventarioOptions, renderInventarioCards,
 // getInventarioCotizacion/setInventarioCotizacion, setInventarioFiltroEstado) se
 // verifican con las funciones REALES de app.js, no copias.
+// Identidad de nodo (revisor 7d63437e, hallazgo 3): en un DOM real, reasignar
+// innerHTML de #inventario-content destruye y recrea TODOS sus hijos —
+// incluidos los <input> de cotización inline y las celdas de Reventa/Venta
+// JD/Pinki de cada fila. El stub simula eso invalidando esos nodos "de fila"
+// cada vez que se reescribe el innerHTML del contenedor, para que un test
+// pueda detectar un re-render completo comparando identidad de objeto
+// (===) antes/después, no solo el valor textual.
+const inventarioRowScopedPrefixes = ['inv-cot-', 'inv-reventa-', 'inv-venta-jd-', 'inv-venta-pinki-'];
+const isInventarioRowScoped = (id) => inventarioRowScopedPrefixes.some((prefix) => id.startsWith(prefix));
 const inventarioElements = new Map();
 const inventarioElement = (id) => {
-  if (!inventarioElements.has(id)) inventarioElements.set(id, { textContent: '', innerHTML: '', hidden: false, value: '' });
+  if (!inventarioElements.has(id)) {
+    if (id === 'inventario-content') {
+      inventarioElements.set(id, { hidden: false, value: '', _html: '',
+        get innerHTML() { return this._html; },
+        set innerHTML(html) {
+          this._html = html;
+          for (const key of [...inventarioElements.keys()]) {
+            if (isInventarioRowScoped(key)) inventarioElements.delete(key);
+          }
+        } });
+    } else {
+      inventarioElements.set(id, { textContent: '', innerHTML: '', hidden: false, value: '' });
+    }
+  }
   return inventarioElements.get(id);
 };
 const estadoFilterButtons = ['Activo', 'Vendido', 'Donado', 'Desechado', ''].map((estado) => ({
@@ -1529,7 +1551,7 @@ const inventarioLocalStorage = {
 };
 const inventarioApi = runInNewContext(`
 let liveMode = true, inventoryAvailable = true, writePending = false, reloadPending = false, reloadFailed = false;
-let currentView = 'inventario', inventarioFiltroEstado = 'Activo';
+let currentView = 'inventario', inventarioFiltroEstado = 'Activo', inventarioRowsRendered = [];
 function fmtARS(value) { return '$' + value; }
 function fmtUSD(value) { return 'U$D ' + value; }
 ${slice('const INVENTARIO_ESTADOS = ', 'const iconFor = ')}
@@ -1541,54 +1563,111 @@ ${slice('function getInventarioCotizacion(', '// ── IMPRIMIR')}
    get filtroEstado() { return inventarioFiltroEstado; } })`,
   { document: inventarioDocument, DATA: inventarioData, localStorage: inventarioLocalStorage });
 
+// invItemJD: USD derivado (sin precio_usd_compra) + proporcion_jd ausente
+// (default 50/50) — con precio_ars=138000 y cotizacion_usd_compra=1465,
+// usdCompra = 94.19795... Con cotHoy=1223 y 50%, Venta JD/Pinki = 57.602.077
+// redondeado = 57602 (brief t_0e38e74e v2, punto 4: "94,198 USD · 1223 · 50% = 57.602").
 const invItemJD = { id: 101, nombre: 'Notebook ThinkPad', categoria: 'Electrónica', ubicacion: 'Living',
   valor_estimado: 450000, fecha_adquisicion: '2024-03-01', notas: 'Comprada usada',
-  precio_usd_compra: 500, proporcion_jd: 60, estado: 'Activo', precio_venta_estimado_usd: 420 };
+  precio_ars: 138000, cotizacion_usd_compra: 1465, proporcion_jd: null, estado: 'Activo' };
+// invItemXss: USD explícito (precio_usd_compra) + reparto declarado 60/40,
+// sin precio_ars (ARS JD/Pinki deben mostrar "—") + payloads XSS en
+// nombre/ubicación/notas.
 const invItemXss = { id: '102', nombre: 'Bicicleta <img src=x onerror=alert(1)>', categoria: 'Deporte',
   ubicacion: '<svg onload=alert(2)>Garage', valor_estimado: 120000, fecha_adquisicion: '',
   notas: '<script>alert(3)</script> cuidado con el freno',
-  precio_ars: 120000, cotizacion_usd_compra: 1000, estado: 'Vendido' };
+  precio_usd_compra: 200, proporcion_jd: 60, estado: 'Vendido' };
+// invItemDonado: sin ningún dato de USD (ni precio_usd_compra ni
+// precio_ars/cotizacion_usd_compra) — USD compra y Venta JD/Pinki deben
+// mostrar "—" (brief: "valores faltantes: —"), nunca inventar un monto.
 const invItemDonado = { id: 103, nombre: 'Silla rota', categoria: 'Hogar', ubicacion: 'Depósito',
   valor_estimado: 30000, estado: 'Donado' };
 inventarioData.inventario = [invItemJD, invItemXss, invItemDonado];
 
-inventarioApi.setInventarioCotizacion('1000');
-assert.equal(inventarioApi.getInventarioCotizacion(), 1000);
+inventarioApi.setInventarioCotizacion('1223');
+assert.equal(inventarioApi.getInventarioCotizacion(), 1223);
 inventarioApi.renderInventarioView();
+
+const usdNotebook = 138000 / 1465;
+const ventaJdNotebook = Math.round(usdNotebook * 1223 * 0.5);
+assert.equal(ventaJdNotebook, 57602, 'Venta JD con usd≈94,198 · cotHoy 1223 · 50% debe dar 57.602 (ejemplo del brief)');
 
 // Barra de cotización (editable, persistida) + 4 cards con el reparto JD/Pinki,
 // filtro de estado "Activo" por defecto.
 assert.equal(inventarioApi.filtroEstado, 'Activo');
-assert.equal(inventarioElement('inv-total-usd').textContent, 'U$D 500');
-assert.equal(inventarioElement('inv-total-ars').textContent, '≈ $500000 ARS hoy');
-assert.equal(inventarioElement('inv-jd-usd').textContent, 'U$D 300');
-assert.equal(inventarioElement('inv-jd-ars').textContent, '≈ $300000 ARS hoy');
-assert.equal(inventarioElement('inv-pinki-usd').textContent, 'U$D 200');
-assert.equal(inventarioElement('inv-pinki-ars').textContent, '≈ $200000 ARS hoy');
+assert.equal(inventarioElement('inv-total-usd').textContent, `U$D ${Math.round(usdNotebook)}`);
+assert.equal(inventarioElement('inv-total-ars').textContent, `≈ $${Math.round(usdNotebook * 1223)} ARS hoy`);
+assert.equal(inventarioElement('inv-jd-usd').textContent, `U$D ${Math.round(usdNotebook * 0.5)}`);
+assert.equal(inventarioElement('inv-pinki-usd').textContent, `U$D ${Math.round(usdNotebook * 0.5)}`);
 assert.equal(inventarioElement('inv-count-activos').textContent, '1');
 assert.match(inventarioElement('inv-count-sub').textContent, /1 bien activo/);
-assert.equal(inventarioElement('inventario-cotizacion-input').value, 1000);
+assert.equal(inventarioElement('inventario-cotizacion-input').value, 1223);
 
 const inventarioHtml = inventarioElement('inventario-content').innerHTML;
+// Columnas y orden exactos del legacy (brief punto 1).
+const headerOrder = ['Descripción', 'Categoría', 'Fecha', 'ARS pagado', 'Cot. compra', 'USD compra',
+  '% JD', '% Pinki', 'ARS JD', 'ARS Pinki', 'Cot. hoy', 'Reventa (ARS hoy)', 'Venta JD', 'Venta Pinki', 'Estado', 'Acciones'];
+const headerPositions = headerOrder.map((h) => inventarioHtml.indexOf(`>${h}<`));
+assert.ok(headerPositions.every((p) => p >= 0), 'Deben estar las 16 columnas del legacy más Reventa (ARS hoy)');
+assert.deepEqual(headerPositions, [...headerPositions].sort((a, b) => a - b), 'Las columnas deben respetar el orden exacto, con Reventa (ARS hoy) entre Cot. hoy y Venta JD');
+
 assert.match(inventarioHtml, /Notebook ThinkPad/);
 assert.doesNotMatch(inventarioHtml, /Bicicleta/, 'El filtro Activo por defecto debe excluir los bienes Vendidos/Donados');
-assert.match(inventarioHtml, /U\$D 500/);
-assert.match(inventarioHtml, /60%/);
-assert.match(inventarioHtml, /40%/);
-assert.match(inventarioHtml, /U\$D 420/, 'La reventa estimada debe listarse en la tabla');
-assert.match(inventarioHtml, /2024-03-01/);
+assert.match(inventarioHtml, new RegExp(`U\\$D ${Math.round(usdNotebook)}`), 'USD compra derivado de precio_ars/cotizacion_usd_compra');
+assert.match(inventarioHtml, />50%</, 'proporcion_jd ausente debe asumir 50/50, sin anotación "(sin dato)"');
+assert.doesNotMatch(inventarioHtml, /sin dato/);
+assert.match(inventarioHtml, new RegExp(`\\$${ventaJdNotebook}`), 'Venta JD debe listarse con la fórmula del legacy');
+// Reventa (ARS hoy) = USD de compra (el mismo derivado que usan Venta JD/Pinki) × cotización de hoy, sin repartir por persona (brief t_0e38e74e, ajuste final).
+const reventaNotebook = Math.round(usdNotebook * 1223);
+assert.match(inventarioHtml, new RegExp(`id="inv-reventa-101">\\$${reventaNotebook}<`),
+  'Reventa (ARS hoy) debe ser USD compra × cotización de hoy');
+assert.match(inventarioHtml, />2024-03</, 'La fecha debe truncarse a YYYY-MM');
+assert.doesNotMatch(inventarioHtml, />2024-03-01</, 'La fecha no debe mostrar el día completo');
+assert.match(inventarioHtml, /class="badge badge-activo">ACTIVO</);
 
-// Cambiar la cotización recalcula el ARS de las cards sin tocar el USD.
+// Cambiar la cotización global (sin foco en ningún input de fila) recalcula
+// en vivo las cards Y la celda Venta JD/Pinki de la fila por id, sin
+// reconstruir la tabla (brief punto 1).
 inventarioApi.setInventarioCotizacion('2000');
-assert.equal(inventarioElement('inv-total-usd').textContent, 'U$D 500', 'El USD no depende de la cotización de hoy');
-assert.equal(inventarioElement('inv-total-ars').textContent, '≈ $1000000 ARS hoy');
+assert.equal(inventarioElement('inv-total-usd').textContent, `U$D ${Math.round(usdNotebook)}`, 'El USD no depende de la cotización de hoy');
+assert.equal(inventarioElement('inv-total-ars').textContent, `≈ $${Math.round(usdNotebook * 2000)} ARS hoy`);
 assert.equal(inventarioElement('inventario-cotizacion-input').value, 2000);
+const ventaJdTras2000 = Math.round(usdNotebook * 2000 * 0.5);
+assert.equal(inventarioElement('inv-venta-jd-101').textContent, `$${ventaJdTras2000}`,
+  'La celda Venta JD de la fila se recalcula por id al cambiar la cotización, sin re-render de la tabla');
+assert.equal(inventarioElement('inv-venta-pinki-101').textContent, `$${ventaJdTras2000}`);
+assert.equal(inventarioElement('inv-reventa-101').textContent, `$${Math.round(usdNotebook * 2000)}`,
+  'La celda Reventa (ARS hoy) de la fila también se recalcula por id al cambiar la cotización');
+
+// El input inline de una fila sincroniza el input global.
+inventarioElement('inv-cot-101').value = '1500';
+inventarioApi.setInventarioCotizacion('1500');
+assert.equal(inventarioElement('inventario-cotizacion-input').value, 1500,
+  'El input global debe sincronizarse con el valor tipeado en la fila');
+
+// Mientras una fila tiene el foco a mitad de tipeo (ej. ya escribió "15", va
+// a seguir escribiendo "1500"), un cambio disparado por OTRO input (la barra
+// global, en este caso) no debe pisarle lo que lleva tipeado — ahí es donde
+// un re-render completo de la tabla rompería el foco/cursor (brief punto 1).
+const cotInputBefore = inventarioElement('inv-cot-101');
+inventarioDocument.activeElement = cotInputBefore;
+cotInputBefore.value = '15';
+inventarioApi.setInventarioCotizacion('3000');
+assert.equal(inventarioElement('inventario-cotizacion-input').value, 3000, 'El input global sí se sincroniza');
+assert.equal(inventarioElement('inv-cot-101'), cotInputBefore,
+  'El nodo del input de cotización de la fila debe ser el mismo objeto antes y después del cambio: setInventarioCotizacion no debe reconstruir la tabla (revisor 7d63437e, hallazgo 3)');
+assert.equal(cotInputBefore.value, '15',
+  'El input de la fila con foco conserva lo que el usuario está tipeando, sin pisarlo');
+inventarioDocument.activeElement = null;
+inventarioElement('inv-cot-101').value = 1500;
+inventarioApi.setInventarioCotizacion('1500');
+
 // Una cotización inválida se ignora y conserva la anterior.
 inventarioApi.setInventarioCotizacion('-5');
-assert.equal(inventarioApi.getInventarioCotizacion(), 2000);
+assert.equal(inventarioApi.getInventarioCotizacion(), 1500);
 inventarioApi.setInventarioCotizacion('no es un número');
-assert.equal(inventarioApi.getInventarioCotizacion(), 2000);
-inventarioApi.setInventarioCotizacion('1000');
+assert.equal(inventarioApi.getInventarioCotizacion(), 1500);
+inventarioApi.setInventarioCotizacion('1223');
 
 // Filtro por estado: Vendidos, Donados y Todos.
 inventarioApi.setInventarioFiltroEstado('Vendido');
@@ -1600,11 +1679,53 @@ assert.equal(inventarioElement('inv-count-activos').textContent, '1',
   'El card de ítems activos cuenta TODO el inventario en Activo, sin importar el filtro de estado elegido');
 assert.equal(estadoFilterButtons.find((b) => b.dataset.estado === 'Vendido').active, true);
 assert.equal(estadoFilterButtons.find((b) => b.dataset.estado === 'Activo').active, false);
+// Reparto declarado 60/40 (Bicicleta) y sin ARS pagado: ARS JD/Pinki en "—".
+assert.match(invFiltered, />60%</);
+assert.match(invFiltered, />40%</);
+assert.match(invFiltered, /class="td-amount inv-color-jd">—</, 'Sin precio_ars, ARS JD debe mostrar "—"');
+
+// Revisor 7d63437e, hallazgo 2: el caso 60/40 debe verificar los importes
+// EXACTOS de Reventa, Venta JD, Venta Pinki y las cards con una cotización
+// dada (1223, fijada más arriba) — no alcanza con comprobar que aparezcan
+// "60%"/"40%", porque un reparto roto 50/50 también deja pasar eso.
+const usdBici = 200;
+const reventaBici1223 = Math.round(usdBici * 1223);
+const ventaJdBici1223 = Math.round(usdBici * 1223 * 0.6);
+const ventaPinkiBici1223 = Math.round(usdBici * 1223 * 0.4);
+assert.match(invFiltered, new RegExp(`id="inv-reventa-102">\\$${reventaBici1223}<`));
+assert.match(invFiltered, new RegExp(`id="inv-venta-jd-102">\\$${ventaJdBici1223}<`));
+assert.match(invFiltered, new RegExp(`id="inv-venta-pinki-102">\\$${ventaPinkiBici1223}<`));
+// Cards: con filtro "Vendido", Bicicleta es el único ítem (USD 200, 60/40).
+assert.equal(inventarioElement('inv-total-usd').textContent, `U$D ${usdBici}`);
+assert.equal(inventarioElement('inv-total-ars').textContent, `≈ $${reventaBici1223} ARS hoy`);
+assert.equal(inventarioElement('inv-jd-usd').textContent, `U$D ${Math.round(usdBici * 0.6)}`);
+assert.equal(inventarioElement('inv-jd-ars').textContent, `≈ $${ventaJdBici1223} ARS hoy`);
+assert.equal(inventarioElement('inv-pinki-usd').textContent, `U$D ${Math.round(usdBici * 0.4)}`);
+assert.equal(inventarioElement('inv-pinki-ars').textContent, `≈ $${ventaPinkiBici1223} ARS hoy`);
+
+// Y también después de cambiar la cotización: Reventa/Venta JD/Venta Pinki y
+// las 3 cards de USD-a-ARS deben recalcularse con el nuevo valor (1500), sin
+// que el USD total en dólares cambie.
+inventarioApi.setInventarioCotizacion('1500');
+const reventaBici1500 = Math.round(usdBici * 1500);
+const ventaJdBici1500 = Math.round(usdBici * 1500 * 0.6);
+const ventaPinkiBici1500 = Math.round(usdBici * 1500 * 0.4);
+assert.equal(inventarioElement('inv-reventa-102').textContent, `$${reventaBici1500}`);
+assert.equal(inventarioElement('inv-venta-jd-102').textContent, `$${ventaJdBici1500}`);
+assert.equal(inventarioElement('inv-venta-pinki-102').textContent, `$${ventaPinkiBici1500}`);
+assert.equal(inventarioElement('inv-total-usd').textContent, `U$D ${usdBici}`, 'El USD total no depende de la cotización de hoy');
+assert.equal(inventarioElement('inv-total-ars').textContent, `≈ $${reventaBici1500} ARS hoy`);
+assert.equal(inventarioElement('inv-jd-ars').textContent, `≈ $${ventaJdBici1500} ARS hoy`);
+assert.equal(inventarioElement('inv-pinki-ars').textContent, `≈ $${ventaPinkiBici1500} ARS hoy`);
+// Se restablece la cotización para no afectar las secciones siguientes.
+inventarioApi.setInventarioCotizacion('1223');
 
 inventarioApi.setInventarioFiltroEstado('Donado');
 invFiltered = inventarioElement('inventario-content').innerHTML;
 assert.match(invFiltered, /Silla rota/);
 assert.doesNotMatch(invFiltered, /Notebook ThinkPad|Bicicleta/);
+// Silla rota no tiene ningún dato de USD: USD compra y Venta JD/Pinki en "—".
+assert.match(invFiltered, /class="td-amount">—</, 'Sin precio_usd_compra ni precio_ars/cotizacion_usd_compra, USD compra debe mostrar "—"');
 
 inventarioApi.setInventarioFiltroEstado('');
 assert.equal(inventarioApi.filtroEstado, '');
@@ -1613,22 +1734,12 @@ assert.match(invFiltered, /Notebook ThinkPad/);
 assert.match(invFiltered, /Bicicleta/);
 assert.match(invFiltered, /Silla rota/);
 assert.equal(inventarioElement('inventario-count').textContent, '3 de 3');
-// Reparto JD/Pinki agregado: explícito (60/40) para Notebook + default 50/50
-// (marcado "sin dato") para Bicicleta, que no tiene proporcion_jd. Silla rota
-// no tiene precio_usd_compra NI precio_ars/cotizacion_usd_compra: no aporta
-// USD conocido (hallazgo 2 del revisor 46d4f3d5 — antes se inventaba un
-// valor convirtiendo valor_estimado con la cotización de HOY, lo que hacía
-// parecer un recálculo real donde no lo había). Por eso el total/reparto
-// solo suma Notebook (500) + Bicicleta (120) = 620, y el card avisa que 1
-// bien quedó sin USD.
-assert.equal(inventarioElement('inv-total-usd').textContent, 'U$D 620');
-assert.equal(inventarioElement('inv-jd-usd').textContent, 'U$D 360');
-assert.equal(inventarioElement('inv-pinki-usd').textContent, 'U$D 260');
-assert.match(inventarioElement('inv-count-sub').textContent, /1 sin USD/);
-assert.match(invFiltered, /sin USD/,
-  'Silla rota, sin ningún dato de USD, debe mostrar "sin USD" en la tabla en vez de un monto inventado');
-assert.match(invFiltered, /\(sin dato\)/,
-  'Bicicleta, sin proporcion_jd, debe marcar el reparto 50/50 como "sin dato"');
+// Las cards suman USD de Notebook (derivado) + Bicicleta (explícito 200); Silla
+// rota no aporta nada por no tener USD conocido (ni inventado ni excluido con aviso).
+const totalUsdTodos = usdNotebook + 200;
+assert.equal(inventarioElement('inv-total-usd').textContent, `U$D ${Math.round(totalUsdTodos)}`);
+assert.doesNotMatch(inventarioElement('inv-count-sub').textContent, /sin USD/,
+  'La captura de Juan no muestra un aviso de "N sin USD", solo "N bienes activos"');
 
 // XSS: nombre, ubicación y notas deben llegar escapados al innerHTML (filtro "Todos" vigente).
 assert.doesNotMatch(invFiltered, /<img/i, 'El nombre con XSS no debe crear un <img>');
@@ -1665,12 +1776,13 @@ assert.match(inventarioElement('inventario-content').innerHTML, /Sin bienes que 
 inventarioElement('inventario-search').value = '';
 inventarioApi.setInventarioFiltroEstado('Activo');
 
-// Botones de escritura: habilitados en vivo, deshabilitados si falta la capability inventory.
+// Botones de escritura (Editar / borrar, como el legacy): habilitados en
+// vivo, deshabilitados si falta la capability inventory.
 inventarioData.inventario = [invItemJD];
 inventarioApi.renderInventarioView();
 let invButtonsHtml = inventarioElement('inventario-content').innerHTML;
 assert.match(invButtonsHtml, /aria-label="Editar bien Notebook ThinkPad" >Editar<\/button>/);
-assert.match(invButtonsHtml, /aria-label="Dar de baja bien Notebook ThinkPad" >Dar de baja<\/button>/);
+assert.match(invButtonsHtml, /aria-label="Borrar bien Notebook ThinkPad" >borrar<\/button>/);
 assert.match(invButtonsHtml, /data-requires="inventory"/);
 inventarioApi.setInventoryAvailable(false);
 inventarioApi.renderInventarioView();
@@ -1690,4 +1802,4 @@ inventarioApi.renderInventarioView();
 assert.match(inventarioElement('inventario-content').innerHTML, /Snapshot de solo lectura/,
   'En modo snapshot debe avisar que no hay datos sin conexión autenticada, no "todavía no hay bienes"');
 
-console.log('Inventario: cards con cotización editable (localStorage), reparto JD/Pinki, filtro por estado (default Activo) y escape de XSS en nombre/ubicación/notas verificados con las funciones reales de app.js');
+console.log('Inventario: tabla idéntica al legacy más Reventa (ARS hoy) (columnas y orden, USD derivado, reparto 60/40, importes exactos de Reventa/Venta JD/Venta Pinki y cards antes y después de cambiar la cotización), recalculo en vivo de filas y cards sin perder el foco del input de cotización (verificado también por identidad de nodo), cards con cotización editable (localStorage), filtro por estado (default Activo) y escape de XSS en nombre/ubicación/notas verificados con las funciones reales de app.js');
