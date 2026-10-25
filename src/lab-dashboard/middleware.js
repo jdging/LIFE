@@ -17,6 +17,43 @@ const COOKIE_NAME = 'dashboard_session';
 const SESSION_DAYS = 90;
 const SESSION_MAX_AGE_SECONDS = SESSION_DAYS * 24 * 60 * 60;
 
+// PWA manifest + íconos (S5, t_a60a2f67): Safari necesita poder leerlos para
+// el prompt de "Agregar a inicio" ANTES de que haya una sesión — nunca llevan
+// datos propios, así que quedan fuera del gate. Rutas EXACTAS únicamente: no
+// es un prefijo ni cubre el resto de /icons/.
+const PUBLIC_STATIC_PATHS = new Set([
+  '/manifest.webmanifest',
+  '/icons/icon-180.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+]);
+
+// Atajos de iPhone (S5, t_a60a2f67): únicos destinos "post-login" admitidos
+// para no abrir un open redirect vía ?next=. Debe reflejar los valores que
+// consumeAccionDeepLink() entiende en app.js.
+const DEEP_LINK_ACCIONES = new Set(['gasto', 'ingreso', 'fijo', 'fijos']);
+
+// Sólo "/" con exactamente ?accion=<conocida> cuenta como destino preservable.
+// Cualquier otra cosa (otro path, parámetros extra, un valor desconocido) cae
+// al default "/" — nunca se redirige a un valor arbitrario del cliente.
+function sanitizeNextTarget(pathname, search) {
+  if (pathname !== '/') return null;
+  const params = new URLSearchParams(search);
+  if ([...params.keys()].length !== 1) return null;
+  const accion = params.get('accion');
+  if (!accion || !DEEP_LINK_ACCIONES.has(accion)) return null;
+  return `/?accion=${encodeURIComponent(accion)}`;
+}
+
+// Revalida un `next` recibido por query (en la propia URL del POST /login,
+// nunca por header ni body) contra el mismo formato exacto que produce
+// sanitizeNextTarget, antes de usarlo como Location de la redirección.
+function isAllowedNextTarget(value) {
+  if (typeof value !== 'string') return false;
+  const match = /^\/\?accion=([a-z]+)$/.exec(value);
+  return !!match && DEEP_LINK_ACCIONES.has(match[1]);
+}
+
 async function sha256Hex(message) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(message));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -494,9 +531,14 @@ async function continueToStaticAsset() {
 // Tests inject a continuation to check the gate without requiring the Vercel
 // SDK in this candidate. Production uses the SDK's documented next().
 export async function handleMiddleware(request, continueRequest) {
-  const secret = process.env.DASHBOARD_PASSWORD;
   const url = new URL(request.url);
   const { pathname } = url;
+
+  if (request.method === 'GET' && PUBLIC_STATIC_PATHS.has(pathname)) {
+    return continueRequest();
+  }
+
+  const secret = process.env.DASHBOARD_PASSWORD;
 
   if (!secret) {
     return new Response(
@@ -517,15 +559,24 @@ export async function handleMiddleware(request, continueRequest) {
       await sha256Hex(secret)
     );
 
+    // El `next` sólo viaja en la URL del propio POST /login (nunca en el body:
+    // el form action lo reenvía ahí desde login.html), y se revalida acá de
+    // nuevo contra el allowlist antes de usarlo como destino.
+    const requestedNext = url.searchParams.get('next');
+    const nextTarget = isAllowedNextTarget(requestedNext) ? requestedNext : null;
+
     if (!passwordOk) {
-      return Response.redirect(new URL('/login?error=1', url), 303);
+      const failedLoginUrl = new URL('/login', url);
+      failedLoginUrl.searchParams.set('error', '1');
+      if (nextTarget) failedLoginUrl.searchParams.set('next', nextTarget);
+      return Response.redirect(failedLoginUrl, 303);
     }
 
     const cookieValue = await createSessionCookieValue(secret);
     // Response.redirect(...) devuelve headers inmutables en el runtime de Vercel
     // (TypeError: immutable al intentar .append()) -- hay que construir la
     // respuesta a mano con un Headers propio (mutable) desde el arranque.
-    const headers = new Headers({ Location: new URL('/', url).toString() });
+    const headers = new Headers({ Location: new URL(nextTarget || '/', url).toString() });
     headers.append(
       'Set-Cookie',
       `${COOKIE_NAME}=${cookieValue}; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}; ` +
@@ -566,7 +617,10 @@ export async function handleMiddleware(request, continueRequest) {
   }
 
   if (!sessionValid) {
-    return Response.redirect(new URL('/login', url), 303);
+    const next = sanitizeNextTarget(pathname, url.search);
+    const loginUrl = new URL('/login', url);
+    if (next) loginUrl.searchParams.set('next', next);
+    return Response.redirect(loginUrl, 303);
   }
 
   return continueRequest(); // valid session: continue to the original static asset

@@ -2,8 +2,14 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>LIFE · Finanzas — acceso</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="LIFE">
+<meta name="theme-color" content="#8fb87a">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500;1,9..144,600&family=Work+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -144,6 +150,17 @@
   .error-msg.visible {
     display: block;
   }
+
+  /* Instalada como PWA ("Agregar a inicio"): respeta el notch/home indicator.
+     Fuera de standalone (pestaña normal de Safari) no cambia nada. */
+  @media (display-mode: standalone) {
+    body {
+      padding-top: calc(20px + env(safe-area-inset-top));
+      padding-right: calc(20px + env(safe-area-inset-right));
+      padding-bottom: calc(20px + env(safe-area-inset-bottom));
+      padding-left: calc(20px + env(safe-area-inset-left));
+    }
+  }
 </style>
 </head>
 <body>
@@ -170,8 +187,18 @@
   </main>
 
   <script>
-    if (new URLSearchParams(window.location.search).get('error') === '1') {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error') === '1') {
       document.getElementById('error-msg').classList.add('visible');
+    }
+    // Atajos de iPhone (?accion=... en "/"): el servidor manda para acá con
+    // ?next=/%3Faccion%3D... cuando no había sesión. Se reenvía como query del
+    // propio POST /login (nunca en el body) para que middleware.js, tras
+    // validar la contraseña, vuelva a ese destino en vez de "/" a secas. El
+    // servidor revalida este valor contra el mismo allowlist antes de usarlo.
+    const next = params.get('next');
+    if (next) {
+      document.querySelector('form').action = '/login?next=' + encodeURIComponent(next);
     }
   </script>
 </body>

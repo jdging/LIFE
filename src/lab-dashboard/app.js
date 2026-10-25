@@ -2667,4 +2667,29 @@ document.querySelector('.view-tabs').addEventListener('keydown', (event) => {
   document.getElementById('tab-' + VISIBLE_VIEWS[next]).focus();
 });
 
-loadAll();
+// ── ATAJOS DE iPHONE (deep links ?accion=) ─────────────────────────────────
+// Los accesos directos de Juan llegan como ?accion=gasto|ingreso|fijo|fijos.
+// En vivo abren el alta correspondiente (o la pestaña Fijos); en snapshot o
+// sin esa capability (liveMode en falso cubre ambos casos, ver loadAll), avisan
+// y no abren ni cambian nada. Un valor desconocido se ignora sin tocar la URL.
+// Para los valores conocidos, el parámetro se limpia con history.replaceState
+// en los dos casos (vivo o aviso), para no dejarlo colgado al refrescar.
+const DEEP_LINK_FORM_KIND = Object.assign(Object.create(null), { gasto: 'expense', ingreso: 'income', fijo: 'fixed' });
+
+function consumeAccionDeepLink() {
+  const params = new URLSearchParams(window.location.search);
+  const accion = params.get('accion');
+  if (accion !== 'fijos' && !(accion !== null && Object.hasOwn(DEEP_LINK_FORM_KIND, accion))) return;
+  if (!liveMode) {
+    window.alert('Para usar este atajo iniciá sesión en la app · estás en modo snapshot de solo lectura.');
+  } else if (accion === 'fijos') {
+    switchView('fijos');
+  } else {
+    openForm(DEEP_LINK_FORM_KIND[accion]);
+  }
+  params.delete('accion');
+  const query = params.toString();
+  window.history.replaceState(null, '', window.location.pathname + (query ? `?${query}` : '') + window.location.hash);
+}
+
+loadAll().then(consumeAccionDeepLink);

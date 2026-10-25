@@ -1803,3 +1803,84 @@ assert.match(inventarioElement('inventario-content').innerHTML, /Snapshot de sol
   'En modo snapshot debe avisar que no hay datos sin conexión autenticada, no "todavía no hay bienes"');
 
 console.log('Inventario: tabla idéntica al legacy más Reventa (ARS hoy) (columnas y orden, USD derivado, reparto 60/40, importes exactos de Reventa/Venta JD/Venta Pinki y cards antes y después de cambiar la cotización), recalculo en vivo de filas y cards sin perder el foco del input de cotización (verificado también por identidad de nodo), cards con cotización editable (localStorage), filtro por estado (default Activo) y escape de XSS en nombre/ubicación/notas verificados con las funciones reales de app.js');
+
+// ── Atajos de iPhone: deep links ?accion= (S5, t_a60a2f67) ─────────────────
+// Usa la función real consumeAccionDeepLink de app.js, con window/openForm/
+// switchView simulados. No hay navegador real: se verifica que open/switch se
+// invoquen con los argumentos correctos y que la URL quede limpia.
+function runDeepLink({ search = '?accion=gasto', hash = '', liveMode = true }) {
+  const openFormCalls = [];
+  const switchViewCalls = [];
+  const alerts = [];
+  const historyCalls = [];
+  const sandboxWindow = {
+    location: { pathname: '/', search, hash },
+    alert(message) { alerts.push(message); },
+    history: { replaceState(_state, _title, url) { historyCalls.push(url); } },
+  };
+  const deepLinkApi = runInNewContext(`
+    let liveMode = ${liveMode};
+    function openForm(kind) { openFormCalls.push(kind); }
+    function switchView(view) { switchViewCalls.push(view); }
+    ${slice('const DEEP_LINK_FORM_KIND = ', 'loadAll().then')}
+    ({ consumeAccionDeepLink })`,
+    { window: sandboxWindow, URLSearchParams, openFormCalls, switchViewCalls });
+  deepLinkApi.consumeAccionDeepLink();
+  return { openFormCalls, switchViewCalls, alerts, historyCalls };
+}
+
+for (const [accion, expectedKind] of [['gasto', 'expense'], ['ingreso', 'income'], ['fijo', 'fixed']]) {
+  const result = runDeepLink({ search: `?accion=${accion}`, liveMode: true });
+  assert.deepEqual(result.openFormCalls, [expectedKind], `?accion=${accion} debe abrir el alta de ${expectedKind}`);
+  assert.equal(result.switchViewCalls.length, 0);
+  assert.equal(result.alerts.length, 0);
+  assert.equal(result.historyCalls.length, 1);
+  assert.doesNotMatch(result.historyCalls[0], /accion=/, 'el parámetro accion debe limpiarse de la URL');
+}
+
+const fijosLive = runDeepLink({ search: '?accion=fijos', liveMode: true });
+assert.deepEqual(fijosLive.switchViewCalls, ['fijos'], '?accion=fijos debe ir a la pestaña Fijos');
+assert.equal(fijosLive.openFormCalls.length, 0);
+assert.equal(fijosLive.alerts.length, 0);
+assert.doesNotMatch(fijosLive.historyCalls[0], /accion=/);
+
+// Snapshot o sin capability (liveMode=false cubre ambos casos en app.js): aviso,
+// no se abre ni cambia nada, pero el parámetro igual se limpia.
+for (const accion of ['gasto', 'ingreso', 'fijo', 'fijos']) {
+  const result = runDeepLink({ search: `?accion=${accion}`, liveMode: false });
+  assert.equal(result.openFormCalls.length, 0, `?accion=${accion} en snapshot no debe abrir nada`);
+  assert.equal(result.switchViewCalls.length, 0, `?accion=${accion} en snapshot no debe cambiar de pestaña`);
+  assert.equal(result.alerts.length, 1, `?accion=${accion} en snapshot debe avisar`);
+  assert.equal(result.historyCalls.length, 1);
+  assert.doesNotMatch(result.historyCalls[0], /accion=/);
+}
+
+// Valor desconocido: se ignora por completo, sin tocar la URL.
+const unknownAccion = runDeepLink({ search: '?accion=lo-que-sea', liveMode: true });
+assert.equal(unknownAccion.openFormCalls.length, 0);
+assert.equal(unknownAccion.switchViewCalls.length, 0);
+assert.equal(unknownAccion.alerts.length, 0);
+assert.equal(unknownAccion.historyCalls.length, 0, 'un valor desconocido no debe generar history.replaceState');
+
+// Claves heredadas del prototipo de Object (constructor, toString, __proto__,
+// hasOwnProperty): el allowlist debe ignorarlas igual que cualquier valor
+// desconocido, sin lanzar una excepción al llegar a openForm().
+for (const accion of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf']) {
+  const result = runDeepLink({ search: `?accion=${accion}`, liveMode: true });
+  assert.equal(result.openFormCalls.length, 0, `?accion=${accion} (clave heredada) no debe abrir nada`);
+  assert.equal(result.switchViewCalls.length, 0, `?accion=${accion} (clave heredada) no debe cambiar de pestaña`);
+  assert.equal(result.alerts.length, 0, `?accion=${accion} (clave heredada) no debe avisar`);
+  assert.equal(result.historyCalls.length, 0, `?accion=${accion} (clave heredada) no debe generar history.replaceState`);
+}
+
+// Sin ?accion en absoluto: tampoco pasa nada.
+const noAccion = runDeepLink({ search: '?mes=2026-10', liveMode: true });
+assert.equal(noAccion.openFormCalls.length, 0);
+assert.equal(noAccion.historyCalls.length, 0);
+
+// Otros parámetros y el hash se preservan al limpiar accion.
+const preserved = runDeepLink({ search: '?foo=bar&accion=fijos', hash: '#ancla', liveMode: true });
+assert.deepEqual(preserved.switchViewCalls, ['fijos']);
+assert.equal(preserved.historyCalls[0], '/?foo=bar#ancla');
+
+console.log('Atajos de iPhone: ?accion=gasto|ingreso|fijo|fijos abre el alta/pestaña correspondiente en vivo, avisa sin abrir nada en snapshot, ignora valores desconocidos (incluidas claves heredadas del prototipo: constructor, toString, __proto__, hasOwnProperty, valueOf) sin tocar la URL ni lanzar excepción, y siempre limpia el parámetro conocido preservando el resto de la query y el hash — verificado con la función real consumeAccionDeepLink de app.js');

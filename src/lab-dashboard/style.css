@@ -1332,6 +1332,19 @@ footer {
   margin: 4px 0 10px;
 }
 
+/* ---- PWA instalada ("Agregar a inicio" en Safari iOS) ---- */
+
+/* Fuera de standalone (pestaña normal del navegador) no cambia nada: el
+   padding extra sólo existe cuando hay notch/home indicator que respetar. */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+  }
+}
+
 @media print {
   body * {
     visibility: hidden;

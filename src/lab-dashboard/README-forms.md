@@ -31,6 +31,20 @@ Lista los bienes registrados (tabla `inventario_bienes`): nombre, categoría, ub
 - **Degradación por capability:** `inventoryAvailable` es independiente de `liveMode`. Si `/api/health` no incluye `'inventory'` en `capabilities` (API vieja o despliegue parcial), el resto del dashboard sigue en vivo pero esta pestaña queda en solo lectura — botones de alta/edición/baja deshabilitados — y muestra un aviso (`#inventario-notice`) indicando que falta esa capability puntual.
 - **Mapeo de campos del legacy:** `nombre` = `descripcion` y `fecha_adquisicion` = `fecha_compra` del legacy (nombres heredados del esquema previo a esta extensión); el resto de los campos nuevos usa el mismo nombre que el legacy (`precio_ars`, `cotizacion_usd_compra`, `precio_usd_compra`, `proporcion_jd`, `precio_venta_estimado_usd`, `estado`). Ver `lab/README-api.md` para la tabla completa de mapeo y validaciones del backend.
 
+## Atajos de iPhone (deep links `?accion=`)
+
+S5 (t_a60a2f67, Epic LIFE v2 prod) agrega soporte de PWA instalable ("Agregar a inicio" en Safari) con atajos de iOS que abren `https://<dominio>/?accion=gasto|ingreso|fijo|fijos`. La lectura del parámetro vive enteramente en `app.js` (`DEEP_LINK_FORM_KIND` / `consumeAccionDeepLink`), encadenada después de que `loadAll()` resuelve — así `liveMode` ya está determinado antes de decidir qué hacer.
+
+- **En vivo:** `gasto` → `openForm('expense')`, `ingreso` → `openForm('income')`, `fijo` → `openForm('fixed')`. `fijos` no abre un formulario: llama `switchView('fijos')` para ir directo a la pestaña.
+- **En snapshot o sin la capability correspondiente** (ambos casos colapsan en `liveMode === false`, ver `loadAll`): se muestra un `alert()` avisando que hace falta una sesión en vivo, y no se abre ni cambia nada.
+- **Valor desconocido en `?accion=`:** se ignora por completo — no abre nada, no avisa, y **no** toca la URL. `DEEP_LINK_FORM_KIND` se construye con `Object.create(null)` y se consulta con `Object.hasOwn`, así que claves heredadas del prototipo de `Object` (`constructor`, `toString`, `__proto__`, `hasOwnProperty`, etc.) también se ignoran sin excepción, en vez de colarse por `in`.
+- Para los cuatro valores conocidos (vivo o snapshot), el parámetro `accion` se limpia de la URL con `history.replaceState` una vez resuelto, preservando el resto de la query string y el hash. Esto evita que un refresh repita la acción o deje la URL con un parámetro ya consumido.
+- No hay manejo especial de la capability `inventory` acá: ninguno de los cuatro valores depende de ella.
+
+Cubierto en `tests/forms.test.mjs` con la función real `consumeAccionDeepLink` en una VM de Node (`window`/`openForm`/`switchView` simulados): los tres altas en vivo, `fijos` en vivo, los cuatro valores en snapshot (aviso, sin abrir nada, URL igual limpiada), un valor desconocido (sin abrir nada y sin tocar la URL), claves heredadas del prototipo (`constructor`, `toString`, `__proto__`, `hasOwnProperty`, `valueOf`, también ignoradas sin excepción ni tocar la URL), ausencia de `?accion`, y preservación de otros parámetros de query más el hash al limpiar `accion`.
+
+La preservación del destino a través del login (`/?accion=gasto` sin sesión → `/login` → de vuelta a `/?accion=gasto`) es responsabilidad de `middleware.js`, documentada en `README-proxy.md`.
+
 ## Límites de integración y contrato
 
 - Según `contrato-api.md`, el alta y la edición de fijos admiten `tipo_proporcion` y `proporcion_jd` por versión. Para responsable `Común`, el formulario ofrece reparto dinámico (`dinamica`, porcentaje `null`) o personalizado (`custom`, porcentaje JD numérico de 0 a 100 inclusive, con decimales). El porcentaje de Pinki se muestra como `100 - JD`. Para `JD` o `Pinki` se omiten los dos campos de reparto. En una edición sin cambio de reparto también se omiten: la API conserva el reparto vigente en `vigente_desde`. Cambiar a dinámico envía `dinamica` y `null` para limpiar el porcentaje previo. La confirmación muestra valor, reparto y fecha; PATCH crea una nueva versión y conserva las anteriores en el historial. No se modificó la referencia de API.

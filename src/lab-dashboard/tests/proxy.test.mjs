@@ -470,3 +470,92 @@ test('login, logout, and protected assets retain the gate and call continuation'
   }, { fetch: () => assert.fail('static route reached fetch') });
   assert.equal(calls, 2);
 });
+
+// ── Atajos de iPhone (S5, t_a60a2f67): manifest/íconos públicos + destino
+// preservado a través del login con allowlist same-origin ──────────────────
+
+test('manifest and icon exact paths bypass the gate: public, GET-only, no session or DASHBOARD_PASSWORD required', async () => {
+  const previousPassword = process.env.DASHBOARD_PASSWORD;
+  delete process.env.DASHBOARD_PASSWORD;
+  try {
+    const continuation = { continued: true };
+    const next = () => continuation;
+    for (const path of ['/manifest.webmanifest', '/icons/icon-180.png', '/icons/icon-192.png', '/icons/icon-512.png']) {
+      assert.equal(await handleMiddleware(new Request(`${SITE_URL}${path}`), next), continuation, path);
+    }
+    // Not one of the exact allowlisted paths: still gated (missing-secret 500, same as any other path).
+    const otherIcon = await handleMiddleware(new Request(`${SITE_URL}/icons/icon-1024.png`), next);
+    assert.equal(otherIcon.status, 500);
+    // Same exact path but POST: not public, falls through to the gate.
+    const postManifest = await handleMiddleware(new Request(`${SITE_URL}/manifest.webmanifest`, { method: 'POST' }), next);
+    assert.equal(postManifest.status, 500);
+  } finally {
+    if (previousPassword === undefined) delete process.env.DASHBOARD_PASSWORD;
+    else process.env.DASHBOARD_PASSWORD = previousPassword;
+  }
+});
+
+test('an unauthenticated known ?accion= deep link is preserved through /login; anything else defaults to "/"', async () => {
+  await withHarness(async () => {
+    for (const accion of ['gasto', 'ingreso', 'fijo', 'fijos']) {
+      const response = await handleMiddleware(new Request(`${SITE_URL}/?accion=${accion}`), () => assert.fail('must redirect, not continue'));
+      assert.equal(response.status, 303);
+      const expected = new URL('/login', SITE_URL);
+      expected.searchParams.set('next', `/?accion=${accion}`);
+      assert.equal(response.headers.get('location'), expected.toString(), accion);
+    }
+    const noPreservedNext = [
+      '/?accion=desconocido', '/?accion=gasto&otro=1', '/style.css?accion=gasto', '/',
+      '/?accion=gasto&accion=ingreso',
+    ];
+    for (const path of noPreservedNext) {
+      const response = await handleMiddleware(new Request(`${SITE_URL}${path}`), () => assert.fail('must redirect, not continue'));
+      assert.equal(response.status, 303, path);
+      assert.equal(response.headers.get('location'), `${SITE_URL}/login`, path);
+    }
+  }, { fetch: () => assert.fail('must not reach the VPS') });
+});
+
+test('POST /login preserves a validated next target on success and failure; a forged or malformed next falls back to "/"', async () => {
+  await withHarness(async () => {
+    const validNext = '/?accion=ingreso';
+
+    const okForm = new FormData();
+    okForm.set('password', DASHBOARD_PASSWORD);
+    const ok = await handleMiddleware(
+      new Request(`${SITE_URL}/login?next=${encodeURIComponent(validNext)}`, { method: 'POST', body: okForm }),
+      () => assert.fail('must redirect, not continue')
+    );
+    assert.equal(ok.status, 303);
+    assert.equal(ok.headers.get('location'), `${SITE_URL}${validNext}`);
+    assert.match(ok.headers.get('set-cookie'), /^dashboard_session=/);
+
+    const badForm = new FormData();
+    badForm.set('password', 'wrong-password');
+    const bad = await handleMiddleware(
+      new Request(`${SITE_URL}/login?next=${encodeURIComponent(validNext)}`, { method: 'POST', body: badForm }),
+      () => assert.fail('must redirect, not continue')
+    );
+    assert.equal(bad.status, 303);
+    const badLocation = new URL(bad.headers.get('location'));
+    assert.equal(badLocation.pathname, '/login');
+    assert.equal(badLocation.searchParams.get('error'), '1');
+    assert.equal(badLocation.searchParams.get('next'), validNext);
+    assert.equal(bad.headers.get('set-cookie'), null);
+
+    const forgedNextValues = [
+      'https://evil.example.test/', '//evil.example.test', '/other-page',
+      '/?accion=gasto&x=1', '/?accion=desconocido', '/\\evil', '/?ACCION=gasto',
+    ];
+    for (const forgedNext of forgedNextValues) {
+      const forgedForm = new FormData();
+      forgedForm.set('password', DASHBOARD_PASSWORD);
+      const forged = await handleMiddleware(
+        new Request(`${SITE_URL}/login?next=${encodeURIComponent(forgedNext)}`, { method: 'POST', body: forgedForm }),
+        () => assert.fail('must redirect, not continue')
+      );
+      assert.equal(forged.status, 303, forgedNext);
+      assert.equal(forged.headers.get('location'), `${SITE_URL}/`, forgedNext);
+    }
+  }, { fetch: () => assert.fail('must not reach the VPS') });
+});
