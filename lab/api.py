@@ -94,6 +94,81 @@ ALLOWED_FIXED_PATCH_FIELDS = {
 }
 CATEGORY_TIPOS = ("Gasto", "Ingreso", "Inversión")
 
+# --- Telegram (brief S2/S3, T2) ---------------------------------------------
+
+TELEGRAM_ID_FIELDS = ("chat_id", "telegram_user_id", "telegram_message_id")
+# Strings de dígitos, con '-' inicial opcional (los chat_id de grupo de
+# Telegram son negativos); longitud acotada para no aceptar basura arbitraria.
+_TELEGRAM_ID_RE = re.compile(r"^-?\d{1,32}$")
+
+ALLOWED_EXPENSE_TELEGRAM_FIELDS = ALLOWED_EXPENSE_FIELDS | set(TELEGRAM_ID_FIELDS) | {"comprobante"}
+ALLOWED_INCOME_TELEGRAM_FIELDS = ALLOWED_INCOME_CREATE_FIELDS | set(TELEGRAM_ID_FIELDS) | {"comprobante"}
+
+ALLOWED_COMPROBANTE_FIELDS = {
+    "hash_archivo", "texto_extraido", "monto_detectado", "fecha_detectada",
+    "comercio_detectado", "ruta_archivo",
+}
+MAX_COMPROBANTE_HASH_LENGTH = 128
+MAX_COMPROBANTE_TEXT_LENGTH = 4000
+MAX_COMPROBANTE_PATH_LENGTH = 512
+
+
+def _valid_optional_telegram_ids(data, fields):
+    for field in fields:
+        if field not in data:
+            continue
+        value = data[field]
+        if value is None:
+            continue
+        if not isinstance(value, str) or not _TELEGRAM_ID_RE.match(value):
+            return False
+    return True
+
+
+def _valid_comprobante_payload(comprobante):
+    """Valida el sub-objeto opcional `comprobante` de `POST
+    /api/expenses/telegram` e `/api/income/telegram` (brief S2/S3, punto 2).
+    No toca la base de datos ni infiere valores: solo forma y rangos.
+    """
+    if not isinstance(comprobante, dict):
+        return False
+    if set(comprobante) - ALLOWED_COMPROBANTE_FIELDS:
+        return False
+
+    hash_archivo = comprobante.get("hash_archivo")
+    if (
+        not isinstance(hash_archivo, str)
+        or not hash_archivo.strip()
+        or len(hash_archivo) > MAX_COMPROBANTE_HASH_LENGTH
+    ):
+        return False
+
+    for campo in ("texto_extraido", "comercio_detectado"):
+        valor = comprobante.get(campo)
+        if valor is not None and (
+            not isinstance(valor, str) or len(valor) > MAX_COMPROBANTE_TEXT_LENGTH
+        ):
+            return False
+
+    ruta_archivo = comprobante.get("ruta_archivo")
+    if ruta_archivo is not None and (
+        not isinstance(ruta_archivo, str)
+        or not ruta_archivo.strip()
+        or len(ruta_archivo) > MAX_COMPROBANTE_PATH_LENGTH
+    ):
+        return False
+
+    fecha_detectada = comprobante.get("fecha_detectada")
+    if fecha_detectada is not None and not _is_iso_date(fecha_detectada):
+        return False
+
+    monto_detectado = comprobante.get("monto_detectado")
+    if monto_detectado is not None:
+        if not _valid_money(monto_detectado, positive=False) or monto_detectado < 0:
+            return False
+
+    return True
+
 _STATUS_TEXT = {
     200: "OK", 201: "Created",
     400: "Bad Request", 401: "Unauthorized", 404: "Not Found",
@@ -224,11 +299,20 @@ class _App:
         ("DELETE", re.compile(r"^/api/fixed/(?P<id>\d+)$"), "delete_fixed"),
         ("GET", re.compile(r"^/api/summary$"), "summary"),
         ("GET", re.compile(r"^/api/categories$"), "list_categories"),
+        # --- Telegram (brief S2/S3, T2): rutas internas, no se agregan al
+        # proxy de Vercel (middleware.js no se toca).
+        ("GET", re.compile(r"^/api/tarjetas$"), "list_tarjetas"),
+        ("POST", re.compile(r"^/api/expenses/telegram$"), "create_expense_telegram"),
+        ("POST", re.compile(r"^/api/income/telegram$"), "create_income_telegram"),
+        ("GET", re.compile(r"^/api/comprobantes/dedupe$"), "comprobantes_dedupe"),
+        ("GET", re.compile(r"^/api/avisos-credito/pendientes$"), "avisos_credito_pendientes_handler"),
+        ("POST", re.compile(r"^/api/avisos-credito/marcar-enviados$"), "avisos_credito_marcar_enviados_handler"),
     )
     QUERY_FIELDS = {
         "list_expenses": {"month"}, "list_fixed": {"dateISO"},
         "fixed_range": {"fromISO", "toISO"}, "summary": {"month"},
         "list_categories": {"tipo"},
+        "comprobantes_dedupe": {"hash", "monto", "fecha", "comercio"},
     }
 
     def __init__(self, db_path, internal_secret):
@@ -469,14 +553,36 @@ class _App:
 
         ids = resultado if isinstance(resultado, list) else [resultado]
         creados = [row for row in db.get_gastos(conn) if row["id"] in ids]
-        return self._json(start_response, 201, {"expenses": creados})
+        avisos_nuevos = self._avisos_credito_por_alta_o_baja(conn, gasto.get("medio_pago"), creados)
+        return self._json(start_response, 201, {
+            "expenses": creados, "avisos_credito_nuevos": avisos_nuevos,
+        })
+
+    @staticmethod
+    def _avisos_credito_por_alta_o_baja(conn, medio_pago, filas):
+        """Tras un alta o baja de gasto en `medio_pago='Crédito'` (brief
+        S2/S3, punto 2): corre `detectar_umbrales_credito` para el mes de
+        cada fila involucrada (una por cuota en un alta con cuotas) y
+        devuelve la lista consolidada de avisos nuevos. `filas` es una
+        lista de dicts de `gastos` (debe incluir `fecha`); si `medio_pago`
+        no es `'Crédito'` o no hay filas, no corre nada.
+        """
+        if medio_pago != "Crédito" or not filas:
+            return []
+        avisos_nuevos = []
+        for mes in sorted({(fila.get("fecha") or "")[:7] for fila in filas if fila.get("fecha")}):
+            resultado = db.detectar_umbrales_credito(conn, mes)
+            avisos_nuevos.extend(resultado["nuevos"])
+        return avisos_nuevos
 
     def delete_expense(self, ctx, conn, start_response):
         gasto_id = int(ctx.path_params["id"])
         # Reservar el escritor antes de leer evita una promoción de snapshot
         # obsoleto si dos conexiones intentan borrar la misma fila a la vez.
         conn.execute("BEGIN IMMEDIATE")
-        fila = conn.execute("SELECT deleted_at, monto FROM gastos WHERE id = ?", (gasto_id,)).fetchone()
+        fila = conn.execute(
+            "SELECT deleted_at, monto, fecha, medio_pago FROM gastos WHERE id = ?", (gasto_id,)
+        ).fetchone()
         if fila is None:
             conn.rollback()
             return self._error(start_response, 404, f"no existe gasto id={gasto_id}.")
@@ -490,7 +596,12 @@ class _App:
             db.eliminar_gasto_logico(conn, gasto_id, SERVER_ACTOR)
         except ValueError:
             return self._error(start_response, 409, "no se pudo borrar el gasto.")
-        return self._json(start_response, 200, {"deleted": True, "id": gasto_id})
+        avisos_nuevos = self._avisos_credito_por_alta_o_baja(
+            conn, fila["medio_pago"], [{"fecha": fila["fecha"]}]
+        )
+        return self._json(start_response, 200, {
+            "deleted": True, "id": gasto_id, "avisos_credito_nuevos": avisos_nuevos,
+        })
 
     # --- income ----------------------------------------------------------
 
@@ -998,6 +1109,191 @@ class _App:
             if subcategoria not in subcategorias:
                 subcategorias.append(subcategoria)
         return self._json(start_response, 200, {"categories": categories})
+
+    # --- Telegram (brief S2/S3, T2) -----------------------------------------
+    #
+    # Rutas internas: no se agregan al proxy de Vercel (middleware.js no se
+    # toca). Misma auth (`X-Internal-Proxy-Secret`), mismo formato de
+    # errores y las mismas validaciones de las rutas equivalentes sin
+    # `/telegram`.
+
+    def list_tarjetas(self, ctx, conn, start_response):
+        unknown = self._unknown_fields(ctx.query.keys(), set())
+        if unknown:
+            return self._error(start_response, 400, "parámetros de query desconocidos.")
+        return self._json(start_response, 200, {"tarjetas": db.get_tarjetas(conn)})
+
+    def create_expense_telegram(self, ctx, conn, start_response):
+        data, err = self._parse_json(ctx, start_response)
+        if err is not None:
+            return err
+        unknown = self._unknown_fields(data.keys(), ALLOWED_EXPENSE_TELEGRAM_FIELDS)
+        if unknown:
+            return self._error(start_response, 400, "campos desconocidos.")
+        if "fecha" in data and not _is_iso_date(data["fecha"]):
+            return self._error(start_response, 400, "fecha debe ser 'YYYY-MM-DD' válida.")
+        if not _valid_optional_strings(data, {
+            "moneda", "subcategoria", "medio_pago", "descripcion_original", "tarjeta_id",
+        }):
+            return self._error(start_response, 400, "campos de texto inválidos.")
+        if not _valid_optional_telegram_ids(data, TELEGRAM_ID_FIELDS):
+            return self._error(
+                start_response, 400,
+                "chat_id/telegram_user_id/telegram_message_id deben ser dígitos (con '-' inicial opcional).",
+            )
+        comprobante = data.get("comprobante")
+        if comprobante is not None and not _valid_comprobante_payload(comprobante):
+            return self._error(start_response, 400, "comprobante inválido.")
+        errores = validaciones.validar_expense(data)
+        if errores:
+            return self._error(start_response, 400, "payload de gasto inválido.")
+        if not _valid_money(data.get("monto")):
+            return self._error(start_response, 400, "monto fuera de rango o con más de dos decimales.")
+
+        cuotas_total = data.get("cuotas_total")
+        if cuotas_total is None:
+            cuotas_total = 1
+        if cuotas_total > MAX_INSTALLMENTS or Decimal(str(data["monto"])) * 100 < cuotas_total:
+            return self._error(start_response, 400, "cuotas_total fuera de rango para el monto.")
+
+        gasto = {key: value for key, value in data.items() if key != "comprobante"}
+        gasto["confirmado"] = True
+        gasto["origen"] = "telegram"
+
+        try:
+            resultado = db.insert_gasto_telegram(conn, gasto, cuotas_total, comprobante)
+        except db.ComprobanteDuplicadoError:
+            return self._error(start_response, 409, "comprobante duplicado: ya fue registrado.")
+        except OverflowError:
+            return self._error(start_response, 400, "monto fuera de rango.")
+        except (ValueError, sqlite3.IntegrityError):
+            return self._error(start_response, 409, "no se pudo crear el gasto.")
+
+        gasto_ids = resultado["gasto_ids"]
+        creados = [row for row in db.get_gastos(conn) if row["id"] in gasto_ids]
+        avisos_nuevos = self._avisos_credito_por_alta_o_baja(conn, gasto.get("medio_pago"), creados)
+
+        respuesta = {"expenses": creados, "avisos_credito_nuevos": avisos_nuevos}
+        if resultado["comprobante_id"] is not None:
+            respuesta["comprobante"] = self._comprobante_por_id(conn, resultado["comprobante_id"])
+        return self._json(start_response, 201, respuesta)
+
+    def create_income_telegram(self, ctx, conn, start_response):
+        data, err = self._parse_json(ctx, start_response)
+        if err is not None:
+            return err
+        unknown = self._unknown_fields(data.keys(), ALLOWED_INCOME_TELEGRAM_FIELDS)
+        if unknown:
+            return self._error(start_response, 400, "campos desconocidos.")
+        if "fecha" in data and not _is_iso_date(data["fecha"]):
+            return self._error(start_response, 400, "fecha debe ser 'YYYY-MM-DD' válida.")
+        if not _valid_optional_strings(data, {"moneda", "descripcion_original"}):
+            return self._error(start_response, 400, "campos de texto inválidos.")
+        if not _valid_optional_telegram_ids(data, TELEGRAM_ID_FIELDS):
+            return self._error(
+                start_response, 400,
+                "chat_id/telegram_user_id/telegram_message_id deben ser dígitos (con '-' inicial opcional).",
+            )
+        comprobante = data.get("comprobante")
+        if comprobante is not None and not _valid_comprobante_payload(comprobante):
+            return self._error(start_response, 400, "comprobante inválido.")
+        errores = validaciones.validar_ingreso(data)
+        if errores:
+            return self._error(start_response, 400, "payload de ingreso inválido.")
+        if not _valid_money(data.get("monto")):
+            return self._error(start_response, 400, "monto fuera de rango o con más de dos decimales.")
+
+        ingreso = {key: value for key, value in data.items() if key != "comprobante"}
+        ingreso["confirmado"] = True
+        ingreso["origen"] = "telegram"
+
+        try:
+            resultado = db.insert_ingreso_telegram(conn, ingreso, comprobante)
+        except db.ComprobanteDuplicadoError:
+            return self._error(start_response, 409, "comprobante duplicado: ya fue registrado.")
+        except OverflowError:
+            return self._error(start_response, 400, "monto fuera de rango.")
+        except ValueError:
+            return self._error(start_response, 409, "no se pudo crear el ingreso.")
+
+        creado = next(row for row in db.get_ingresos(conn) if row["id"] == resultado["ingreso_id"])
+        respuesta = {"income": creado}
+        if resultado["comprobante_id"] is not None:
+            respuesta["comprobante"] = self._comprobante_por_id(conn, resultado["comprobante_id"])
+        return self._json(start_response, 201, respuesta)
+
+    @staticmethod
+    def _comprobante_por_id(conn, comprobante_id):
+        fila = conn.execute(
+            "SELECT * FROM comprobantes_telegram WHERE id = ?", (comprobante_id,)
+        ).fetchone()
+        return dict(fila)
+
+    def comprobantes_dedupe(self, ctx, conn, start_response):
+        unknown = self._unknown_fields(ctx.query.keys(), {"hash", "monto", "fecha", "comercio"})
+        if unknown:
+            return self._error(start_response, 400, "parámetros de query desconocidos.")
+        hash_archivo = ctx.query_param("hash")
+        if (
+            not isinstance(hash_archivo, str)
+            or not hash_archivo.strip()
+            or len(hash_archivo) > MAX_COMPROBANTE_HASH_LENGTH
+        ):
+            return self._error(start_response, 400, "hash es obligatorio.")
+
+        monto_raw = ctx.query_param("monto")
+        monto = None
+        if monto_raw is not None:
+            try:
+                monto = float(monto_raw)
+            except ValueError:
+                return self._error(start_response, 400, "monto debe ser numérico.")
+            if not math.isfinite(monto):
+                return self._error(start_response, 400, "monto debe ser numérico.")
+
+        fecha = ctx.query_param("fecha")
+        if fecha is not None and not _is_iso_date(fecha):
+            return self._error(start_response, 400, "fecha debe ser 'YYYY-MM-DD' válida.")
+
+        comercio = ctx.query_param("comercio")
+
+        resultado = db.buscar_comprobante_dedupe(
+            conn, hash_archivo, monto=monto, fecha=fecha, comercio=comercio,
+        )
+        return self._json(start_response, 200, resultado)
+
+    def avisos_credito_pendientes_handler(self, ctx, conn, start_response):
+        unknown = self._unknown_fields(ctx.query.keys(), set())
+        if unknown:
+            return self._error(start_response, 400, "parámetros de query desconocidos.")
+        return self._json(
+            start_response, 200, {"avisos_credito": db.avisos_credito_pendientes(conn)}
+        )
+
+    def avisos_credito_marcar_enviados_handler(self, ctx, conn, start_response):
+        data, err = self._parse_json(ctx, start_response)
+        if err is not None:
+            return err
+        unknown = self._unknown_fields(data.keys(), {"items"})
+        if unknown:
+            return self._error(start_response, 400, "campos desconocidos.")
+
+        items = data.get("items")
+        if not isinstance(items, list) or not items:
+            return self._error(start_response, 400, "items debe ser una lista no vacía.")
+        for item in items:
+            if not isinstance(item, dict) or set(item) != {"mes", "umbral"}:
+                return self._error(
+                    start_response, 400, "cada item debe tener exactamente 'mes' y 'umbral'.",
+                )
+            if not _is_iso_month(item["mes"]):
+                return self._error(start_response, 400, "mes debe ser 'YYYY-MM' válido.")
+            umbral = item["umbral"]
+            if isinstance(umbral, bool) or not isinstance(umbral, int) or umbral < 0:
+                return self._error(start_response, 400, "umbral debe ser un entero >= 0.")
+
+        actualizados = db.marcar_avisos_credito_enviados(conn, items)
+        return self._json(start_response, 200, {"actualizados": actualizados})
 
 
 def create_app(db_path, internal_secret):

@@ -305,6 +305,81 @@ existe o ya estaba borrado — incluida la carrera de una doble baja
 concurrente, igual que `DELETE /api/income/:id`. `GET /api/inventory` excluye
 siempre los bienes borrados lógicamente; no hay ruta de restauración.
 
+## Telegram (brief S2/S3, T1/T2 de CTO-DISENO.md)
+
+Rutas **internas**: no se agregan al proxy de Vercel (`middleware.js` no se
+toca). Misma auth `X-Internal-Proxy-Secret`, mismo formato de errores y las
+mismas validaciones que las rutas equivalentes sin `/telegram`. El CLI (T3) y
+la skill de Lasso (T4) consumen este contrato en una tarea posterior.
+
+| Método y ruta | Entrada | Respuesta exitosa |
+| --- | --- | --- |
+| `GET /api/tarjetas` | Sin parámetros | `{"tarjetas":[...]}`; catálogo completo, solo lectura |
+| `POST /api/expenses/telegram` | Mismos campos que `POST /api/expenses`, más `chat_id`, `telegram_user_id`, `telegram_message_id` opcionales y `comprobante` opcional | `201 {"expenses":[...],"avisos_credito_nuevos":[...],"comprobante":{...}?}` |
+| `POST /api/income/telegram` | Mismos campos que `POST /api/income`, más `chat_id`, `telegram_user_id`, `telegram_message_id` opcionales y `comprobante` opcional | `201 {"income":{...},"comprobante":{...}?}` |
+| `GET /api/comprobantes/dedupe?hash=...&monto=&fecha=&comercio=` | `hash` obligatorio; `monto`, `fecha`, `comercio` opcionales | `{"duplicado":bool,"gasto_id":N\|null,"ingreso_id":N\|null,"coincidencia":"hash"\|"aproximada"\|null}` |
+| `GET /api/avisos-credito/pendientes` | Sin parámetros | `{"avisos_credito":[{"mes","umbral","total_al_detectar","detectado_en","enviado_en":null},...]}` |
+| `POST /api/avisos-credito/marcar-enviados` | `{"items":[{"mes":"YYYY-MM","umbral":N},...]}` | `{"actualizados":[{"mes","umbral"},...]}` |
+
+`chat_id`, `telegram_user_id` y `telegram_message_id` son strings de dígitos,
+con `-` inicial opcional (los `chat_id` de grupo de Telegram son negativos) y
+longitud acotada a 32 caracteres; se validan igual en las dos rutas de alta.
+`origen` se fija en `'telegram'` del lado del servidor, igual que las rutas
+sin `/telegram` fijan `'api'` — el cliente nunca lo declara (`validaciones.py`
+no restringe `origen` a una lista cerrada de valores; si la tuviera, habría
+que agregar `'telegram'` ahí también, pero hoy no hace falta). Con `cuotas_total`,
+`POST /api/expenses/telegram` expande en N filas igual que la ruta normal, y
+cada fila hereda `chat_id`/`telegram_user_id`/`telegram_message_id`.
+
+**`comprobante` (opcional en el body de alta).** Campos: `hash_archivo`
+(obligatorio dentro del sub-objeto si este viene, hasta 128 caracteres),
+`texto_extraido`, `monto_detectado`, `fecha_detectada`, `comercio_detectado`,
+`ruta_archivo` (todos opcionales). Si viene, se inserta en
+`comprobantes_telegram` en la MISMA transacción que el gasto/ingreso
+(`db.insert_gasto_telegram`/`db.insert_ingreso_telegram`): si `hash_archivo`
+ya existe, la respuesta es `409` y no se crea nada — ni el gasto/ingreso ni
+el comprobante, atomicidad real, no una compensación posterior.
+
+**Dedupe (`GET /api/comprobantes/dedupe`).** Primero busca coincidencia
+exacta de `hash_archivo` (`coincidencia:"hash"`). Si no hay y se pasan
+`monto` y `fecha`, busca coincidencia aproximada: mismo `monto_detectado`
+(±0,01) y `fecha_detectada` dentro de ±1 día; `comercio` solo filtra si se
+pasa. Sin coincidencia, `{"duplicado":false,"gasto_id":null,"ingreso_id":null,"coincidencia":null}`.
+
+**Avisos de crédito (S3).** Cambio respecto del CTO 66f52e78 (ver
+DECISIONES.md): esta API no tiene token de Telegram, así que **solo
+detecta y registra** (`enviado_en` arranca en `NULL`); el envío al grupo y
+el marcado como enviado los hace Lasso vía `hermes cron`, llamando primero a
+`GET /api/avisos-credito/pendientes` y después a `POST
+/api/avisos-credito/marcar-enviados`. Umbrales: `100000 + 50000·n` sobre
+`total_credito_mes` (suma de `gastos.monto` con `medio_pago='Crédito'`,
+`deleted_at IS NULL`, mes calendario — no ciclo de cierre de tarjeta; cada
+cuota ya es su propia fila con su propia fecha). Tras un alta o baja de
+gasto en `medio_pago='Crédito'`, **por cualquier ruta** (`/api/expenses`,
+`/api/expenses/telegram` y `DELETE /api/expenses/:id`), la respuesta incluye
+`avisos_credito_nuevos: [{"mes","umbral","total"},...]` con los umbrales
+recién cruzados para el mes de cada fila involucrada (una por cuota en un
+alta con cuotas). Un umbral ya registrado para un mes nunca se vuelve a
+registrar ni se borra, aunque el total baje y vuelva a subir (sin
+"desaviso", sin repetir un aviso ya mandado en el mismo mes).
+
+**Migraciones (`db.py`, aditivas e idempotentes, mismo patrón `ALTER TABLE
+ADD COLUMN` que ya usa el archivo).** `gastos` gana `telegram_user_id`/
+`telegram_message_id` (`chat_id` ya existía); `ingresos` gana `chat_id`/
+`telegram_user_id`/`telegram_message_id` (no tenía ninguno). Tablas nuevas
+`comprobantes_telegram` y `avisos_credito` (ver `db.py` para el esquema
+completo). `estado_conversacional` pasa de `UNIQUE(telegram_chat_id)` a
+`UNIQUE(telegram_chat_id, usuario)`: dos usuarios del mismo chat tienen
+borradores independientes. SQLite no permite alterar una restricción UNIQUE
+existente, así que `db._migrar_estado_conversacional` recrea la tabla
+preservando las filas en una transacción explícita (rename -> create ->
+copy -> drop); es idempotente (detecta el índice único compuesto antes de
+tocar nada) y segura sin pérdida de datos, porque bajo el esquema viejo
+nunca pudo existir más de una fila por `telegram_chat_id`. `set_estado`/
+`get_estado`/`clear_estado` ahora toman `usuario` opcional (default `None`
+= mismo comportamiento que antes de esta migración, comparado con `IS` en
+vez de `=` para que `NULL` siga matcheando `NULL` de forma determinística).
+
 ## Pruebas preparadas
 
 `tests/test_api.py` usa archivos temporales y `:memory:`; incluye inyección
@@ -343,6 +418,27 @@ web después de un primer backfill no se repuebla en una segunda corrida;
 mismo nombre y fecha con otra categoría no empareja; y un bloque legacy
 cuyos valores no coinciden con los del raw actual se omite por completo en
 vez de completar con datos que no corresponden.
+`tests/test_telegram_api.py` (nuevo, brief S2/S3 T6) cubre: migración
+idempotente de `estado_conversacional` sobre una base vieja con filas
+cargadas (preserva `usuario`/`estado`/`payload_parcial`); migración
+idempotente de las columnas Telegram nuevas en `gastos`/`ingresos`; dos
+usuarios del mismo chat con borradores independientes (alta, update y
+borrado de uno sin tocar el otro) y el caso sin `usuario` explícito
+(compatibilidad con el comportamiento previo a la migración); `POST
+/api/expenses/telegram` e `/api/income/telegram` (origen fijado
+server-side, ids de Telegram devueltos, validación idéntica a la ruta sin
+`/telegram`, formato de `chat_id`/`telegram_user_id`/`telegram_message_id`,
+cuotas, comprobante insertado en la misma transacción, `409` por hash
+duplicado sin crear nada, `401` sin auth); `GET /api/tarjetas`; `GET
+/api/comprobantes/dedupe` (hash exacto, aproximado por monto+fecha+comercio,
+sin coincidencia, `400` sin `hash`); umbrales de crédito (cruce simple,
+varios de golpe en un solo alta — 80k→210k registra 100k/150k/200k —, baja
+que no desregistra, resuba que no repite un umbral ya registrado, cuotas en
+meses distintos con mes calendario, gasto no-Crédito que no cuenta) tanto a
+nivel `db.py` como en la respuesta de las rutas HTTP; y `GET
+/api/avisos-credito/pendientes` + `POST /api/avisos-credito/marcar-enviados`
+(idempotente, valida la forma de `items`).
+
 El comando para el coordinador es `python3 -m pytest -q tests` (desde `lab/`).
 Esta corrida no tuvo shell disponible para ejecutarlas; el coordinador debe
 correrlas antes de aceptar el candidato.

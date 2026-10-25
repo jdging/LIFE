@@ -24,7 +24,14 @@ def strict_json(raw):
     return json.loads(raw, parse_constant=reject_constant)
 
 
-class ApiTest(unittest.TestCase):
+class WsgiApiTestCase(unittest.TestCase):
+    """Harness WSGI común (setUp/tearDown/request + payloads de ejemplo).
+
+    Separado de `ApiTest` para que `tests/test_telegram_api.py` lo reutilice
+    sin duplicar ~60 líneas de infraestructura de request/respuesta ni
+    volver a correr los `test_*` de este archivo bajo otro nombre de clase.
+    """
+
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
         self.db_path = str(Path(self.tempdir.name) / "api.sqlite")
@@ -94,6 +101,8 @@ class ApiTest(unittest.TestCase):
         payload.update(changes)
         return payload
 
+
+class ApiTest(WsgiApiTestCase):
     def test_auth_health_and_factory(self):
         for args in ((None, TEST_SECRET), (self.db_path, None), ("", TEST_SECRET)):
             with self.assertRaises(ValueError):

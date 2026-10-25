@@ -33,6 +33,11 @@ class Gasto:
     # del borrado lógico y quién lo ejecutó, o None si sigue activo.
     deleted_at: Optional[str] = None
     deleted_by: Optional[str] = None
+    # Telegram (brief S2/S3, T1): quién mandó el mensaje y cuál fue
+    # ('chat_id' ya existía). Permiten trazabilidad y vincular
+    # `ComprobanteTelegram` sin volver a preguntar.
+    telegram_user_id: Optional[str] = None
+    telegram_message_id: Optional[str] = None
 
 
 @dataclass
@@ -51,6 +56,11 @@ class Ingreso:
     fecha: Optional[str] = None
     id: Optional[int] = None
     created_at: Optional[str] = None
+    # Telegram (brief S2/S3, T1): a diferencia de `Gasto`, `Ingreso` no
+    # tenía ningún campo de Telegram todavía -- se agregan los tres.
+    chat_id: Optional[str] = None
+    telegram_user_id: Optional[str] = None
+    telegram_message_id: Optional[str] = None
 
 
 @dataclass
@@ -113,14 +123,59 @@ class Tarjeta:
 
 @dataclass
 class EstadoConversacional:
+    """Borrador de un intent en curso para `(telegram_chat_id, usuario)`.
+
+    Desde el brief S2/S3 (T1), la identidad es compuesta: dos usuarios del
+    mismo chat tienen borradores independientes (`UNIQUE(telegram_chat_id,
+    usuario)` en `db.py`, ver `set_estado`/`get_estado`/`clear_estado`).
+    """
+
     telegram_chat_id: str
     estado: str
     campo_pendiente: Optional[str] = None
     payload_parcial: Optional[dict] = None
     mensaje_original: Optional[str] = None
-    # JD/Pinki; no se identifica activamente en Fase 1 (TODO Fase 2/3).
-    usuario: Optional[str] = None
+    usuario: Optional[str] = None  # JD/Pinki; None = borrador sin usuario identificado
     intent_detectado: str = "gasto"
     id: Optional[int] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+
+
+@dataclass
+class ComprobanteTelegram:
+    """Comprobante (foto/PDF) de un gasto/ingreso ingresado por Telegram
+    (brief S2/S3, T1). `hash_archivo` es la clave de dedupe exacta (ver
+    `db.buscar_comprobante_dedupe`); `gasto_id`/`ingreso_id` son mutuamente
+    excluyentes en la práctica -- un comprobante vincula a lo sumo uno de
+    los dos."""
+
+    hash_archivo: str
+    chat_id: Optional[str] = None
+    telegram_user_id: Optional[str] = None
+    telegram_message_id: Optional[str] = None
+    texto_extraido: Optional[str] = None
+    monto_detectado: Optional[float] = None
+    fecha_detectada: Optional[str] = None
+    comercio_detectado: Optional[str] = None
+    ruta_archivo: Optional[str] = None
+    gasto_id: Optional[int] = None
+    ingreso_id: Optional[int] = None
+    id: Optional[int] = None
+    creado_en: Optional[str] = None
+
+
+@dataclass
+class AvisoCredito:
+    """Umbral de gasto en crédito detectado para un mes calendario (brief
+    S2/S3, T1/T2). Esta API no tiene token de Telegram, así que solo
+    DETECTA y registra (`enviado_en=None`); el envío y el marcado como
+    enviado los hace Lasso vía `POST /api/avisos-credito/marcar-enviados`
+    (ver `db.detectar_umbrales_credito`/`db.marcar_avisos_credito_enviados`,
+    cambio respecto del CTO 66f52e78 documentado en DECISIONES.md)."""
+
+    mes: str  # 'YYYY-MM'
+    umbral: int
+    total_al_detectar: float
+    detectado_en: str
+    enviado_en: Optional[str] = None

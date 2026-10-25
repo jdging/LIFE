@@ -95,9 +95,16 @@ CREATE TABLE IF NOT EXISTS gastos (
     chat_id TEXT
 );
 
+-- UNIQUE(telegram_chat_id, usuario) en vez de UNIQUE(telegram_chat_id) solo
+-- (esquema previo, t_65096083): permite que dos usuarios del mismo chat
+-- tengan borradores independientes sin pisarse (ver DECISIONES.md S2/S3 y
+-- `set_estado`/`get_estado`/`clear_estado`). Esta definición solo aplica a
+-- bases nuevas (CREATE TABLE IF NOT EXISTS); una base existente con el
+-- esquema viejo se recrea en `_migrar_estado_conversacional`, porque SQLite
+-- no permite alterar una restricción UNIQUE in-place.
 CREATE TABLE IF NOT EXISTS estado_conversacional (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    telegram_chat_id TEXT NOT NULL UNIQUE,
+    telegram_chat_id TEXT NOT NULL,
     usuario TEXT,
     intent_detectado TEXT NOT NULL DEFAULT 'gasto',
     payload_parcial TEXT,
@@ -105,7 +112,8 @@ CREATE TABLE IF NOT EXISTS estado_conversacional (
     mensaje_original TEXT,
     estado TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    UNIQUE(telegram_chat_id, usuario)
 );
 
 CREATE TABLE IF NOT EXISTS recetas (
@@ -249,6 +257,44 @@ CREATE TABLE IF NOT EXISTS auditoria (
     despues_json TEXT,
     creado_en TEXT NOT NULL
 );
+
+-- Comprobantes (foto/PDF) de gastos/ingresos ingresados por Telegram
+-- (brief S2/S3, T1). `hash_archivo` es la clave de dedupe exacta (ver
+-- `_insert_comprobante_tx`/`buscar_comprobante_dedupe`); `gasto_id`/
+-- `ingreso_id` son mutuamente excluyentes en la práctica (un comprobante
+-- vincula a lo sumo uno de los dos), pero no se fuerza con CHECK a nivel
+-- SQL -- la capa de API decide a cuál de los dos vincula cada alta.
+CREATE TABLE IF NOT EXISTS comprobantes_telegram (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hash_archivo TEXT NOT NULL UNIQUE,
+    chat_id TEXT,
+    telegram_user_id TEXT,
+    telegram_message_id TEXT,
+    texto_extraido TEXT,
+    monto_detectado REAL,
+    fecha_detectada TEXT,
+    comercio_detectado TEXT,
+    ruta_archivo TEXT,
+    gasto_id INTEGER REFERENCES gastos(id),
+    ingreso_id INTEGER REFERENCES ingresos(id),
+    creado_en TEXT NOT NULL
+);
+
+-- Umbrales de gasto en crédito detectados por mes calendario (brief S2/S3,
+-- T1; cambio respecto del CTO 66f52e78: esta API no tiene token de
+-- Telegram, así que solo DETECTA y registra -- `enviado_en` arranca en NULL
+-- y lo marca Lasso después de enviar el aviso, ver
+-- `/api/avisos-credito/marcar-enviados`). PRIMARY KEY compuesta: un umbral
+-- ya registrado para un mes nunca se vuelve a registrar ni se borra, aunque
+-- el total baje y vuelva a subir (ver `detectar_umbrales_credito`).
+CREATE TABLE IF NOT EXISTS avisos_credito (
+    mes TEXT NOT NULL,
+    umbral INTEGER NOT NULL,
+    total_al_detectar REAL NOT NULL,
+    detectado_en TEXT NOT NULL,
+    enviado_en TEXT,
+    PRIMARY KEY (mes, umbral)
+);
 """
 
 
@@ -296,6 +342,11 @@ def _migrar_columnas_gastos(conn: sqlite3.Connection) -> None:
         # lógico y quién lo ejecutó, o NULL si el gasto sigue activo.
         ("deleted_at", "TEXT"),
         ("deleted_by", "TEXT"),
+        # Telegram (brief S2/S3, T1): `chat_id` ya existía; estas dos
+        # identifican quién mandó el mensaje y cuál fue, para trazabilidad
+        # y para vincular `comprobantes_telegram` sin volver a preguntar.
+        ("telegram_user_id", "TEXT"),
+        ("telegram_message_id", "TEXT"),
     )
     for columna, definicion in columnas_nuevas:
         if columna not in existentes:
@@ -319,6 +370,90 @@ def _migrar_columnas_tarjetas(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _estado_conversacional_tiene_unique_compuesto(conn: sqlite3.Connection) -> bool:
+    """True si `estado_conversacional` ya tiene un índice UNIQUE sobre
+    `(telegram_chat_id, usuario)` -- esquema ya migrado, o creado directo
+    con el esquema nuevo en una base recién inicializada. Se usa
+    `PRAGMA index_list`/`index_info` en vez de parsear el texto del
+    `CREATE TABLE` en `sqlite_master`, para no depender de su formato
+    exacto.
+    """
+    indices = conn.execute("PRAGMA index_list('estado_conversacional')").fetchall()
+    for indice in indices:
+        if not indice["unique"]:
+            continue
+        columnas = [
+            fila["name"]
+            for fila in conn.execute(f"PRAGMA index_info('{indice['name']}')").fetchall()
+        ]
+        if columnas == ["telegram_chat_id", "usuario"]:
+            return True
+    return False
+
+
+def _migrar_estado_conversacional(conn: sqlite3.Connection) -> None:
+    """Pasa `estado_conversacional` de `UNIQUE(telegram_chat_id)` a
+    `UNIQUE(telegram_chat_id, usuario)` (brief S2/S3, T1; DECISIONES.md).
+
+    SQLite no permite alterar una restricción UNIQUE existente -- se
+    recrea la tabla preservando las filas en una sola transacción
+    (rename -> create -> copy -> drop). Es seguro copiar sin riesgo de
+    choque contra la nueva UNIQUE compuesta: bajo el esquema viejo nunca
+    pudo existir más de una fila por `telegram_chat_id`, así que tampoco
+    puede haber dos filas con el mismo `(telegram_chat_id, usuario)`.
+
+    Idempotente: si la tabla ya tiene el índice único compuesto (porque ya
+    fue migrada antes, o porque `SCHEMA` la creó directamente con el
+    esquema nuevo), no hace nada.
+    """
+    if _estado_conversacional_tiene_unique_compuesto(conn):
+        return
+
+    try:
+        # BEGIN explícito: el módulo `sqlite3` de Python solo abre una
+        # transacción implícita antes de sentencias DML (INSERT/UPDATE/
+        # DELETE), no antes de DDL como `ALTER`/`CREATE`/`DROP`. Sin este
+        # `BEGIN`, cada paso de la secuencia rename -> create -> copy ->
+        # drop correría en autocommit por separado, y un `rollback()` ante
+        # una falla a mitad de camino no deshaería los pasos ya aplicados.
+        conn.execute("BEGIN")
+        conn.execute(
+            "ALTER TABLE estado_conversacional RENAME TO estado_conversacional_legacy"
+        )
+        conn.execute(
+            """
+            CREATE TABLE estado_conversacional (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_chat_id TEXT NOT NULL,
+                usuario TEXT,
+                intent_detectado TEXT NOT NULL DEFAULT 'gasto',
+                payload_parcial TEXT,
+                campo_pendiente TEXT,
+                mensaje_original TEXT,
+                estado TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(telegram_chat_id, usuario)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO estado_conversacional
+                (id, telegram_chat_id, usuario, intent_detectado, payload_parcial,
+                 campo_pendiente, mensaje_original, estado, created_at, updated_at)
+            SELECT id, telegram_chat_id, usuario, intent_detectado, payload_parcial,
+                   campo_pendiente, mensaje_original, estado, created_at, updated_at
+            FROM estado_conversacional_legacy
+            """
+        )
+        conn.execute("DROP TABLE estado_conversacional_legacy")
+    except Exception:
+        conn.rollback()
+        raise
+    conn.commit()
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     conn.commit()
@@ -329,6 +464,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     _migrar_columnas_recetas(conn)
     _migrar_columnas_ingresos(conn)
     _migrar_columnas_inventario_bienes(conn)
+    _migrar_estado_conversacional(conn)
 
 
 def _migrar_columnas_lista_compras(conn: sqlite3.Connection) -> None:
@@ -574,8 +710,9 @@ def _insert_gasto_tx(conn: sqlite3.Connection, gasto: dict) -> int:
             (fecha, monto, moneda, categoria, subcategoria, medio_pago,
              pagado_por, descripcion_original, origen, chat_id, confirmado,
              created_at, tarjeta_id, tipo_proporcion, proporcion_jd,
-             proporcion_pinki, cuotas_total, cuota_nro, cuota_ref, saldado)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             proporcion_pinki, cuotas_total, cuota_nro, cuota_ref, saldado,
+             telegram_user_id, telegram_message_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             gasto.get("fecha") or _now(),
@@ -598,6 +735,8 @@ def _insert_gasto_tx(conn: sqlite3.Connection, gasto: dict) -> int:
             cuota_nro,
             gasto.get("cuota_ref"),
             gasto.get("saldado"),
+            gasto.get("telegram_user_id"),
+            gasto.get("telegram_message_id"),
         ),
     )
     return cursor.lastrowid
@@ -830,9 +969,19 @@ def eliminar_gasto_logico(conn: sqlite3.Connection, gasto_id: int, actor: str) -
     conn.commit()
 
 
-def get_estado(conn: sqlite3.Connection, chat_id: str) -> Optional[dict]:
+def get_estado(
+    conn: sqlite3.Connection, chat_id: str, usuario: Optional[str] = None
+) -> Optional[dict]:
+    """Devuelve el estado conversacional de `(chat_id, usuario)`, o `None`
+    si no hay ninguno. `usuario=None` (default) busca el borrador "sin
+    usuario identificado" de ese chat -- nunca cualquier usuario del chat
+    (ver `set_estado`, DECISIONES.md: dos usuarios del mismo chat tienen
+    borradores independientes desde la migración a
+    `UNIQUE(telegram_chat_id, usuario)`).
+    """
     row = conn.execute(
-        "SELECT * FROM estado_conversacional WHERE telegram_chat_id = ?", (chat_id,)
+        "SELECT * FROM estado_conversacional WHERE telegram_chat_id = ? AND usuario IS ?",
+        (chat_id, usuario),
     ).fetchone()
     if row is None:
         return None
@@ -853,45 +1002,62 @@ def set_estado(
     usuario: Optional[str] = None,
     intent_detectado: str = "gasto",
 ) -> None:
-    """Crea o actualiza la fila de estado conversacional de `chat_id`.
+    """Crea o actualiza la fila de estado conversacional de `(chat_id, usuario)`.
+
+    Desde la migración a `UNIQUE(telegram_chat_id, usuario)` (ver
+    DECISIONES.md), dos usuarios del mismo chat tienen borradores
+    independientes: `usuario` identifica cuál se crea o actualiza. No se usa
+    `INSERT ... ON CONFLICT` porque SQLite nunca considera iguales dos
+    `NULL` a los fines de un índice UNIQUE (el conflicto no se dispararía
+    para `usuario=None`, dejando crear una fila nueva en vez de actualizar
+    la existente); en su lugar se busca la fila con `usuario IS ?`
+    (comparación NULL-safe) y se actualiza o inserta explícitamente.
 
     `intent_detectado` queda fijo en "gasto" por ahora (Fase 1 sólo
     implementa ese intent; receta/inventario/compra quedan para fases
     futuras, ver LIFE-lab-propuesta.md sección 3).
     """
-    conn.execute(
-        """
-        INSERT INTO estado_conversacional
-            (telegram_chat_id, usuario, intent_detectado, payload_parcial,
-             campo_pendiente, mensaje_original, estado, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(telegram_chat_id) DO UPDATE SET
-            usuario = excluded.usuario,
-            intent_detectado = excluded.intent_detectado,
-            payload_parcial = excluded.payload_parcial,
-            campo_pendiente = excluded.campo_pendiente,
-            mensaje_original = excluded.mensaje_original,
-            estado = excluded.estado,
-            updated_at = excluded.updated_at
-        """,
-        (
-            chat_id,
-            usuario,
-            intent_detectado,
-            json.dumps(payload_parcial or {}, ensure_ascii=False),
-            campo_pendiente,
-            mensaje_original,
-            estado,
-            _now(),
-            _now(),
-        ),
-    )
+    existente = conn.execute(
+        "SELECT id FROM estado_conversacional WHERE telegram_chat_id = ? AND usuario IS ?",
+        (chat_id, usuario),
+    ).fetchone()
+    payload_json = json.dumps(payload_parcial or {}, ensure_ascii=False)
+    ahora = _now()
+    if existente is not None:
+        conn.execute(
+            """
+            UPDATE estado_conversacional SET
+                intent_detectado = ?, payload_parcial = ?, campo_pendiente = ?,
+                mensaje_original = ?, estado = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                intent_detectado, payload_json, campo_pendiente, mensaje_original,
+                estado, ahora, existente["id"],
+            ),
+        )
+    else:
+        conn.execute(
+            """
+            INSERT INTO estado_conversacional
+                (telegram_chat_id, usuario, intent_detectado, payload_parcial,
+                 campo_pendiente, mensaje_original, estado, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                chat_id, usuario, intent_detectado, payload_json, campo_pendiente,
+                mensaje_original, estado, ahora, ahora,
+            ),
+        )
     conn.commit()
 
 
-def clear_estado(conn: sqlite3.Connection, chat_id: str) -> None:
+def clear_estado(conn: sqlite3.Connection, chat_id: str, usuario: Optional[str] = None) -> None:
+    """Borra el estado conversacional de `(chat_id, usuario)` -- solo ese
+    borrador, no los de otros usuarios del mismo chat (ver `set_estado`)."""
     conn.execute(
-        "DELETE FROM estado_conversacional WHERE telegram_chat_id = ?", (chat_id,)
+        "DELETE FROM estado_conversacional WHERE telegram_chat_id = ? AND usuario IS ?",
+        (chat_id, usuario),
     )
     conn.commit()
 
@@ -2086,6 +2252,12 @@ def _migrar_columnas_ingresos(conn: sqlite3.Connection) -> None:
     columnas_nuevas = (
         ("deleted_at", "TEXT"),
         ("deleted_by", "TEXT"),
+        # Telegram (brief S2/S3, T1): a diferencia de `gastos`, `ingresos`
+        # no tenía ninguna columna de Telegram todavía -- se agregan las
+        # tres (incluido `chat_id`) de una.
+        ("chat_id", "TEXT"),
+        ("telegram_user_id", "TEXT"),
+        ("telegram_message_id", "TEXT"),
     )
     for columna, definicion in columnas_nuevas:
         if columna not in existentes:
@@ -2529,3 +2701,414 @@ def calcular_deudas_pendientes(conn: sqlite3.Connection, hasta_mes: Optional[str
     if saldo_a_favor_de_jd < -0.0001:
         return {"deudor": "JD", "acreedor": "Pinki", "monto": round(-saldo_a_favor_de_jd, 2)}
     return {"deudor": None, "acreedor": None, "monto": 0.0}
+
+
+# --- Telegram: altas con comprobante en la misma transacción ----------------
+
+
+class ComprobanteDuplicadoError(ValueError):
+    """`hash_archivo` ya registrado en `comprobantes_telegram`; ninguna
+    escritura (gasto/ingreso ni comprobante) se aplicó -- ver
+    `insert_gasto_telegram`/`insert_ingreso_telegram`."""
+
+
+def _insertar_gasto_expandido_tx(conn: sqlite3.Connection, gasto: dict, cuotas_total: int) -> list:
+    """Variante de `insert_gasto_con_cuotas` SIN commit/rollback propio, para
+    uso interno de `insert_gasto_telegram` -- el caller controla la
+    transacción completa (tiene que compartirla con la inserción opcional
+    de `comprobantes_telegram`). Misma validación y expansión de cuotas que
+    `insert_gasto_con_cuotas`; no delega en esa función ni en `insert_gasto`
+    (ambas hacen su propio `commit`) para no romper la atomicidad que exige
+    el brief S2/S3. Devuelve la lista de ids insertados (longitud 1 si no
+    hay cuotas).
+    """
+    if cuotas_total is None:
+        cuotas_total = 1
+    if (
+        not isinstance(cuotas_total, int)
+        or isinstance(cuotas_total, bool)
+        or cuotas_total < 1
+    ):
+        raise ValueError(
+            f"cuotas_total debe ser un entero >= 1 (recibido {cuotas_total!r})."
+        )
+    if gasto.get("confirmado") is not True:
+        raise ValueError(
+            "No se puede insertar un gasto sin confirmación explícita "
+            "(confirmado debe ser True)."
+        )
+    if cuotas_total == 1:
+        return [_insert_gasto_tx(conn, gasto)]
+
+    monto_total_dec = Decimal(str(gasto["monto"]))
+    monto_cuota_dec = (monto_total_dec / Decimal(cuotas_total)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    monto_ultima_cuota_dec = monto_total_dec - monto_cuota_dec * (cuotas_total - 1)
+    fecha_base = (gasto.get("fecha") or _now())[:10]
+
+    ids = []
+    cuota_ref = None
+    for numero in range(1, cuotas_total + 1):
+        es_ultima = numero == cuotas_total
+        gasto_cuota = dict(gasto)
+        gasto_cuota["monto"] = float(
+            monto_ultima_cuota_dec if es_ultima else monto_cuota_dec
+        )
+        gasto_cuota["fecha"] = _sumar_meses(fecha_base, numero - 1)
+        gasto_cuota["cuotas_total"] = cuotas_total
+        gasto_cuota["cuota_nro"] = numero
+        gasto_cuota["cuota_ref"] = cuota_ref
+        nuevo_id = _insert_gasto_tx(conn, gasto_cuota)
+        if cuota_ref is None:
+            cuota_ref = nuevo_id
+            conn.execute("UPDATE gastos SET cuota_ref = ? WHERE id = ?", (cuota_ref, nuevo_id))
+        ids.append(nuevo_id)
+    return ids
+
+
+def _insert_comprobante_tx(
+    conn: sqlite3.Connection,
+    comprobante: dict,
+    *,
+    chat_id: Optional[str] = None,
+    telegram_user_id: Optional[str] = None,
+    telegram_message_id: Optional[str] = None,
+    gasto_id: Optional[int] = None,
+    ingreso_id: Optional[int] = None,
+) -> int:
+    """Inserta una fila en `comprobantes_telegram`, SIN commit propio (el
+    caller controla la transacción). Levanta `ComprobanteDuplicadoError` si
+    `hash_archivo` ya existe, sin insertar nada -- el chequeo previo evita
+    depender únicamente de la excepción de SQLite por la columna `UNIQUE`,
+    para poder distinguirla de cualquier otro `sqlite3.IntegrityError`.
+    """
+    hash_archivo = comprobante.get("hash_archivo")
+    existente = conn.execute(
+        "SELECT id FROM comprobantes_telegram WHERE hash_archivo = ?", (hash_archivo,)
+    ).fetchone()
+    if existente is not None:
+        raise ComprobanteDuplicadoError(
+            f"Ya existe un comprobante con hash_archivo={hash_archivo!r}."
+        )
+    cursor = conn.execute(
+        """
+        INSERT INTO comprobantes_telegram
+            (hash_archivo, chat_id, telegram_user_id, telegram_message_id,
+             texto_extraido, monto_detectado, fecha_detectada, comercio_detectado,
+             ruta_archivo, gasto_id, ingreso_id, creado_en)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            hash_archivo,
+            chat_id,
+            telegram_user_id,
+            telegram_message_id,
+            comprobante.get("texto_extraido"),
+            comprobante.get("monto_detectado"),
+            comprobante.get("fecha_detectada"),
+            comprobante.get("comercio_detectado"),
+            comprobante.get("ruta_archivo"),
+            gasto_id,
+            ingreso_id,
+            _now(),
+        ),
+    )
+    return cursor.lastrowid
+
+
+def insert_gasto_telegram(
+    conn: sqlite3.Connection,
+    gasto: dict,
+    cuotas_total: int,
+    comprobante: Optional[dict] = None,
+) -> dict:
+    """Inserta un gasto de origen Telegram (con cuotas opcionales) y, si
+    viene, su comprobante vinculado -- TODO en una sola transacción (brief
+    S2/S3, punto 2): un hash de comprobante duplicado revierte el gasto y
+    sus cuotas sin dejar nada creado (`ComprobanteDuplicadoError`).
+
+    Devuelve `{'gasto_ids': [...], 'comprobante_id': int|None}`.
+    """
+    try:
+        gasto_ids = _insertar_gasto_expandido_tx(conn, gasto, cuotas_total)
+        comprobante_id = None
+        if comprobante:
+            comprobante_id = _insert_comprobante_tx(
+                conn, comprobante,
+                chat_id=gasto.get("chat_id"),
+                telegram_user_id=gasto.get("telegram_user_id"),
+                telegram_message_id=gasto.get("telegram_message_id"),
+                gasto_id=gasto_ids[0],
+            )
+    except Exception:
+        conn.rollback()
+        raise
+    conn.commit()
+    return {"gasto_ids": gasto_ids, "comprobante_id": comprobante_id}
+
+
+def insert_ingreso_telegram(
+    conn: sqlite3.Connection, ingreso: dict, comprobante: Optional[dict] = None,
+) -> dict:
+    """Inserta un ingreso de origen Telegram y, si viene, su comprobante
+    vinculado, en una sola transacción -- mismo contrato que
+    `insert_gasto_telegram` para ingresos.
+
+    Devuelve `{'ingreso_id': int, 'comprobante_id': int|None}`.
+    """
+    if ingreso.get("confirmado") is not True:
+        raise ValueError(
+            "No se puede insertar un ingreso sin confirmación explícita "
+            "(confirmado debe ser True)."
+        )
+    errores = validar_ingreso(ingreso)
+    if errores:
+        raise ValueError(f"Ingreso inválido: {errores}")
+
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO ingresos
+                (fecha, monto, moneda, categoria, persona, descripcion_original,
+                 origen, confirmado, created_at, chat_id, telegram_user_id,
+                 telegram_message_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                ingreso.get("fecha") or _now(),
+                ingreso["monto"],
+                ingreso.get("moneda") or "ARS",
+                ingreso["categoria"],
+                ingreso["persona"],
+                ingreso.get("descripcion_original"),
+                ingreso.get("origen") or "texto",
+                1,
+                _now(),
+                ingreso.get("chat_id"),
+                ingreso.get("telegram_user_id"),
+                ingreso.get("telegram_message_id"),
+            ),
+        )
+        ingreso_id = cursor.lastrowid
+        comprobante_id = None
+        if comprobante:
+            comprobante_id = _insert_comprobante_tx(
+                conn, comprobante,
+                chat_id=ingreso.get("chat_id"),
+                telegram_user_id=ingreso.get("telegram_user_id"),
+                telegram_message_id=ingreso.get("telegram_message_id"),
+                ingreso_id=ingreso_id,
+            )
+    except Exception:
+        conn.rollback()
+        raise
+    conn.commit()
+    return {"ingreso_id": ingreso_id, "comprobante_id": comprobante_id}
+
+
+def buscar_comprobante_dedupe(
+    conn: sqlite3.Connection,
+    hash_archivo: str,
+    monto: Optional[float] = None,
+    fecha: Optional[str] = None,
+    comercio: Optional[str] = None,
+) -> dict:
+    """Busca si `hash_archivo` (o, en su defecto, un comprobante aproximado)
+    ya fue registrado en `comprobantes_telegram` -- caso "mismo comprobante
+    reenviado con nombre de archivo distinto" (brief S2/S3, punto 2).
+
+    1. Coincidencia exacta de `hash_archivo`: la más fuerte, se prueba
+       siempre primero.
+    2. Si no hay coincidencia de hash y se pasan `monto` y `fecha`:
+       coincidencia aproximada = mismo `monto_detectado` (±0,01) y
+       `fecha_detectada` dentro de ±1 día; `comercio` solo filtra si se
+       pasa (ver brief -- no todos los comprobantes traen comercio
+       detectado).
+
+    Devuelve `{'duplicado': bool, 'gasto_id': int|None, 'ingreso_id':
+    int|None, 'coincidencia': 'hash'|'aproximada'|None}`.
+    """
+    fila_hash = conn.execute(
+        "SELECT gasto_id, ingreso_id FROM comprobantes_telegram WHERE hash_archivo = ?",
+        (hash_archivo,),
+    ).fetchone()
+    if fila_hash is not None:
+        return {
+            "duplicado": True,
+            "gasto_id": fila_hash["gasto_id"],
+            "ingreso_id": fila_hash["ingreso_id"],
+            "coincidencia": "hash",
+        }
+
+    if monto is None or fecha is None:
+        return {"duplicado": False, "gasto_id": None, "ingreso_id": None, "coincidencia": None}
+
+    fecha_dt = date.fromisoformat(fecha)
+    desde = (fecha_dt - timedelta(days=1)).isoformat()
+    hasta = (fecha_dt + timedelta(days=1)).isoformat()
+
+    # Comparación en centavos enteros (hallazgo 2 del revisor run 65c69e0c):
+    # `ABS(monto_detectado - ?) <= 0.01` fallaba en parte del límite inclusivo
+    # por error de coma flotante (ej. 1.02 vs 1.01 daba 0.010000000000000009,
+    # mayor a 0.01). Redondear ambos montos a centavos antes de restar hace
+    # la comparación exacta en aritmética entera.
+    condiciones = [
+        "monto_detectado IS NOT NULL",
+        "ABS(CAST(ROUND(monto_detectado * 100) AS INTEGER) - CAST(ROUND(? * 100) AS INTEGER)) <= 1",
+        "fecha_detectada IS NOT NULL",
+        "fecha_detectada BETWEEN ? AND ?",
+    ]
+    parametros = [monto, desde, hasta]
+    if comercio is not None:
+        condiciones.append("comercio_detectado = ?")
+        parametros.append(comercio)
+
+    fila_aprox = conn.execute(
+        f"SELECT gasto_id, ingreso_id FROM comprobantes_telegram "
+        f"WHERE {' AND '.join(condiciones)} ORDER BY id LIMIT 1",
+        parametros,
+    ).fetchone()
+    if fila_aprox is not None:
+        return {
+            "duplicado": True,
+            "gasto_id": fila_aprox["gasto_id"],
+            "ingreso_id": fila_aprox["ingreso_id"],
+            "coincidencia": "aproximada",
+        }
+    return {"duplicado": False, "gasto_id": None, "ingreso_id": None, "coincidencia": None}
+
+
+# --- Avisos de crédito (S3) --------------------------------------------------
+
+UMBRAL_CREDITO_BASE = 100000
+UMBRAL_CREDITO_PASO = 50000
+
+
+def _total_credito_mes_centavos(conn: sqlite3.Connection, mes: str) -> int:
+    """Igual que `total_credito_mes`, pero en centavos enteros.
+
+    Hallazgo 1 del revisor run 65c69e0c: sumar `gastos.monto` directo como
+    `REAL` puede perder un umbral alcanzado exactamente por error de coma
+    flotante (ej. 353.34 + 72252.93 + 27393.73 = 100000.00 exacto, pero
+    SQLite devuelve 99999.99999999999 sumando los `REAL` tal cual). Cada
+    monto se redondea a centavos ANTES de sumar, así la suma es exacta en
+    aritmética entera.
+    """
+    row = conn.execute(
+        "SELECT COALESCE(SUM(CAST(ROUND(monto * 100) AS INTEGER)), 0) AS total_centavos "
+        "FROM gastos WHERE medio_pago = 'Crédito' AND deleted_at IS NULL "
+        "AND substr(fecha, 1, 7) = ?",
+        (mes,),
+    ).fetchone()
+    return int(row["total_centavos"])
+
+
+def total_credito_mes(conn: sqlite3.Connection, mes: str) -> float:
+    """Suma `gastos.monto` con `medio_pago='Crédito'`, `deleted_at IS NULL`
+    y mes calendario `mes` ('YYYY-MM') -- cada cuota ya es su propia fila
+    con su propia fecha (ver `insert_gasto_con_cuotas`), así que este total
+    ya refleja lo que cae ese mes sin trabajo adicional (brief S2/S3,
+    punto 1; DECISIONES.md punto 2: mes calendario, no ciclo de cierre).
+
+    La suma se calcula en centavos enteros (ver `_total_credito_mes_centavos`)
+    y se devuelve en pesos, redondeada a 2 decimales.
+    """
+    return round(_total_credito_mes_centavos(conn, mes) / 100, 2)
+
+
+def detectar_umbrales_credito(conn: sqlite3.Connection, mes: str) -> dict:
+    """Detecta los umbrales de crédito (100000 + 50000·n) cruzados por el
+    total de `mes` que todavía no estén registrados en `avisos_credito`,
+    los registra con `enviado_en=NULL` (esta API solo DETECTA; el envío y
+    el marcado como enviado los hace Lasso vía
+    `/api/avisos-credito/marcar-enviados` -- cambio respecto del CTO
+    66f52e78, ver DECISIONES.md) y devuelve los nuevos junto con el total.
+
+    Nunca borra ni re-registra un umbral ya existente para ese mes, aunque
+    el total baje y vuelva a subir (evita flapping, DECISIONES.md punto 8):
+    un umbral solo se registra la primera vez que se detecta cruzado.
+
+    La comparación contra los umbrales se hace en centavos enteros (ver
+    `_total_credito_mes_centavos` y hallazgo 1 del revisor run 65c69e0c):
+    comparar el total sumado como `REAL` directamente contra `100000` podía
+    omitir un umbral alcanzado exactamente por error de coma flotante.
+    `avisos_credito.umbral` sigue guardando pesos enteros, igual que antes.
+
+    Devuelve `{'total': float, 'nuevos': [{'mes', 'umbral', 'total'}, ...]}`.
+    """
+    total_centavos = _total_credito_mes_centavos(conn, mes)
+    total = round(total_centavos / 100, 2)
+    base_centavos = UMBRAL_CREDITO_BASE * 100
+    paso_centavos = UMBRAL_CREDITO_PASO * 100
+    if total_centavos < base_centavos:
+        return {"total": total, "nuevos": []}
+
+    umbral_maximo_centavos = base_centavos + paso_centavos * int(
+        (total_centavos - base_centavos) // paso_centavos
+    )
+    candidatos_centavos = range(base_centavos, umbral_maximo_centavos + 1, paso_centavos)
+
+    existentes = {
+        row["umbral"]
+        for row in conn.execute(
+            "SELECT umbral FROM avisos_credito WHERE mes = ?", (mes,)
+        ).fetchall()
+    }
+
+    nuevos = []
+    ahora = _now()
+    for umbral_centavos in candidatos_centavos:
+        umbral = umbral_centavos // 100
+        if umbral in existentes:
+            continue
+        try:
+            conn.execute(
+                """
+                INSERT INTO avisos_credito (mes, umbral, total_al_detectar, detectado_en, enviado_en)
+                VALUES (?, ?, ?, ?, NULL)
+                """,
+                (mes, umbral, total, ahora),
+            )
+        except sqlite3.IntegrityError:
+            # Ya lo registró una corrida concurrente entre el SELECT de
+            # `existentes` y este INSERT; no es un umbral nuevo para
+            # nosotros, no se vuelve a contar ni se re-lanza el error.
+            continue
+        nuevos.append({"mes": mes, "umbral": umbral, "total": total})
+    conn.commit()
+    return {"total": total, "nuevos": nuevos}
+
+
+def avisos_credito_pendientes(conn: sqlite3.Connection) -> list:
+    """Avisos de crédito detectados y todavía no marcados como enviados
+    (`enviado_en IS NULL`) -- los que Lasso tiene que mandar."""
+    rows = conn.execute(
+        "SELECT * FROM avisos_credito WHERE enviado_en IS NULL ORDER BY mes, umbral"
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def marcar_avisos_credito_enviados(conn: sqlite3.Connection, items: list) -> list:
+    """Marca `enviado_en` = ahora para cada `{'mes', 'umbral'}` de `items`
+    que exista y todavía no esté marcado. Idempotente: un item ya marcado,
+    o uno que no existe, simplemente no se cuenta entre los actualizados en
+    esta llamada -- no levanta error, para que Lasso pueda reintentar un
+    lote sin chequear primero cuáles ya mandó.
+
+    Devuelve la lista de items efectivamente actualizados en esta llamada.
+    """
+    ahora = _now()
+    actualizados = []
+    for item in items:
+        mes = item.get("mes")
+        umbral = item.get("umbral")
+        cursor = conn.execute(
+            "UPDATE avisos_credito SET enviado_en = ? "
+            "WHERE mes = ? AND umbral = ? AND enviado_en IS NULL",
+            (ahora, mes, umbral),
+        )
+        if cursor.rowcount == 1:
+            actualizados.append({"mes": mes, "umbral": umbral})
+    conn.commit()
+    return actualizados
