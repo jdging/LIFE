@@ -97,29 +97,31 @@ def test_insert_gasto_con_cuotas_total_uno_devuelve_un_solo_id(conn):
 
 
 def test_insert_gasto_con_cuotas_redondeo_100_dividido_3(conn):
-    """100 / 3 no es divisible exacto: las 2 primeras cuotas quedan en
-    33.33 (ROUND_HALF_UP a centavos) y la última absorbe la diferencia en
-    33.34, para que la suma sea exactamente el monto_total (ver README)."""
+    """100 / 3 no es divisible exacto: `divmod(10000, 3)` da base=3333 y
+    resto=1 centavo, que se asigna a la primera cuota (33.34); las otras
+    2 quedan en 33.33, para que la suma sea exactamente el monto_total
+    (ver `_repartir_cuotas_centavos` en db.py)."""
     ids = db.insert_gasto_con_cuotas(conn, _gasto_valido(monto=100.0), cuotas_total=3)
     gastos = db.get_gastos(conn)
     cuotas = [g for g in gastos if g["id"] in ids]
     assert len(cuotas) == 3
     montos = [cuotas[0]["monto"], cuotas[1]["monto"], cuotas[2]["monto"]]
-    assert montos == [33.33, 33.33, 33.34]
+    assert montos == [33.34, 33.33, 33.33]
     assert round(sum(montos), 2) == 100.00
 
 
 def test_insert_gasto_con_cuotas_redondeo_1000_dividido_7(conn):
-    """1000 / 7 tampoco es divisible exacto: las 6 primeras cuotas quedan
-    redondeadas a centavos y la última absorbe la diferencia, sin perder
-    ni un centavo del monto_total."""
+    """1000 / 7 tampoco es divisible exacto: `divmod(100000, 7)` da
+    base=14285 y resto=5 centavos, repartidos de a uno entre las 5
+    primeras cuotas (142.86); las 2 restantes quedan en 142.85, sin
+    perder ni un centavo del monto_total."""
     ids = db.insert_gasto_con_cuotas(conn, _gasto_valido(monto=1000.0), cuotas_total=7)
     gastos = db.get_gastos(conn)
     cuotas = [g for g in gastos if g["id"] in ids]
     assert len(cuotas) == 7
     montos = [c["monto"] for c in cuotas]
-    assert montos[:6] == [142.86] * 6
-    assert montos[6] == 142.84
+    assert montos[:5] == [142.86] * 5
+    assert montos[5:] == [142.85] * 2
     assert round(sum(montos), 2) == 1000.00
 
 

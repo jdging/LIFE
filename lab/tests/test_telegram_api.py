@@ -6,7 +6,11 @@ de comprobantes y los umbrales de aviso de crédito. Todo contra SQLite
 efímera (`:memory:` o archivos temporales); nunca contra la base real.
 """
 
+import sqlite3
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+from unittest import mock
 
 import pytest
 
@@ -418,24 +422,127 @@ def test_insert_comprobante_duplicado_levanta_error_sin_insertar(conn):
     assert total == 1
 
 
+# --- t_a3f2bbb5: dedupe por nro_operacion + migración idempotente ----------
+
+
+def test_migracion_columna_nro_operacion_idempotente_sobre_base_vieja():
+    """Simula una base vieja con `comprobantes_telegram` sin `nro_operacion`
+    (esquema previo a t_a3f2bbb5) y filas ya cargadas: la migración agrega
+    la columna y el índice único parcial sin tocar los datos existentes, y
+    correrla dos veces es un no-op."""
+    vieja = db.get_connection(":memory:")
+    try:
+        vieja.execute(
+            """
+            CREATE TABLE comprobantes_telegram (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hash_archivo TEXT NOT NULL UNIQUE,
+                chat_id TEXT, telegram_user_id TEXT, telegram_message_id TEXT,
+                texto_extraido TEXT, monto_detectado REAL, fecha_detectada TEXT,
+                comercio_detectado TEXT, ruta_archivo TEXT,
+                gasto_id INTEGER, ingreso_id INTEGER, creado_en TEXT NOT NULL
+            )
+            """
+        )
+        vieja.execute(
+            "INSERT INTO comprobantes_telegram (hash_archivo, creado_en) "
+            "VALUES ('hash-legacy', '2026-01-01T00:00:00')"
+        )
+        vieja.commit()
+
+        assert "nro_operacion" not in db._column_names(vieja, "comprobantes_telegram")
+
+        for _ in range(2):  # idempotente
+            db._migrar_columnas_comprobantes_telegram(vieja)
+
+        assert "nro_operacion" in db._column_names(vieja, "comprobantes_telegram")
+        fila = vieja.execute(
+            "SELECT * FROM comprobantes_telegram WHERE hash_archivo = 'hash-legacy'"
+        ).fetchone()
+        assert fila["nro_operacion"] is None
+    finally:
+        vieja.close()
+
+
+def test_indice_unico_parcial_nro_operacion_permite_varios_null(conn):
+    """El índice único es PARCIAL (`WHERE nro_operacion IS NOT NULL`):
+    varios comprobantes sin número de operación conviven sin problema,
+    pero dos con el MISMO número de operación chocan."""
+    db._insert_comprobante_tx(conn, {"hash_archivo": "hash-sin-op-1"})
+    db._insert_comprobante_tx(conn, {"hash_archivo": "hash-sin-op-2"})
+    conn.commit()
+
+    db._insert_comprobante_tx(conn, {"hash_archivo": "hash-op-1", "nro_operacion": "173192245876"})
+    conn.commit()
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            "INSERT INTO comprobantes_telegram (hash_archivo, nro_operacion, creado_en) "
+            "VALUES ('hash-op-2', '173192245876', '2026-01-01T00:00:00')"
+        )
+
+
+def test_buscar_comprobante_dedupe_por_nro_operacion(conn):
+    db._insert_comprobante_tx(conn, {"hash_archivo": "hash-op-x", "nro_operacion": "173192245876"})
+    conn.commit()
+
+    exacto = db.buscar_comprobante_dedupe(conn, "otro-hash", nro_operacion="173192245876")
+    assert exacto["duplicado"] is True
+    assert exacto["coincidencia"] == "operacion"
+
+    sin_match = db.buscar_comprobante_dedupe(conn, "otro-hash-2", nro_operacion="000000000")
+    assert sin_match == {
+        "duplicado": False, "gasto_id": None, "ingreso_id": None, "coincidencia": None,
+    }
+
+
+def test_buscar_comprobante_dedupe_nro_operacion_tiene_prioridad_sobre_aproximada(conn):
+    """Un comprobante con el mismo número de operación es duplicado aunque
+    monto/fecha no coincidan -- la coincidencia por operación se prueba
+    ANTES que la aproximada (más fuerte: un número de operación bancaria es
+    inequívoco, un monto+fecha parecidos no tanto)."""
+    db._insert_comprobante_tx(
+        conn,
+        {
+            "hash_archivo": "hash-op-y", "monto_detectado": 27000.0,
+            "fecha_detectada": "2026-08-11", "nro_operacion": "173192245876",
+        },
+    )
+    conn.commit()
+
+    resultado = db.buscar_comprobante_dedupe(
+        conn, "otro-hash", monto=9999.0, fecha="2026-09-01", nro_operacion="173192245876",
+    )
+    assert resultado["duplicado"] is True
+    assert resultado["coincidencia"] == "operacion"
+
+
 # --- T2: rutas HTTP /telegram ------------------------------------------------
 
 
 class TelegramApiTest(WsgiApiTestCase):
+    def setUp(self):
+        super().setUp()
+        with db.get_connection(self.db_path) as conn:
+            db.insert_tarjeta(conn, {
+                "id": "TC1", "nombre": "Visa", "tipo": "Crédito", "titular": "JD",
+            })
+
     def expense_telegram(self, **changes):
         payload = self.expense()
         payload.update({
             "chat_id": "-5500256401", "telegram_user_id": "7355824354",
-            "telegram_message_id": "42",
+            "telegram_message_id": "42", "medio_pago": "Efectivo", "confirmado": True,
         })
         payload.update(changes)
+        if payload.get("medio_pago") in ("Crédito", "Débito") and "tarjeta_id" not in changes:
+            payload["tarjeta_id"] = "TC1"
         return payload
 
     def income_telegram(self, **changes):
         payload = self.income()
         payload.update({
             "chat_id": "-5500256401", "telegram_user_id": "7355824354",
-            "telegram_message_id": "43",
+            "telegram_message_id": "43", "confirmado": True,
         })
         payload.update(changes)
         return payload
@@ -461,6 +568,145 @@ class TelegramApiTest(WsgiApiTestCase):
         self.assertEqual(gasto["telegram_message_id"], "42")
         self.assertEqual(body["avisos_credito_nuevos"], [])
         self.assertNotIn("comprobante", body)
+
+    def test_telegram_rechaza_campos_obligatorios_sin_escribir(self):
+        cases = [
+            ("/api/expenses/telegram", self.expense_telegram(), "confirmado"),
+            ("/api/expenses/telegram", self.expense_telegram(), "pagado_por"),
+            ("/api/expenses/telegram", self.expense_telegram(), "fecha"),
+            ("/api/expenses/telegram", self.expense_telegram(), "medio_pago"),
+            ("/api/expenses/telegram", self.expense_telegram(medio_pago="Crédito"), "tarjeta_id"),
+            ("/api/income/telegram", self.income_telegram(), "confirmado"),
+            ("/api/income/telegram", self.income_telegram(), "fecha"),
+            ("/api/income/telegram", self.income_telegram(), "persona"),
+        ]
+        for route, payload, field in cases:
+            with self.subTest(route=route, field=field):
+                payload.pop(field)
+                with db.get_connection(self.db_path) as conn:
+                    before = tuple(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                                   for table in ("gastos", "ingresos", "comprobantes_telegram"))
+                self.assertEqual(self.request("POST", route, payload)[0], 400)
+                with db.get_connection(self.db_path) as conn:
+                    after = tuple(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                                  for table in ("gastos", "ingresos", "comprobantes_telegram"))
+                self.assertEqual(after, before)
+        for value in (False, 1, None):
+            with self.subTest(confirmado=value):
+                self.assertEqual(self.request("POST", "/api/expenses/telegram", self.expense_telegram(confirmado=value))[0], 400)
+                self.assertEqual(self.request("POST", "/api/income/telegram", self.income_telegram(confirmado=value))[0], 400)
+
+    def test_telegram_cuotas_estrictas(self):
+        for value in (2.9, True, 0, 121):
+            with self.subTest(value=value):
+                self.assertEqual(self.request("POST", "/api/expenses/telegram", self.expense_telegram(cuotas_total=value))[0], 400)
+        for value in (1, 3, 120):
+            with self.subTest(value=value):
+                status, body, _ = self.request("POST", "/api/expenses/telegram", self.expense_telegram(cuotas_total=value, monto=120))
+                self.assertEqual(status, 201)
+                self.assertEqual(len(body["expenses"]), value)
+
+    def test_telegram_120_cuotas_conserva_total_fechas_y_atomicidad(self):
+        payload = self.expense_telegram(cuotas_total=120, monto=120)
+        status, body, _ = self.request("POST", "/api/expenses/telegram", payload)
+        self.assertEqual(status, 201)
+        rows = body["expenses"]
+        self.assertEqual(len(rows), 120)
+        self.assertEqual([row["cuota_nro"] for row in rows], list(range(1, 121)))
+        self.assertEqual({row["cuotas_total"] for row in rows}, {120})
+        self.assertEqual({row["cuota_ref"] for row in rows}, {rows[0]["id"]})
+        self.assertEqual(
+            [row["fecha"] for row in rows],
+            [f"{2026 + (3 + offset) // 12:04d}-{(3 + offset) % 12 + 1:02d}-10"
+             for offset in range(120)],
+        )
+        self.assertEqual([round(row["monto"] * 100) for row in rows], [100] * 120)
+        self.assertEqual(sum(round(row["monto"] * 100) for row in rows), 12000)
+
+        with db.get_connection(self.db_path) as conn:
+            before = conn.execute("SELECT COUNT(*) FROM gastos").fetchone()[0]
+            comprobantes_before = conn.execute(
+                "SELECT COUNT(*) FROM comprobantes_telegram"
+            ).fetchone()[0]
+            stored = conn.execute(
+                "SELECT id, monto, fecha, cuota_nro FROM gastos ORDER BY id"
+            ).fetchall()
+        self.assertEqual(before, 120)
+        self.assertEqual([row["id"] for row in stored], [row["id"] for row in rows])
+        self.assertEqual(
+            [(row["monto"], row["fecha"], row["cuota_nro"]) for row in stored],
+            [(row["monto"], row["fecha"], row["cuota_nro"]) for row in rows],
+        )
+
+        # El monto original no alcanza para dar al menos un centavo a cada cuota.
+        status, _, _ = self.request(
+            "POST", "/api/expenses/telegram",
+            self.expense_telegram(
+                cuotas_total=120, monto=1.19,
+                comprobante=self.comprobante(hash_archivo="invalid-120"),
+            ),
+        )
+        self.assertEqual(status, 400)
+        with db.get_connection(self.db_path) as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM gastos").fetchone()[0], before)
+            self.assertEqual(
+                conn.execute("SELECT COUNT(*) FROM comprobantes_telegram").fetchone()[0],
+                comprobantes_before,
+            )
+
+    def test_telegram_installments_minimum_cent_and_indivisible_total(self):
+        """Mismo contrato de reparto que la ruta web (`test_api.py`): usa el
+        helper único `db._repartir_cuotas_centavos`, así que debe aceptar
+        0,01/1, rechazar 0,01/2 sin escrituras, y repartir 0,08/5 en centavos
+        enteros positivos (dictamen NO APTO e46265bb)."""
+        status, body, _ = self.request(
+            "POST", "/api/expenses/telegram",
+            self.expense_telegram(monto=0.01, cuotas_total=1),
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(len(body["expenses"]), 1)
+        self.assertEqual(round(body["expenses"][0]["monto"] * 100), 1)
+
+        with db.get_connection(self.db_path) as conn:
+            before = conn.execute("SELECT COUNT(*) FROM gastos").fetchone()[0]
+        status, _, _ = self.request(
+            "POST", "/api/expenses/telegram",
+            self.expense_telegram(monto=0.01, cuotas_total=2),
+        )
+        self.assertEqual(status, 400)
+        with db.get_connection(self.db_path) as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM gastos").fetchone()[0], before)
+
+        status, body, _ = self.request(
+            "POST", "/api/expenses/telegram",
+            self.expense_telegram(monto=0.08, cuotas_total=5),
+        )
+        self.assertEqual(status, 201)
+        rows = body["expenses"]
+        self.assertEqual([round(row["monto"] * 100) for row in rows], [2, 2, 2, 1, 1])
+        self.assertTrue(all(row["monto"] > 0 for row in rows))
+        self.assertEqual(sum(round(row["monto"] * 100) for row in rows), 8)
+
+    def test_telegram_120_cuotas_revierte_todas_ante_comprobante_duplicado(self):
+        comprobante = self.comprobante()
+        status, _, _ = self.request(
+            "POST", "/api/expenses/telegram",
+            self.expense_telegram(comprobante=comprobante),
+        )
+        self.assertEqual(status, 201)
+        with db.get_connection(self.db_path) as conn:
+            before = conn.execute("SELECT COUNT(*) FROM gastos").fetchone()[0]
+
+        status, _, _ = self.request(
+            "POST", "/api/expenses/telegram",
+            self.expense_telegram(cuotas_total=120, monto=120, comprobante=comprobante),
+        )
+        self.assertEqual(status, 409)
+        with db.get_connection(self.db_path) as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM gastos").fetchone()[0], before)
+            self.assertEqual(
+                conn.execute("SELECT COUNT(*) FROM comprobantes_telegram").fetchone()[0], 1,
+            )
 
     def test_create_expense_telegram_rejects_client_origen_and_unknown_fields(self):
         self.assertEqual(
@@ -495,6 +741,39 @@ class TelegramApiTest(WsgiApiTestCase):
             self.request("POST", "/api/expenses/telegram", self.expense_telegram(categoria=""))[0],
             400,
         )
+
+    def test_create_expense_telegram_rechaza_proporcion_fuera_de_rango(self):
+        for proporcion_jd, proporcion_pinki in ((120, -20), (-5, 105)):
+            with self.subTest(proporcion_jd=proporcion_jd):
+                status, _, _ = self.request(
+                    "POST", "/api/expenses/telegram",
+                    self.expense_telegram(
+                        tipo_proporcion="custom",
+                        proporcion_jd=proporcion_jd, proporcion_pinki=proporcion_pinki,
+                    ),
+                )
+                self.assertEqual(status, 400)
+
+    def test_create_expense_telegram_rechaza_proporcion_no_numerica_o_nan(self):
+        for proporcion_jd, proporcion_pinki in ((float("nan"), 100), ("50", 50)):
+            with self.subTest(proporcion_jd=proporcion_jd):
+                status, _, _ = self.request(
+                    "POST", "/api/expenses/telegram",
+                    self.expense_telegram(
+                        tipo_proporcion="custom",
+                        proporcion_jd=proporcion_jd, proporcion_pinki=proporcion_pinki,
+                    ),
+                )
+                self.assertEqual(status, 400)
+
+    def test_create_expense_telegram_acepta_proporcion_personal_100_0(self):
+        status, body, _ = self.request(
+            "POST", "/api/expenses/telegram",
+            self.expense_telegram(tipo_proporcion="custom", proporcion_jd=100, proporcion_pinki=0),
+        )
+        self.assertEqual(status, 201)
+        gasto = body["expenses"][0]
+        self.assertEqual((gasto["proporcion_jd"], gasto["proporcion_pinki"]), (100, 0))
 
     def test_create_expense_telegram_with_installments(self):
         status, body, _ = self.request(
@@ -571,6 +850,49 @@ class TelegramApiTest(WsgiApiTestCase):
             despues = conn.execute("SELECT COUNT(*) FROM ingresos").fetchone()[0]
         self.assertEqual(despues, antes)
 
+    def test_comprobante_conserva_recepcion_original_para_retencion(self):
+        received = "2026-08-11T10:00:00+00:00"
+        status, body, _ = self.request(
+            "POST", "/api/income/telegram",
+            self.income_telegram(comprobante=self.comprobante(hash_archivo="received-original", received_at=received)),
+        )
+        self.assertEqual(status, 201)
+        with db.get_connection(self.db_path) as conn:
+            row = conn.execute("SELECT creado_en FROM comprobantes_telegram WHERE id = ?", (body["comprobante"]["id"],)).fetchone()
+        self.assertEqual(row["creado_en"], received)
+
+    def test_income_operacion_duplicada_y_carrera_de_indice_devuelven_409(self):
+        first = self.comprobante(hash_archivo="op-first", nro_operacion="173192245876")
+        self.assertEqual(self.request("POST", "/api/income/telegram", self.income_telegram(comprobante=first))[0], 201)
+        with db.get_connection(self.db_path) as conn:
+            before = tuple(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                           for table in ("ingresos", "comprobantes_telegram"))
+        second = self.comprobante(hash_archivo="op-second", nro_operacion="173192245876")
+        self.assertEqual(self.request("POST", "/api/income/telegram", self.income_telegram(comprobante=second))[0], 409)
+        with mock.patch.object(db, "_insert_comprobante_tx", side_effect=sqlite3.IntegrityError("unique race")):
+            self.assertEqual(self.request("POST", "/api/income/telegram", self.income_telegram(comprobante=self.comprobante(hash_archivo="race")))[0], 409)
+        with db.get_connection(self.db_path) as conn:
+            after = tuple(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                          for table in ("ingresos", "comprobantes_telegram"))
+        self.assertEqual(after, before)
+
+    def test_income_operacion_concurrente_solo_crea_una_fila(self):
+        barrier = Barrier(2)
+
+        def send(hash_archivo):
+            barrier.wait()
+            comprobante = self.comprobante(hash_archivo=hash_archivo, nro_operacion="9000000001")
+            return self.request("POST", "/api/income/telegram", self.income_telegram(comprobante=comprobante))[0]
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(send, f"parallel-{index}") for index in range(2)]
+            statuses = sorted(future.result() for future in futures)
+        self.assertEqual(statuses, [201, 409])
+        with db.get_connection(self.db_path) as conn:
+            incomes = conn.execute("SELECT COUNT(*) FROM ingresos").fetchone()[0]
+            receipts = conn.execute("SELECT COUNT(*) FROM comprobantes_telegram WHERE nro_operacion = '9000000001'").fetchone()[0]
+        self.assertEqual((incomes, receipts), (1, 1))
+
     def test_create_income_telegram_validation_same_as_normal_route(self):
         self.assertEqual(
             self.request("POST", "/api/income/telegram", self.income_telegram(persona="Común"))[0],
@@ -594,11 +916,11 @@ class TelegramApiTest(WsgiApiTestCase):
     def test_list_tarjetas(self):
         with db.get_connection(self.db_path) as conn:
             db.insert_tarjeta(conn, {
-                "id": "TC1", "nombre": "Visa", "tipo": "Crédito", "titular": "JD",
+                "id": "TC2", "nombre": "Mastercard", "tipo": "Crédito", "titular": "JD",
             })
         status, body, _ = self.request("GET", "/api/tarjetas")
         self.assertEqual(status, 200)
-        self.assertEqual([t["id"] for t in body["tarjetas"]], ["TC1"])
+        self.assertEqual({t["id"] for t in body["tarjetas"]}, {"TC1", "TC2"})
 
     def test_comprobantes_dedupe_route(self):
         status, body, _ = self.request(
@@ -623,6 +945,52 @@ class TelegramApiTest(WsgiApiTestCase):
         self.assertEqual(body["coincidencia"], "aproximada")
 
         self.assertEqual(self.request("GET", "/api/comprobantes/dedupe")[0], 400)
+
+    def test_comprobantes_dedupe_por_nro_operacion(self):
+        status, _, _ = self.request(
+            "POST", "/api/expenses/telegram",
+            self.expense_telegram(
+                comprobante=self.comprobante(hash_archivo="hash-con-operacion", nro_operacion="173192245876"),
+            ),
+        )
+        self.assertEqual(status, 201)
+
+        status, body, _ = self.request(
+            "GET", "/api/comprobantes/dedupe?hash=otro-hash&nro_operacion=173192245876",
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(body["duplicado"], True)
+        self.assertEqual(body["coincidencia"], "operacion")
+
+        status, body, _ = self.request(
+            "GET", "/api/comprobantes/dedupe?hash=otro-hash&nro_operacion=000000000",
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(body["duplicado"], False)
+
+        self.assertEqual(
+            self.request("GET", "/api/comprobantes/dedupe?hash=x&nro_operacion=abc")[0], 400,
+        )
+
+    def test_create_expense_telegram_con_nro_operacion_queda_en_el_comprobante(self):
+        status, body, _ = self.request(
+            "POST", "/api/expenses/telegram",
+            self.expense_telegram(
+                comprobante=self.comprobante(hash_archivo="hash-op-guardado", nro_operacion="173192245876"),
+            ),
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(body["comprobante"]["nro_operacion"], "173192245876")
+
+        self.assertEqual(
+            self.request(
+                "POST", "/api/expenses/telegram",
+                self.expense_telegram(
+                    comprobante=self.comprobante(hash_archivo="hash-otro", nro_operacion="abc"),
+                ),
+            )[0],
+            400,
+        )
 
     def test_avisos_credito_pendientes_y_marcar_enviados(self):
         status, _, _ = self.request(
@@ -696,6 +1064,91 @@ class TelegramApiTest(WsgiApiTestCase):
         self.assertEqual(deleted["avisos_credito_nuevos"], [])
         pendientes = self.request("GET", "/api/avisos-credito/pendientes")[1]["avisos_credito"]
         self.assertEqual([a["umbral"] for a in pendientes], [100000])
+
+
+# --- T3: GET/PUT/DELETE /api/telegram/borrador ------------------------------
+
+
+class TelegramBorradorApiTest(WsgiApiTestCase):
+    """Rutas internas agregadas para el CLI (brief S2/S3, T3): exponen
+    `db.get_estado`/`set_estado`/`clear_estado` sobre HTTP, misma auth que el
+    resto de `/api/*`. `chat`/`usuario` son identificadores de dominio
+    arbitrarios (no se exige formato de dígitos, a diferencia de
+    `telegram_user_id`/`chat_id` de las rutas `*/telegram` de altas)."""
+
+    def test_get_sin_borrador_devuelve_null(self):
+        status, body, _ = self.request("GET", "/api/telegram/borrador?chat=chat-9&usuario=JD")
+        self.assertEqual(status, 200)
+        self.assertIsNone(body["borrador"])
+
+    def test_set_get_clear_roundtrip(self):
+        status, body, _ = self.request(
+            "PUT", "/api/telegram/borrador?chat=chat-9&usuario=JD",
+            {"estado": "esperando_campo", "campo_pendiente": "monto", "payload_parcial": {"categoria": "Comida"}},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(body["borrador"]["estado"], "esperando_campo")
+        self.assertEqual(body["borrador"]["campo_pendiente"], "monto")
+        self.assertEqual(body["borrador"]["payload_parcial"], {"categoria": "Comida"})
+
+        status, body, _ = self.request("GET", "/api/telegram/borrador?chat=chat-9&usuario=JD")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["borrador"]["estado"], "esperando_campo")
+
+        status, body, _ = self.request("DELETE", "/api/telegram/borrador?chat=chat-9&usuario=JD")
+        self.assertEqual(status, 200)
+        self.assertEqual(body, {"cleared": True})
+
+        status, body, _ = self.request("GET", "/api/telegram/borrador?chat=chat-9&usuario=JD")
+        self.assertEqual(status, 200)
+        self.assertIsNone(body["borrador"])
+
+    def test_dos_usuarios_mismo_chat_no_se_pisan(self):
+        self.request(
+            "PUT", "/api/telegram/borrador?chat=chat-9&usuario=JD",
+            {"estado": "esperando_campo", "campo_pendiente": "monto"},
+        )
+        self.request(
+            "PUT", "/api/telegram/borrador?chat=chat-9&usuario=Pinki",
+            {"estado": "esperando_confirmacion"},
+        )
+        status, jd, _ = self.request("GET", "/api/telegram/borrador?chat=chat-9&usuario=JD")
+        status2, pinki, _ = self.request("GET", "/api/telegram/borrador?chat=chat-9&usuario=Pinki")
+        self.assertEqual(jd["borrador"]["estado"], "esperando_campo")
+        self.assertEqual(pinki["borrador"]["estado"], "esperando_confirmacion")
+
+    def test_usuario_omitido_usa_el_borrador_sin_usuario(self):
+        status, body, _ = self.request(
+            "PUT", "/api/telegram/borrador?chat=chat-legacy", {"estado": "esperando_confirmacion"},
+        )
+        self.assertEqual(status, 200)
+        status, body, _ = self.request("GET", "/api/telegram/borrador?chat=chat-legacy")
+        self.assertEqual(body["borrador"]["estado"], "esperando_confirmacion")
+
+    def test_chat_obligatorio(self):
+        self.assertEqual(self.request("GET", "/api/telegram/borrador?usuario=JD")[0], 400)
+        self.assertEqual(self.request("PUT", "/api/telegram/borrador?usuario=JD", {"estado": "x"})[0], 400)
+        self.assertEqual(self.request("DELETE", "/api/telegram/borrador?usuario=JD")[0], 400)
+
+    def test_set_requiere_estado_no_vacio(self):
+        status, _, _ = self.request("PUT", "/api/telegram/borrador?chat=chat-9", {})
+        self.assertEqual(status, 400)
+        status, _, _ = self.request("PUT", "/api/telegram/borrador?chat=chat-9", {"estado": ""})
+        self.assertEqual(status, 400)
+        status, _, _ = self.request("PUT", "/api/telegram/borrador?chat=chat-9", {"estado": "x", "campo_raro": 1})
+        self.assertEqual(status, 400)
+
+    def test_requiere_auth(self):
+        self.assertEqual(self.request("GET", "/api/telegram/borrador?chat=chat-9", auth=False)[0], 401)
+        self.assertEqual(
+            self.request("PUT", "/api/telegram/borrador?chat=chat-9", {"estado": "x"}, auth=False)[0], 401,
+        )
+        self.assertEqual(self.request("DELETE", "/api/telegram/borrador?chat=chat-9", auth=False)[0], 401)
+
+    def test_metodo_no_permitido_devuelve_405_con_allow(self):
+        status, _, headers = self.request("POST", "/api/telegram/borrador?chat=chat-9", {"estado": "x"})
+        self.assertEqual(status, 405)
+        self.assertIn("Allow", headers)
 
 
 if __name__ == "__main__":

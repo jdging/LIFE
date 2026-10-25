@@ -72,6 +72,8 @@ from validaciones import (
     validar_expense,
     validar_gasto_fijo,
     validar_ingreso,
+    validar_telegram_expense,
+    validar_telegram_ingreso,
 )
 
 DEFAULT_DB_PATH = str(Path(__file__).parent / "data" / "lasso.sqlite")
@@ -464,6 +466,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     _migrar_columnas_recetas(conn)
     _migrar_columnas_ingresos(conn)
     _migrar_columnas_inventario_bienes(conn)
+    _migrar_columnas_comprobantes_telegram(conn)
     _migrar_estado_conversacional(conn)
 
 
@@ -636,6 +639,37 @@ def _migrar_columnas_inventario_bienes(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _migrar_columnas_comprobantes_telegram(conn: sqlite3.Connection) -> None:
+    """Agrega a `comprobantes_telegram` la columna `nro_operacion` si falta,
+    más un índice único PARCIAL sobre ella (brief: dedupe de comprobantes
+    por número de operación bancaria, además del hash exacto y la
+    coincidencia aproximada por monto/fecha/comercio que ya existían).
+
+    Mismo patrón que el resto de `_migrar_columnas_*`: `ALTER TABLE ADD
+    COLUMN` retrocompatible, nunca recrea la tabla. Nullable a nivel SQL --
+    no todo comprobante trae un número de operación (ej. comprobantes
+    tipeados a mano, o formatos todavía no soportados por `extraer-
+    campos`/`formato_desconocido`).
+
+    El índice es PARCIAL (`WHERE nro_operacion IS NOT NULL`) a propósito:
+    SQLite no considera iguales dos `NULL` a los fines de un índice UNIQUE
+    normal (no haría falta la cláusula `WHERE` por esa razón sola), pero la
+    cláusula deja explícito que la restricción de unicidad solo aplica a
+    comprobantes que SÍ tienen un número de operación -- evita cualquier
+    ambigüedad si en el futuro cambia el motor o se migra el esquema.
+    `CREATE UNIQUE INDEX IF NOT EXISTS` hace esto idempotente: correrlo de
+    nuevo sobre una base ya migrada no falla ni duplica el índice.
+    """
+    existentes = _column_names(conn, "comprobantes_telegram")
+    if "nro_operacion" not in existentes:
+        conn.execute("ALTER TABLE comprobantes_telegram ADD COLUMN nro_operacion TEXT")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_comprobantes_telegram_nro_operacion "
+        "ON comprobantes_telegram(nro_operacion) WHERE nro_operacion IS NOT NULL"
+    )
+    conn.commit()
+
+
 def detectar_fijos_nombre_duplicado(conn: sqlite3.Connection) -> list:
     """Diagnóstico (NO fusión automática) de `nombre`s de `gastos_fijos` que
     aparecen repartidos en más de un `fijo_grupo_id` (más de una serie).
@@ -679,18 +713,33 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _insert_gasto_tx(conn: sqlite3.Connection, gasto: dict) -> int:
+def _insert_gasto_tx(
+    conn: sqlite3.Connection, gasto: dict, *, monto_total_original: Optional[float] = None,
+) -> int:
     """Igual que `insert_gasto`, pero sin `commit()` — para uso interno de
     `insert_gasto` y `insert_gasto_con_cuotas`, que controlan la transacción
     completa (ver nota de atomicidad en `insert_gasto_con_cuotas`).
 
-    Corre `validar_expense(gasto)` antes de tocar la base: es la barrera que
+    Corre `validar_expense` antes de tocar la base: es la barrera que
     el revisor independiente (run 3b184396, hallazgo 1) encontró ausente —
     antes se podía insertar `monto<=0`, `categoria=""`, `pagado_por`
     inválido o `cuotas_total<=0` llamando a `insert_gasto` directamente,
-    porque solo se chequeaban `confirmado` y las proporciones a mano.
+    porque solo se chequeaban `confirmado` y las proporciones a mano. Para
+    cuotas expandidas, `monto_total_original` permite validar el mínimo de
+    centavos contra el total sin dejar de exigir monto positivo en cada fila.
     """
-    errores = validar_expense(gasto)
+    # Al expandir cuotas, `monto` es el importe de esta fila, mientras que
+    # `cuotas_total` describe el gasto completo. El mínimo de un centavo por
+    # cuota se comprueba contra el monto original, no contra cada fila.
+    gasto_para_validar = (
+        gasto if monto_total_original is None
+        else {**gasto, "monto": monto_total_original}
+    )
+    errores = validar_expense(gasto_para_validar)
+    if monto_total_original is not None and (
+        not _es_numero(gasto.get("monto")) or gasto["monto"] <= 0
+    ):
+        errores.append("monto de cuota debe ser mayor a 0.")
     if errores:
         raise ValueError(f"Gasto inválido: {errores}")
 
@@ -829,11 +878,23 @@ def _sumar_meses(fecha_str: str, meses: int) -> str:
     return f"{nuevo_year:04d}-{nuevo_mes:02d}-{nuevo_dia:02d}"
 
 
+def _repartir_cuotas_centavos(monto_total: float, cuotas_total: int) -> list[int]:
+    """Reparte un monto en centavos enteros, con el resto al comienzo."""
+    centavos_exactos = Decimal(str(monto_total)) * 100
+    if centavos_exactos != centavos_exactos.to_integral_value():
+        raise ValueError("monto_total debe tener como máximo dos decimales.")
+    total_centavos = int(centavos_exactos)
+    if total_centavos < cuotas_total:
+        raise ValueError("cuotas_total excede los centavos disponibles del monto.")
+    base, resto = divmod(total_centavos, cuotas_total)
+    return [base + (indice < resto) for indice in range(cuotas_total)]
+
+
 def insert_gasto_con_cuotas(conn: sqlite3.Connection, gasto: dict, cuotas_total: int) -> "int | list":
     """Inserta un gasto, expandiéndolo en N filas si tiene cuotas.
 
     - `cuotas_total` None: se toma como 1 (retrocompatible).
-    - `cuotas_total` inválido (no entero, `bool`, o `< 1` — ej. `2.9` o `0`):
+    - `cuotas_total` inválido (no entero, `bool`, o fuera de 1..120):
       levanta `ValueError` de inmediato, SIN truncar ni reemplazar en
       silencio (hallazgo de revisor independiente, run 3b184396, hallazgo 2).
     - `cuotas_total == 1`: idéntico a `insert_gasto` (devuelve un solo id).
@@ -848,27 +909,19 @@ def insert_gasto_con_cuotas(conn: sqlite3.Connection, gasto: dict, cuotas_total:
       pagado_por, etc.) se hereda igual en todas las cuotas. Devuelve la
       lista de ids insertados, en orden.
 
-    Redondeo de montos cuando `monto_total` no es divisible exacto por
-    `cuotas_total` (condición de QA, run 735a6e21, ver README): se calcula
-    `monto_total / cuotas_total` con `Decimal` y se redondea a 2 decimales
-    (centavos) con `ROUND_HALF_UP`. Esa cuota redondeada se repite en todas
-    las cuotas salvo la ÚLTIMA, que absorbe la diferencia (`monto_total -
-    monto_cuota_redondeada * (cuotas_total - 1)`) para que la suma de todas
-    las cuotas sea exactamente `monto_total`, nunca unos centavos de más o
-    de menos por acumulación de redondeo. Ej.: 100 / 3 -> cuotas 1 y 2 en
-    33.33, cuota 3 en 33.34 (suma 100.00). Si `monto_total` es divisible
-    exacto (ej. 3000 / 3), la última cuota coincide con las demás, igual que
-    antes de este ajuste.
+    El monto se distribuye en centavos enteros: `divmod` asigna un centavo
+    adicional a las primeras cuotas que lo necesitan. Todas quedan positivas,
+    suman exactamente el total y difieren a lo sumo en un centavo.
     """
     if cuotas_total is None:
         cuotas_total = 1
     if (
         not isinstance(cuotas_total, int)
         or isinstance(cuotas_total, bool)
-        or cuotas_total < 1
+        or not 1 <= cuotas_total <= 120
     ):
         raise ValueError(
-            f"cuotas_total debe ser un entero >= 1 (recibido {cuotas_total!r})."
+            f"cuotas_total debe ser un entero entre 1 y 120 (recibido {cuotas_total!r})."
         )
     if cuotas_total == 1:
         return insert_gasto(conn, gasto)
@@ -879,27 +932,22 @@ def insert_gasto_con_cuotas(conn: sqlite3.Connection, gasto: dict, cuotas_total:
             "(confirmado debe ser True)."
         )
 
-    monto_total_dec = Decimal(str(gasto["monto"]))
-    monto_cuota_dec = (monto_total_dec / Decimal(cuotas_total)).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
-    )
-    monto_ultima_cuota_dec = monto_total_dec - monto_cuota_dec * (cuotas_total - 1)
+    montos_centavos = _repartir_cuotas_centavos(gasto["monto"], cuotas_total)
     fecha_base = (gasto.get("fecha") or _now())[:10]
 
     ids = []
     cuota_ref = None
     try:
-        for numero in range(1, cuotas_total + 1):
-            es_ultima = numero == cuotas_total
+        for numero, centavos in enumerate(montos_centavos, start=1):
             gasto_cuota = dict(gasto)
-            gasto_cuota["monto"] = float(
-                monto_ultima_cuota_dec if es_ultima else monto_cuota_dec
-            )
+            gasto_cuota["monto"] = float(Decimal(centavos) / 100)
             gasto_cuota["fecha"] = _sumar_meses(fecha_base, numero - 1)
             gasto_cuota["cuotas_total"] = cuotas_total
             gasto_cuota["cuota_nro"] = numero
             gasto_cuota["cuota_ref"] = cuota_ref
-            nuevo_id = _insert_gasto_tx(conn, gasto_cuota)
+            nuevo_id = _insert_gasto_tx(
+                conn, gasto_cuota, monto_total_original=gasto["monto"]
+            )
             if cuota_ref is None:
                 cuota_ref = nuevo_id
                 conn.execute(
@@ -2727,10 +2775,10 @@ def _insertar_gasto_expandido_tx(conn: sqlite3.Connection, gasto: dict, cuotas_t
     if (
         not isinstance(cuotas_total, int)
         or isinstance(cuotas_total, bool)
-        or cuotas_total < 1
+        or not 1 <= cuotas_total <= 120
     ):
         raise ValueError(
-            f"cuotas_total debe ser un entero >= 1 (recibido {cuotas_total!r})."
+            f"cuotas_total debe ser un entero entre 1 y 120 (recibido {cuotas_total!r})."
         )
     if gasto.get("confirmado") is not True:
         raise ValueError(
@@ -2740,26 +2788,21 @@ def _insertar_gasto_expandido_tx(conn: sqlite3.Connection, gasto: dict, cuotas_t
     if cuotas_total == 1:
         return [_insert_gasto_tx(conn, gasto)]
 
-    monto_total_dec = Decimal(str(gasto["monto"]))
-    monto_cuota_dec = (monto_total_dec / Decimal(cuotas_total)).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
-    )
-    monto_ultima_cuota_dec = monto_total_dec - monto_cuota_dec * (cuotas_total - 1)
+    montos_centavos = _repartir_cuotas_centavos(gasto["monto"], cuotas_total)
     fecha_base = (gasto.get("fecha") or _now())[:10]
 
     ids = []
     cuota_ref = None
-    for numero in range(1, cuotas_total + 1):
-        es_ultima = numero == cuotas_total
+    for numero, centavos in enumerate(montos_centavos, start=1):
         gasto_cuota = dict(gasto)
-        gasto_cuota["monto"] = float(
-            monto_ultima_cuota_dec if es_ultima else monto_cuota_dec
-        )
+        gasto_cuota["monto"] = float(Decimal(centavos) / 100)
         gasto_cuota["fecha"] = _sumar_meses(fecha_base, numero - 1)
         gasto_cuota["cuotas_total"] = cuotas_total
         gasto_cuota["cuota_nro"] = numero
         gasto_cuota["cuota_ref"] = cuota_ref
-        nuevo_id = _insert_gasto_tx(conn, gasto_cuota)
+        nuevo_id = _insert_gasto_tx(
+            conn, gasto_cuota, monto_total_original=gasto["monto"]
+        )
         if cuota_ref is None:
             cuota_ref = nuevo_id
             conn.execute("UPDATE gastos SET cuota_ref = ? WHERE id = ?", (cuota_ref, nuevo_id))
@@ -2796,8 +2839,8 @@ def _insert_comprobante_tx(
         INSERT INTO comprobantes_telegram
             (hash_archivo, chat_id, telegram_user_id, telegram_message_id,
              texto_extraido, monto_detectado, fecha_detectada, comercio_detectado,
-             ruta_archivo, gasto_id, ingreso_id, creado_en)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ruta_archivo, nro_operacion, gasto_id, ingreso_id, creado_en)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             hash_archivo,
@@ -2809,9 +2852,11 @@ def _insert_comprobante_tx(
             comprobante.get("fecha_detectada"),
             comprobante.get("comercio_detectado"),
             comprobante.get("ruta_archivo"),
+            comprobante.get("nro_operacion"),
             gasto_id,
             ingreso_id,
-            _now(),
+            (datetime.fromisoformat(comprobante["received_at"].replace("Z", "+00:00")).astimezone(timezone.utc).isoformat()
+             if comprobante.get("received_at") else _now()),
         ),
     )
     return cursor.lastrowid
@@ -2830,6 +2875,9 @@ def insert_gasto_telegram(
 
     Devuelve `{'gasto_ids': [...], 'comprobante_id': int|None}`.
     """
+    errores = validar_telegram_expense(gasto)
+    if errores:
+        raise ValueError(f"Gasto Telegram inválido: {errores}")
     try:
         gasto_ids = _insertar_gasto_expandido_tx(conn, gasto, cuotas_total)
         comprobante_id = None
@@ -2862,7 +2910,7 @@ def insert_ingreso_telegram(
             "No se puede insertar un ingreso sin confirmación explícita "
             "(confirmado debe ser True)."
         )
-    errores = validar_ingreso(ingreso)
+    errores = validar_telegram_ingreso(ingreso)
     if errores:
         raise ValueError(f"Ingreso inválido: {errores}")
 
@@ -2913,6 +2961,7 @@ def buscar_comprobante_dedupe(
     monto: Optional[float] = None,
     fecha: Optional[str] = None,
     comercio: Optional[str] = None,
+    nro_operacion: Optional[str] = None,
 ) -> dict:
     """Busca si `hash_archivo` (o, en su defecto, un comprobante aproximado)
     ya fue registrado en `comprobantes_telegram` -- caso "mismo comprobante
@@ -2920,14 +2969,20 @@ def buscar_comprobante_dedupe(
 
     1. Coincidencia exacta de `hash_archivo`: la más fuerte, se prueba
        siempre primero.
-    2. Si no hay coincidencia de hash y se pasan `monto` y `fecha`:
-       coincidencia aproximada = mismo `monto_detectado` (±0,01) y
+    2. Si no hay coincidencia de hash y se pasa `nro_operacion`:
+       coincidencia exacta por número de operación bancaria (brief t_a3f2bbb5
+       -- un comprobante de transferencia reenviado como foto distinta pero
+       con el mismo número de operación es inequívocamente el mismo
+       movimiento, aunque no coincida ni el hash del archivo ni monto/fecha
+       si alguno de los dos se tipeó distinto).
+    3. Si no hay coincidencia de hash ni de operación y se pasan `monto` y
+       `fecha`: coincidencia aproximada = mismo `monto_detectado` (±0,01) y
        `fecha_detectada` dentro de ±1 día; `comercio` solo filtra si se
        pasa (ver brief -- no todos los comprobantes traen comercio
        detectado).
 
     Devuelve `{'duplicado': bool, 'gasto_id': int|None, 'ingreso_id':
-    int|None, 'coincidencia': 'hash'|'aproximada'|None}`.
+    int|None, 'coincidencia': 'hash'|'operacion'|'aproximada'|None}`.
     """
     fila_hash = conn.execute(
         "SELECT gasto_id, ingreso_id FROM comprobantes_telegram WHERE hash_archivo = ?",
@@ -2940,6 +2995,19 @@ def buscar_comprobante_dedupe(
             "ingreso_id": fila_hash["ingreso_id"],
             "coincidencia": "hash",
         }
+
+    if nro_operacion:
+        fila_operacion = conn.execute(
+            "SELECT gasto_id, ingreso_id FROM comprobantes_telegram WHERE nro_operacion = ?",
+            (nro_operacion,),
+        ).fetchone()
+        if fila_operacion is not None:
+            return {
+                "duplicado": True,
+                "gasto_id": fila_operacion["gasto_id"],
+                "ingreso_id": fila_operacion["ingreso_id"],
+                "coincidencia": "operacion",
+            }
 
     if monto is None or fecha is None:
         return {"duplicado": False, "gasto_id": None, "ingreso_id": None, "coincidencia": None}
@@ -2977,6 +3045,32 @@ def buscar_comprobante_dedupe(
             "coincidencia": "aproximada",
         }
     return {"duplicado": False, "gasto_id": None, "ingreso_id": None, "coincidencia": None}
+
+
+def limpiar_texto_comprobantes_vencidos(
+    conn: sqlite3.Connection, *, ahora: Optional[datetime] = None, apply: bool = False,
+) -> dict:
+    """Limpia solo texto extraído de comprobantes recibidos hace >=40 días.
+
+    Función acotada para integrar desde la API; no se invoca automáticamente.
+    Conserva hash, número de operación y vínculos contables. `creado_en` es
+    la fecha de recepción en UTC, nunca la fecha impresa `fecha_detectada`.
+    """
+    ahora = ahora or datetime.now(timezone.utc)
+    if ahora.tzinfo is None or ahora.utcoffset() is None:
+        raise ValueError("ahora debe tener zona horaria")
+    limite = (ahora.astimezone(timezone.utc) - timedelta(days=40)).isoformat()
+    condicion = "texto_extraido IS NOT NULL AND creado_en <= ?"
+    cantidad = conn.execute(
+        f"SELECT COUNT(*) FROM comprobantes_telegram WHERE {condicion}", (limite,),
+    ).fetchone()[0]
+    if apply and cantidad:
+        with conn:
+            conn.execute(
+                f"UPDATE comprobantes_telegram SET texto_extraido = NULL WHERE {condicion}",
+                (limite,),
+            )
+    return {"candidatos": cantidad, "limite_recepcion": limite, "aplicado": bool(apply)}
 
 
 # --- Avisos de crédito (S3) --------------------------------------------------

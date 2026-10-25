@@ -20,7 +20,7 @@ import math
 import re
 import sqlite3
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal, DecimalException
 from urllib.parse import parse_qs
 from uuid import uuid4
@@ -101,16 +101,19 @@ TELEGRAM_ID_FIELDS = ("chat_id", "telegram_user_id", "telegram_message_id")
 # Telegram son negativos); longitud acotada para no aceptar basura arbitraria.
 _TELEGRAM_ID_RE = re.compile(r"^-?\d{1,32}$")
 
-ALLOWED_EXPENSE_TELEGRAM_FIELDS = ALLOWED_EXPENSE_FIELDS | set(TELEGRAM_ID_FIELDS) | {"comprobante"}
-ALLOWED_INCOME_TELEGRAM_FIELDS = ALLOWED_INCOME_CREATE_FIELDS | set(TELEGRAM_ID_FIELDS) | {"comprobante"}
+ALLOWED_EXPENSE_TELEGRAM_FIELDS = ALLOWED_EXPENSE_FIELDS | set(TELEGRAM_ID_FIELDS) | {"comprobante", "confirmado"}
+ALLOWED_INCOME_TELEGRAM_FIELDS = ALLOWED_INCOME_CREATE_FIELDS | set(TELEGRAM_ID_FIELDS) | {"comprobante", "confirmado"}
 
 ALLOWED_COMPROBANTE_FIELDS = {
     "hash_archivo", "texto_extraido", "monto_detectado", "fecha_detectada",
-    "comercio_detectado", "ruta_archivo",
+    "comercio_detectado", "ruta_archivo", "nro_operacion", "received_at",
 }
 MAX_COMPROBANTE_HASH_LENGTH = 128
 MAX_COMPROBANTE_TEXT_LENGTH = 4000
 MAX_COMPROBANTE_PATH_LENGTH = 512
+# Número de operación bancaria (ej. Mercado Pago): solo dígitos -- mismo
+# criterio que `_TELEGRAM_ID_RE` de más abajo, pero sin signo, nunca lo trae.
+_NRO_OPERACION_RE = re.compile(r"^\d{1,32}$")
 
 
 def _valid_optional_telegram_ids(data, fields):
@@ -165,6 +168,23 @@ def _valid_comprobante_payload(comprobante):
     monto_detectado = comprobante.get("monto_detectado")
     if monto_detectado is not None:
         if not _valid_money(monto_detectado, positive=False) or monto_detectado < 0:
+            return False
+
+    nro_operacion = comprobante.get("nro_operacion")
+    if nro_operacion is not None and not (
+        isinstance(nro_operacion, str) and _NRO_OPERACION_RE.match(nro_operacion)
+    ):
+        return False
+
+    received_at = comprobante.get("received_at")
+    if received_at is not None:
+        if not isinstance(received_at, str):
+            return False
+        try:
+            received = datetime.fromisoformat(received_at.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        if received.tzinfo is None or received.utcoffset() is None or received > datetime.now(timezone.utc):
             return False
 
     return True
@@ -307,12 +327,21 @@ class _App:
         ("GET", re.compile(r"^/api/comprobantes/dedupe$"), "comprobantes_dedupe"),
         ("GET", re.compile(r"^/api/avisos-credito/pendientes$"), "avisos_credito_pendientes_handler"),
         ("POST", re.compile(r"^/api/avisos-credito/marcar-enviados$"), "avisos_credito_marcar_enviados_handler"),
+        # --- Telegram (brief S2/S3, T3): estado conversacional expuesto para
+        # que el CLI determinista pueda leer/escribir/borrar un borrador sin
+        # importar `db.py` directo (ver justificación en CTO-DISENO.md §1(a)).
+        ("GET", re.compile(r"^/api/telegram/borrador$"), "get_telegram_borrador"),
+        ("PUT", re.compile(r"^/api/telegram/borrador$"), "set_telegram_borrador"),
+        ("DELETE", re.compile(r"^/api/telegram/borrador$"), "clear_telegram_borrador"),
     )
     QUERY_FIELDS = {
         "list_expenses": {"month"}, "list_fixed": {"dateISO"},
         "fixed_range": {"fromISO", "toISO"}, "summary": {"month"},
         "list_categories": {"tipo"},
-        "comprobantes_dedupe": {"hash", "monto", "fecha", "comercio"},
+        "comprobantes_dedupe": {"hash", "monto", "fecha", "comercio", "nro_operacion"},
+        "get_telegram_borrador": {"chat", "usuario"},
+        "set_telegram_borrador": {"chat", "usuario"},
+        "clear_telegram_borrador": {"chat", "usuario"},
     }
 
     def __init__(self, db_path, internal_secret):
@@ -1130,6 +1159,16 @@ class _App:
         unknown = self._unknown_fields(data.keys(), ALLOWED_EXPENSE_TELEGRAM_FIELDS)
         if unknown:
             return self._error(start_response, 400, "campos desconocidos.")
+        if data.get("confirmado") is not True:
+            return self._error(start_response, 400, "confirmado=true es obligatorio.")
+        if not _is_iso_date(data.get("fecha")):
+            return self._error(start_response, 400, "fecha debe ser 'YYYY-MM-DD' válida.")
+        if data.get("pagado_por") not in validaciones.PAGADO_POR_VALIDOS:
+            return self._error(start_response, 400, "pagado_por es obligatorio.")
+        if data.get("medio_pago") not in ("Crédito", "Débito", "Efectivo", "Transferencia"):
+            return self._error(start_response, 400, "medio_pago es obligatorio o inválido.")
+        if data["medio_pago"] in ("Crédito", "Débito") and not data.get("tarjeta_id"):
+            return self._error(start_response, 400, "tarjeta_id es obligatorio para tarjeta.")
         if "fecha" in data and not _is_iso_date(data["fecha"]):
             return self._error(start_response, 400, "fecha debe ser 'YYYY-MM-DD' válida.")
         if not _valid_optional_strings(data, {
@@ -1144,7 +1183,7 @@ class _App:
         comprobante = data.get("comprobante")
         if comprobante is not None and not _valid_comprobante_payload(comprobante):
             return self._error(start_response, 400, "comprobante inválido.")
-        errores = validaciones.validar_expense(data)
+        errores = validaciones.validar_telegram_expense(data)
         if errores:
             return self._error(start_response, 400, "payload de gasto inválido.")
         if not _valid_money(data.get("monto")):
@@ -1185,6 +1224,10 @@ class _App:
         unknown = self._unknown_fields(data.keys(), ALLOWED_INCOME_TELEGRAM_FIELDS)
         if unknown:
             return self._error(start_response, 400, "campos desconocidos.")
+        if data.get("confirmado") is not True:
+            return self._error(start_response, 400, "confirmado=true es obligatorio.")
+        if not _is_iso_date(data.get("fecha")):
+            return self._error(start_response, 400, "fecha debe ser 'YYYY-MM-DD' válida.")
         if "fecha" in data and not _is_iso_date(data["fecha"]):
             return self._error(start_response, 400, "fecha debe ser 'YYYY-MM-DD' válida.")
         if not _valid_optional_strings(data, {"moneda", "descripcion_original"}):
@@ -1197,7 +1240,7 @@ class _App:
         comprobante = data.get("comprobante")
         if comprobante is not None and not _valid_comprobante_payload(comprobante):
             return self._error(start_response, 400, "comprobante inválido.")
-        errores = validaciones.validar_ingreso(data)
+        errores = validaciones.validar_telegram_ingreso(data)
         if errores:
             return self._error(start_response, 400, "payload de ingreso inválido.")
         if not _valid_money(data.get("monto")):
@@ -1213,7 +1256,7 @@ class _App:
             return self._error(start_response, 409, "comprobante duplicado: ya fue registrado.")
         except OverflowError:
             return self._error(start_response, 400, "monto fuera de rango.")
-        except ValueError:
+        except (ValueError, sqlite3.IntegrityError):
             return self._error(start_response, 409, "no se pudo crear el ingreso.")
 
         creado = next(row for row in db.get_ingresos(conn) if row["id"] == resultado["ingreso_id"])
@@ -1230,7 +1273,9 @@ class _App:
         return dict(fila)
 
     def comprobantes_dedupe(self, ctx, conn, start_response):
-        unknown = self._unknown_fields(ctx.query.keys(), {"hash", "monto", "fecha", "comercio"})
+        unknown = self._unknown_fields(
+            ctx.query.keys(), {"hash", "monto", "fecha", "comercio", "nro_operacion"},
+        )
         if unknown:
             return self._error(start_response, 400, "parámetros de query desconocidos.")
         hash_archivo = ctx.query_param("hash")
@@ -1257,8 +1302,13 @@ class _App:
 
         comercio = ctx.query_param("comercio")
 
+        nro_operacion = ctx.query_param("nro_operacion")
+        if nro_operacion is not None and not _NRO_OPERACION_RE.match(nro_operacion):
+            return self._error(start_response, 400, "nro_operacion debe ser numérico.")
+
         resultado = db.buscar_comprobante_dedupe(
             conn, hash_archivo, monto=monto, fecha=fecha, comercio=comercio,
+            nro_operacion=nro_operacion,
         )
         return self._json(start_response, 200, resultado)
 
@@ -1294,6 +1344,72 @@ class _App:
 
         actualizados = db.marcar_avisos_credito_enviados(conn, items)
         return self._json(start_response, 200, {"actualizados": actualizados})
+
+    # --- Telegram (brief S2/S3, T3): borrador conversacional -------------
+    #
+    # Expone `db.get_estado`/`set_estado`/`clear_estado` (ya usadas por el
+    # borrador independiente por `(chat_id, usuario)`, ver T1) para que el
+    # CLI determinista (`telegram_ingesta.py`) pueda leer/escribir/borrar un
+    # borrador pendiente sin importar `db.py` directo -- misma auth
+    # `X-Internal-Proxy-Secret`, misma ruta interna no proxyeada por Vercel.
+    # `chat`/`usuario` son identificadores de dominio arbitrarios (no se
+    # valida formato de dígitos como en `TELEGRAM_ID_FIELDS`): el esquema ya
+    # acepta cualquier string no vacío para `telegram_chat_id` (ver
+    # fixtures de `tests/test_telegram_api.py`, p.ej. `'chat-9'`).
+
+    def get_telegram_borrador(self, ctx, conn, start_response):
+        chat = ctx.query_param("chat")
+        if not isinstance(chat, str) or not chat.strip():
+            return self._error(start_response, 400, "chat es obligatorio.")
+        usuario = ctx.query_param("usuario") or None
+        estado = db.get_estado(conn, chat, usuario=usuario)
+        return self._json(start_response, 200, {"borrador": estado})
+
+    def set_telegram_borrador(self, ctx, conn, start_response):
+        chat = ctx.query_param("chat")
+        if not isinstance(chat, str) or not chat.strip():
+            return self._error(start_response, 400, "chat es obligatorio.")
+        usuario = ctx.query_param("usuario") or None
+
+        data, err = self._parse_json(ctx, start_response)
+        if err is not None:
+            return err
+        allowed = {"estado", "campo_pendiente", "payload_parcial", "mensaje_original", "intent_detectado"}
+        unknown = self._unknown_fields(data.keys(), allowed)
+        if unknown:
+            return self._error(start_response, 400, "campos desconocidos.")
+
+        estado = data.get("estado")
+        if not isinstance(estado, str) or not estado.strip():
+            return self._error(start_response, 400, "estado es obligatorio.")
+        campo_pendiente = data.get("campo_pendiente")
+        if campo_pendiente is not None and not isinstance(campo_pendiente, str):
+            return self._error(start_response, 400, "campo_pendiente debe ser texto.")
+        payload_parcial = data.get("payload_parcial")
+        if payload_parcial is not None and not isinstance(payload_parcial, dict):
+            return self._error(start_response, 400, "payload_parcial debe ser un objeto.")
+        mensaje_original = data.get("mensaje_original")
+        if mensaje_original is not None and not isinstance(mensaje_original, str):
+            return self._error(start_response, 400, "mensaje_original debe ser texto.")
+        intent_detectado = data.get("intent_detectado", "gasto")
+        if not isinstance(intent_detectado, str) or not intent_detectado.strip():
+            return self._error(start_response, 400, "intent_detectado debe ser texto no vacío.")
+
+        db.set_estado(
+            conn, chat, estado=estado, campo_pendiente=campo_pendiente,
+            payload_parcial=payload_parcial, mensaje_original=mensaje_original,
+            usuario=usuario, intent_detectado=intent_detectado,
+        )
+        nuevo = db.get_estado(conn, chat, usuario=usuario)
+        return self._json(start_response, 200, {"borrador": nuevo})
+
+    def clear_telegram_borrador(self, ctx, conn, start_response):
+        chat = ctx.query_param("chat")
+        if not isinstance(chat, str) or not chat.strip():
+            return self._error(start_response, 400, "chat es obligatorio.")
+        usuario = ctx.query_param("usuario") or None
+        db.clear_estado(conn, chat, usuario=usuario)
+        return self._json(start_response, 200, {"cleared": True})
 
 
 def create_app(db_path, internal_secret):

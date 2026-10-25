@@ -40,9 +40,10 @@ Esta entrega no activa infraestructura ni publica la API.
 Todas las rutas `/api` requieren `X-Internal-Proxy-Secret`, comparado en tiempo
 constante. Una credencial ausente o incorrecta devuelve `401`, incluso en
 `/api/health`. No hay autenticación individual: las escrituras auditadas usan
-`sesion_compartida:no_verificado`. `actor`, `confirmado`, `origen` y otros campos
-de control no se aceptan del cliente; la API fija `confirmado=True` en altas de
-gastos e ingresos. Eso habilita la barrera del dominio, pero no atribuye una
+`sesion_compartida:no_verificado`. `actor`, `origen` y otros campos
+de control no se aceptan del cliente. Las rutas web fijan `confirmado=True`;
+las rutas `/telegram` exigen `confirmado=true` explícito del cliente. Eso
+habilita la barrera del dominio, pero no atribuye una
 identidad JD/Pinki al request.
 
 Las respuestas son JSON (`application/json; charset=utf-8`) y llevan
@@ -309,15 +310,15 @@ siempre los bienes borrados lógicamente; no hay ruta de restauración.
 
 Rutas **internas**: no se agregan al proxy de Vercel (`middleware.js` no se
 toca). Misma auth `X-Internal-Proxy-Secret`, mismo formato de errores y las
-mismas validaciones que las rutas equivalentes sin `/telegram`. El CLI (T3) y
-la skill de Lasso (T4) consumen este contrato en una tarea posterior.
+validaciones del dominio más confirmación y campos explícitos. El CLI de
+Telegram consume este contrato.
 
 | Método y ruta | Entrada | Respuesta exitosa |
 | --- | --- | --- |
 | `GET /api/tarjetas` | Sin parámetros | `{"tarjetas":[...]}`; catálogo completo, solo lectura |
-| `POST /api/expenses/telegram` | Mismos campos que `POST /api/expenses`, más `chat_id`, `telegram_user_id`, `telegram_message_id` opcionales y `comprobante` opcional | `201 {"expenses":[...],"avisos_credito_nuevos":[...],"comprobante":{...}?}` |
-| `POST /api/income/telegram` | Mismos campos que `POST /api/income`, más `chat_id`, `telegram_user_id`, `telegram_message_id` opcionales y `comprobante` opcional | `201 {"income":{...},"comprobante":{...}?}` |
-| `GET /api/comprobantes/dedupe?hash=...&monto=&fecha=&comercio=` | `hash` obligatorio; `monto`, `fecha`, `comercio` opcionales | `{"duplicado":bool,"gasto_id":N\|null,"ingreso_id":N\|null,"coincidencia":"hash"\|"aproximada"\|null}` |
+| `POST /api/expenses/telegram` | Campos de gasto más `confirmado:true`, `fecha`, `pagado_por`, `medio_pago` y `tarjeta_id` si Crédito/Débito; IDs Telegram y `comprobante` opcionales | `201 {"expenses":[...],"avisos_credito_nuevos":[...],"comprobante":{...}?}` |
+| `POST /api/income/telegram` | Campos de ingreso más `confirmado:true` y `fecha`; IDs Telegram y `comprobante` opcionales | `201 {"income":{...},"comprobante":{...}?}` |
+| `GET /api/comprobantes/dedupe?hash=...&monto=&fecha=&comercio=&nro_operacion=` | `hash` obligatorio; `monto`, `fecha`, `comercio`, `nro_operacion` opcionales | `{"duplicado":bool,"gasto_id":N\|null,"ingreso_id":N\|null,"coincidencia":"hash"\|"operacion"\|"aproximada"\|null}` |
 | `GET /api/avisos-credito/pendientes` | Sin parámetros | `{"avisos_credito":[{"mes","umbral","total_al_detectar","detectado_en","enviado_en":null},...]}` |
 | `POST /api/avisos-credito/marcar-enviados` | `{"items":[{"mes":"YYYY-MM","umbral":N},...]}` | `{"actualizados":[{"mes","umbral"},...]}` |
 
@@ -330,21 +331,55 @@ no restringe `origen` a una lista cerrada de valores; si la tuviera, habría
 que agregar `'telegram'` ahí también, pero hoy no hace falta). Con `cuotas_total`,
 `POST /api/expenses/telegram` expande en N filas igual que la ruta normal, y
 cada fila hereda `chat_id`/`telegram_user_id`/`telegram_message_id`.
+`cuotas_total` acepta solo enteros de 1 a 120, nunca booleanos ni fracciones.
+Una operación duplicada en ingreso devuelve `409`, también si la unicidad
+SQLite detecta la colisión durante la inserción; la transacción revierte.
+
+Telegram es el frontend conversacional LLM para escribir en esta misma base
+SQLite mediante la API; no lleva una contabilidad paralela. Durante las
+pruebas no sustituye la planilla vigente. Para comprobantes rige retención
+**máxima de 40 días desde la recepción** para originales, PNG renderizados y
+`texto_extraido`; la fecha impresa `fecha_detectada` no determina el plazo.
+La CLI local `lab/telegram_retencion.py --root RUTA --db BASE.sqlite` coordina
+la limpieza de texto y archivos manifestados (dry-run por defecto, aplicación
+explícita), preservando hash, número de operación y referencias contables.
+El receptor real debe usar el handoff de `incoming/`; no hay cron activo ni
+activación sobre adjuntos reales (ver `lab/README-telegram.md`).
 
 **`comprobante` (opcional en el body de alta).** Campos: `hash_archivo`
 (obligatorio dentro del sub-objeto si este viene, hasta 128 caracteres),
 `texto_extraido`, `monto_detectado`, `fecha_detectada`, `comercio_detectado`,
-`ruta_archivo` (todos opcionales). Si viene, se inserta en
-`comprobantes_telegram` en la MISMA transacción que el gasto/ingreso
-(`db.insert_gasto_telegram`/`db.insert_ingreso_telegram`): si `hash_archivo`
-ya existe, la respuesta es `409` y no se crea nada — ni el gasto/ingreso ni
-el comprobante, atomicidad real, no una compensación posterior.
+`ruta_archivo`, `nro_operacion`, `received_at` (todos opcionales). Si el CLI
+envía `ruta_archivo`, obtiene `received_at` del manifiesto gestionado;
+`creado_en` conserva esa recepción original para la limpieza del texto.
+`nro_operacion` (brief
+t_a3f2bbb5, parte C): string de solo dígitos, hasta 32 caracteres (ej. el
+número de operación de un comprobante de Mercado Pago, ver
+`lab/README-telegram.md` → `extraer-campos`). Si `comprobante` viene, se
+inserta en `comprobantes_telegram` en la MISMA transacción que el
+gasto/ingreso (`db.insert_gasto_telegram`/`db.insert_ingreso_telegram`): si
+`hash_archivo` YA existe, la respuesta es `409` y no se crea nada — ni el
+gasto/ingreso ni el comprobante, atomicidad real, no una compensación
+posterior. Si en cambio es `nro_operacion` el que ya existe (dos
+comprobantes distintos con el mismo número de operación bancaria), la
+columna tiene un índice único parcial (`WHERE nro_operacion IS NOT NULL`,
+ver sección de migraciones) y la inserción falla con `sqlite3.IntegrityError`
+→ también `409`, mismo criterio que el hash duplicado.
 
-**Dedupe (`GET /api/comprobantes/dedupe`).** Primero busca coincidencia
-exacta de `hash_archivo` (`coincidencia:"hash"`). Si no hay y se pasan
-`monto` y `fecha`, busca coincidencia aproximada: mismo `monto_detectado`
-(±0,01) y `fecha_detectada` dentro de ±1 día; `comercio` solo filtra si se
-pasa. Sin coincidencia, `{"duplicado":false,"gasto_id":null,"ingreso_id":null,"coincidencia":null}`.
+**Dedupe (`GET /api/comprobantes/dedupe`).** Tres niveles, en orden:
+
+1. Coincidencia exacta de `hash_archivo` (`coincidencia:"hash"`) — la más
+   fuerte, mismo archivo exacto (por contenido).
+2. Si no hay coincidencia de hash y se pasa `nro_operacion`: coincidencia
+   exacta por número de operación bancaria (`coincidencia:"operacion"`) —
+   un comprobante reenviado como foto/PDF distinto (hash distinto) pero con
+   el mismo número de operación es inequívocamente el mismo movimiento,
+   aunque monto/fecha no coincidan (ej. se tipeó mal un dato la primera vez).
+3. Si no hay coincidencia de hash ni de operación y se pasan `monto` y
+   `fecha`: coincidencia aproximada, mismo `monto_detectado` (±0,01) y
+   `fecha_detectada` dentro de ±1 día; `comercio` solo filtra si se pasa.
+
+Sin ninguna coincidencia: `{"duplicado":false,"gasto_id":null,"ingreso_id":null,"coincidencia":null}`.
 
 **Avisos de crédito (S3).** Cambio respecto del CTO 66f52e78 (ver
 DECISIONES.md): esta API no tiene token de Telegram, así que **solo
@@ -363,12 +398,37 @@ alta con cuotas). Un umbral ya registrado para un mes nunca se vuelve a
 registrar ni se borra, aunque el total baje y vuelva a subir (sin
 "desaviso", sin repetir un aviso ya mandado en el mismo mes).
 
+**Borrador conversacional (`GET`/`PUT`/`DELETE /api/telegram/borrador`,
+brief S2/S3 T3).** Rutas internas que exponen `db.get_estado`/`set_estado`/
+`clear_estado` sobre HTTP para que `lab/telegram_ingesta.py` (el CLI) pueda
+leer/escribir/borrar un borrador pendiente sin importar `db.py` directo —
+misma auth `X-Internal-Proxy-Secret`, mismo formato de errores que el resto
+de `/api/*`.
+
+| Método y ruta | Entrada | Respuesta exitosa |
+| --- | --- | --- |
+| `GET /api/telegram/borrador?chat=&usuario=` | `chat` obligatorio; `usuario` opcional | `{"borrador": {...}|null}` |
+| `PUT /api/telegram/borrador?chat=&usuario=` | `chat` obligatorio; `usuario` opcional; body `{"estado", "campo_pendiente"?, "payload_parcial"?, "mensaje_original"?, "intent_detectado"?}` (`estado` obligatorio no vacío) | `{"borrador": {...}}` con el estado ya guardado |
+| `DELETE /api/telegram/borrador?chat=&usuario=` | `chat` obligatorio; `usuario` opcional | `{"cleared": true}` |
+
+`chat`/`usuario` son identificadores de dominio arbitrarios (no se exige
+formato de dígitos, a diferencia de `chat_id`/`telegram_user_id` de las
+rutas de alta `*/telegram`): dos usuarios del mismo `chat` tienen borradores
+independientes (ver migración de `estado_conversacional` más abajo); omitir
+`usuario` opera sobre el borrador "sin usuario identificado" de ese chat,
+igual que `db.get_estado`/`set_estado`/`clear_estado` con `usuario=None`.
+
 **Migraciones (`db.py`, aditivas e idempotentes, mismo patrón `ALTER TABLE
 ADD COLUMN` que ya usa el archivo).** `gastos` gana `telegram_user_id`/
 `telegram_message_id` (`chat_id` ya existía); `ingresos` gana `chat_id`/
 `telegram_user_id`/`telegram_message_id` (no tenía ninguno). Tablas nuevas
 `comprobantes_telegram` y `avisos_credito` (ver `db.py` para el esquema
-completo). `estado_conversacional` pasa de `UNIQUE(telegram_chat_id)` a
+completo). `comprobantes_telegram` gana además `nro_operacion` (brief
+t_a3f2bbb5, parte C), columna nullable con `ALTER TABLE ADD COLUMN`, más un
+índice único PARCIAL (`CREATE UNIQUE INDEX ... WHERE nro_operacion IS NOT
+NULL`, idempotente vía `IF NOT EXISTS`) — parcial porque no todo
+comprobante trae número de operación; la unicidad solo aplica entre los que
+sí lo traen. `estado_conversacional` pasa de `UNIQUE(telegram_chat_id)` a
 `UNIQUE(telegram_chat_id, usuario)`: dos usuarios del mismo chat tienen
 borradores independientes. SQLite no permite alterar una restricción UNIQUE
 existente, así que `db._migrar_estado_conversacional` recrea la tabla
@@ -430,15 +490,33 @@ server-side, ids de Telegram devueltos, validación idéntica a la ruta sin
 `/telegram`, formato de `chat_id`/`telegram_user_id`/`telegram_message_id`,
 cuotas, comprobante insertado en la misma transacción, `409` por hash
 duplicado sin crear nada, `401` sin auth); `GET /api/tarjetas`; `GET
-/api/comprobantes/dedupe` (hash exacto, aproximado por monto+fecha+comercio,
-sin coincidencia, `400` sin `hash`); umbrales de crédito (cruce simple,
+/api/comprobantes/dedupe` (hash exacto, operación exacta por
+`nro_operacion` -- con prioridad sobre la aproximada aunque monto/fecha no
+coincidan --, aproximado por monto+fecha+comercio, sin coincidencia, `400`
+sin `hash` o con `nro_operacion` no numérico); migración idempotente de
+`comprobantes_telegram.nro_operacion` sobre una base vieja sin esa columna,
+más el índice único parcial (permite varios `NULL`, choca en el mismo
+`nro_operacion`); umbrales de crédito (cruce simple,
 varios de golpe en un solo alta — 80k→210k registra 100k/150k/200k —, baja
 que no desregistra, resuba que no repite un umbral ya registrado, cuotas en
 meses distintos con mes calendario, gasto no-Crédito que no cuenta) tanto a
 nivel `db.py` como en la respuesta de las rutas HTTP; y `GET
 /api/avisos-credito/pendientes` + `POST /api/avisos-credito/marcar-enviados`
-(idempotente, valida la forma de `items`).
+(idempotente, valida la forma de `items`). El mismo archivo agrega
+`TelegramBorradorApiTest` (brief S2/S3 T3): `GET`/`PUT`/`DELETE
+/api/telegram/borrador` round-trip, dos usuarios del mismo chat sin
+pisarse, `usuario` omitido (compatibilidad con el borrador legacy sin
+usuario), `400` con `chat` ausente o `estado` vacío/campos desconocidos,
+`401` sin auth y `405` con `Allow` ante un método no soportado.
+`tests/test_telegram_ingesta.py` (nuevo, brief S2/S3 T3) cubre el CLI
+`lab/telegram_ingesta.py` -- ver `lab/README-telegram.md` para el detalle
+completo.
 
 El comando para el coordinador es `python3 -m pytest -q tests` (desde `lab/`).
-Esta corrida no tuvo shell disponible para ejecutarlas; el coordinador debe
-correrlas antes de aceptar el candidato.
+Para los tests de `extraer-pdf` que necesitan `pymupdf`, correrlos con
+`/home/ai-os/hermes/workspaces/lasso/tools/venv-ingesta/bin/python -m pytest
+-q tests/test_telegram_ingesta.py` (se saltan solos si `pymupdf` no está
+instalado en el intérprete usado).
+Esta continuación no ejecutó tests porque el wrapper lo prohibió expresamente.
+El coordinador debe correrlos antes de aceptar el candidato; puede omitir
+`test_migracion` y `test_export_dashboard_real` si falta el raw real.

@@ -9,16 +9,19 @@ cuando exista la infraestructura que hoy no está desplegada (ver README.md).
 import math
 import re
 from datetime import datetime
+from decimal import Decimal
 
 _FORMATO_FECHA_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 PAGADO_POR_VALIDOS = ("Común", "JD", "Pinki")
 TIPO_PROPORCION_VALIDOS = ("dinamico", "custom")
 TOLERANCIA_PROPORCION = 0.01
+MAX_CUOTAS = 120
 
 # A diferencia de `pagado_por` (gastos), un ingreso siempre pertenece a una
 # persona concreta — "Común" no es válido acá (ver brief t_65096083).
 PERSONA_INGRESO_VALIDOS = ("JD", "Pinki")
+MEDIOS_PAGO_VALIDOS = ("Crédito", "Débito", "Efectivo", "Transferencia")
 
 
 def _es_numero(valor) -> bool:
@@ -97,6 +100,11 @@ def validar_expense(payload: dict) -> list:
             )
         elif not _es_numero(proporcion_jd) or not _es_numero(proporcion_pinki):
             errores.append("proporcion_jd y proporcion_pinki deben ser numéricas.")
+        elif not (0 <= proporcion_jd <= 100) or not (0 <= proporcion_pinki <= 100):
+            errores.append(
+                "proporcion_jd y proporcion_pinki deben estar entre 0 y 100 "
+                f"(recibido {proporcion_jd} y {proporcion_pinki})."
+            )
         elif abs((proporcion_jd + proporcion_pinki) - 100) > TOLERANCIA_PROPORCION:
             errores.append(
                 "proporcion_jd + proporcion_pinki debe sumar 100 "
@@ -113,9 +121,12 @@ def validar_expense(payload: dict) -> list:
     cuotas_total = payload.get("cuotas_total", 1)
     if cuotas_total is None:
         cuotas_total = 1
-    if not isinstance(cuotas_total, int) or isinstance(cuotas_total, bool) or cuotas_total < 1:
-        errores.append("cuotas_total debe ser un entero >= 1.")
+    if (not isinstance(cuotas_total, int) or isinstance(cuotas_total, bool)
+            or not 1 <= cuotas_total <= MAX_CUOTAS):
+        errores.append("cuotas_total debe ser un entero entre 1 y 120.")
         cuotas_total = None  # evita validar cuota_nro contra un valor inválido
+    elif _es_numero(monto) and monto > 0 and Decimal(str(monto)) * 100 < cuotas_total:
+        errores.append("cuotas_total excede los centavos disponibles del monto.")
 
     cuota_nro = payload.get("cuota_nro", 1)
     if cuota_nro is None:
@@ -128,6 +139,34 @@ def validar_expense(payload: dict) -> list:
             f"({cuotas_total})."
         )
 
+    return errores
+
+
+def validar_telegram_expense(payload: dict) -> list:
+    """Campos explícitos del flujo Telegram, antes de permitir defaults de DB."""
+    errores = validar_expense(payload)
+    if payload.get("confirmado") is not True:
+        errores.append("confirmado=True es obligatorio para Telegram.")
+    if not _es_fecha_iso(payload.get("fecha")):
+        errores.append("fecha ISO explícita es obligatoria para Telegram.")
+    if payload.get("pagado_por") not in PAGADO_POR_VALIDOS:
+        errores.append("pagado_por explícito es obligatorio para Telegram.")
+    medio = payload.get("medio_pago")
+    if medio not in MEDIOS_PAGO_VALIDOS:
+        errores.append("medio_pago explícito es obligatorio para Telegram.")
+    if medio in ("Crédito", "Débito") and not isinstance(payload.get("tarjeta_id"), str):
+        errores.append("tarjeta_id es obligatoria para Crédito o Débito.")
+    elif medio in ("Crédito", "Débito") and not payload["tarjeta_id"].strip():
+        errores.append("tarjeta_id es obligatoria para Crédito o Débito.")
+    return errores
+
+
+def validar_telegram_ingreso(payload: dict) -> list:
+    errores = validar_ingreso(payload)
+    if payload.get("confirmado") is not True:
+        errores.append("confirmado=True es obligatorio para Telegram.")
+    if not _es_fecha_iso(payload.get("fecha")):
+        errores.append("fecha ISO explícita es obligatoria para Telegram.")
     return errores
 
 

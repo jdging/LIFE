@@ -151,7 +151,7 @@ class ApiTest(WsgiApiTestCase):
             "2026-04-10", "2026-05-10", "2026-06-10",
         ])
         self.assertEqual([row["cuota_nro"] for row in rows], [1, 2, 3])
-        self.assertEqual([round(row["monto"], 2) for row in rows], [33.33, 33.33, 33.34])
+        self.assertEqual([round(row["monto"], 2) for row in rows], [33.34, 33.33, 33.33])
         self.assertEqual({row["cuota_ref"] for row in rows}, {rows[0]["id"]})
         self.assertEqual(sum(round(row["monto"] * 100) for row in rows), 10000)
         self.assertTrue(all(row["confirmado"] == 1 for row in rows))
@@ -169,6 +169,99 @@ class ApiTest(WsgiApiTestCase):
             deleted = next(row for row in db.get_gastos(conn, incluir_borrados=True)
                            if row["id"] == rows[1]["id"])
             self.assertEqual(deleted["deleted_by"], "sesion_compartida:no_verificado")
+
+    def test_expense_installments_120_uses_original_total(self):
+        status, body, _ = self.request(
+            "POST", "/api/expenses", self.expense(monto=120, cuotas_total=120)
+        )
+        self.assertEqual(status, 201)
+        rows = body["expenses"]
+        self.assertEqual(len(rows), 120)
+        self.assertEqual([row["cuota_nro"] for row in rows], list(range(1, 121)))
+        self.assertEqual([rows[0]["fecha"], rows[1]["fecha"], rows[-1]["fecha"]],
+                         ["2026-04-10", "2026-05-10", "2036-03-10"])
+        self.assertTrue(all(row["monto"] == 1 and row["monto"] > 0 for row in rows))
+        self.assertEqual(sum(round(row["monto"] * 100) for row in rows), 12000)
+        self.assertEqual({row["cuota_ref"] for row in rows}, {rows[0]["id"]})
+        with db.get_connection(self.db_path) as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM gastos").fetchone()[0], 120)
+
+    def test_expense_installments_minimum_cent_and_indivisible_total(self):
+        status, body, _ = self.request(
+            "POST", "/api/expenses", self.expense(monto=0.01, cuotas_total=1)
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(len(body["expenses"]), 1)
+        self.assertEqual(round(body["expenses"][0]["monto"] * 100), 1)
+
+        status, _, _ = self.request(
+            "POST", "/api/expenses", self.expense(monto=0.01, cuotas_total=2)
+        )
+        self.assertEqual(status, 400)
+        with db.get_connection(self.db_path) as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM gastos").fetchone()[0], 1)
+
+        status, body, _ = self.request(
+            "POST", "/api/expenses", self.expense(monto=0.05, cuotas_total=2)
+        )
+        self.assertEqual(status, 201)
+        rows = body["expenses"]
+        self.assertEqual([round(row["monto"] * 100) for row in rows], [3, 2])
+        self.assertTrue(all(row["monto"] > 0 for row in rows))
+        self.assertEqual(sum(round(row["monto"] * 100) for row in rows), 5)
+        self.assertEqual([row["fecha"] for row in rows], ["2026-04-10", "2026-05-10"])
+
+        # $0,08 en 5 cuotas: 8 centavos no son divisibles por 5, pero el
+        # reparto en centavos enteros (divmod) da 5 filas positivas que
+        # suman exacto, con el resto repartido en las primeras cuotas
+        # (dictamen NO APTO e46265bb: antes la última cuota quedaba en $0).
+        status, body, _ = self.request(
+            "POST", "/api/expenses", self.expense(monto=0.08, cuotas_total=5)
+        )
+        self.assertEqual(status, 201)
+        rows = body["expenses"]
+        self.assertEqual([round(row["monto"] * 100) for row in rows], [2, 2, 2, 1, 1])
+        self.assertTrue(all(row["monto"] > 0 for row in rows))
+        self.assertEqual(sum(round(row["monto"] * 100) for row in rows), 8)
+
+    def test_repartir_cuotas_centavos_exhaustivo_1_a_500(self):
+        """Prueba sintética exhaustiva del helper único (`db._repartir_cuotas_centavos`)
+        usado por ambos expansores (web y Telegram): para cada monto de 1 a
+        500 centavos y cada cantidad de cuotas de 1 a `min(120, centavos)`,
+        el reparto tiene exactamente `cuotas` filas, todas positivas, que
+        suman el total exacto y difieren entre sí a lo sumo en un centavo.
+        Los asserts de suma comparan enteros (centavos), no floats."""
+        for centavos in range(1, 501):
+            monto_total = centavos / 100
+            for cuotas in range(1, min(120, centavos) + 1):
+                with self.subTest(centavos=centavos, cuotas=cuotas):
+                    reparto = db._repartir_cuotas_centavos(monto_total, cuotas)
+                    self.assertEqual(len(reparto), cuotas)
+                    self.assertTrue(all(isinstance(valor, int) and valor > 0 for valor in reparto))
+                    self.assertEqual(sum(reparto), centavos)
+                    self.assertLessEqual(max(reparto) - min(reparto), 1)
+
+    def test_expense_installments_roll_back_after_second_insert_fails(self):
+        with db.get_connection(self.db_path) as conn:
+            conn.execute("""
+                CREATE TRIGGER reject_second_installment BEFORE INSERT ON gastos
+                WHEN NEW.cuota_nro = 2
+                BEGIN SELECT RAISE(ABORT, 'forced second installment failure'); END
+            """)
+
+        status, _, _ = self.request(
+            "POST", "/api/expenses", self.expense(monto=120, cuotas_total=120)
+        )
+        self.assertEqual(status, 409)
+        with db.get_connection(self.db_path) as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM gastos").fetchone()[0], 0)
+            conn.execute("DROP TRIGGER reject_second_installment")
+
+        status, body, _ = self.request(
+            "POST", "/api/expenses", self.expense(monto=120, cuotas_total=120)
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(len(body["expenses"]), 120)
 
     def test_income_validation_update_and_summary(self):
         status, _, _ = self.request("POST", "/api/income", self.income(persona="Común"))
@@ -421,6 +514,39 @@ class ApiTest(WsgiApiTestCase):
         self.assertEqual(self.request("DELETE", "/api/expenses/999")[0], 404)
         self.assertEqual(self.request("GET", "/api/fixed/999/historial")[0], 404)
         self.assertEqual(self.request("GET", "/api/no-such-route")[0], 404)
+
+    def test_expense_proporcion_custom_fuera_de_rango_rechazada(self):
+        for proporcion_jd, proporcion_pinki in ((120, -20), (-5, 105)):
+            with self.subTest(proporcion_jd=proporcion_jd):
+                status, _, _ = self.request(
+                    "POST", "/api/expenses",
+                    self.expense(
+                        tipo_proporcion="custom",
+                        proporcion_jd=proporcion_jd, proporcion_pinki=proporcion_pinki,
+                    ),
+                )
+                self.assertEqual(status, 400)
+
+    def test_expense_proporcion_custom_no_numerica_o_nan_rechazada(self):
+        for proporcion_jd, proporcion_pinki in ((float("nan"), 100), ("50", 50)):
+            with self.subTest(proporcion_jd=proporcion_jd):
+                status, _, _ = self.request(
+                    "POST", "/api/expenses",
+                    self.expense(
+                        tipo_proporcion="custom",
+                        proporcion_jd=proporcion_jd, proporcion_pinki=proporcion_pinki,
+                    ),
+                )
+                self.assertEqual(status, 400)
+
+    def test_expense_proporcion_personal_100_0_aceptada(self):
+        status, body, _ = self.request(
+            "POST", "/api/expenses",
+            self.expense(tipo_proporcion="custom", proporcion_jd=100, proporcion_pinki=0),
+        )
+        self.assertEqual(status, 201)
+        gasto = body["expenses"][0]
+        self.assertEqual((gasto["proporcion_jd"], gasto["proporcion_pinki"]), (100, 0))
 
     def test_money_rejected_before_write_and_retry_does_not_duplicate(self):
         cases = (
