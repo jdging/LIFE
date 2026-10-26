@@ -66,6 +66,10 @@ ALLOWED_EXPENSE_FIELDS = {
     "pagado_por", "descripcion_original", "tarjeta_id", "tipo_proporcion",
     "proporcion_jd", "proporcion_pinki", "cuotas_total",
 }
+# PATCH /api/expenses/:id (t_b5c6e680, punto 3): mismo set que
+# `ALLOWED_EXPENSE_FIELDS` menos `cuotas_total` -- ver justificación en
+# `db.GASTO_CAMPOS_EDITABLES`. Debe seguir en sync con esa constante.
+EXPENSE_EDITABLE_FIELDS = ALLOWED_EXPENSE_FIELDS - {"cuotas_total"}
 ALLOWED_INCOME_CREATE_FIELDS = {
     "fecha", "monto", "moneda", "categoria", "persona", "descripcion_original",
 }
@@ -301,6 +305,7 @@ class _App:
         ("GET", re.compile(r"^/api/health$"), "health"),
         ("GET", re.compile(r"^/api/expenses$"), "list_expenses"),
         ("POST", re.compile(r"^/api/expenses$"), "create_expense"),
+        ("PATCH", re.compile(r"^/api/expenses/(?P<id>\d+)$"), "update_expense"),
         ("DELETE", re.compile(r"^/api/expenses/(?P<id>\d+)$"), "delete_expense"),
         ("POST", re.compile(r"^/api/expenses/(?P<id>\d+)/saldar$"), "saldar_expense"),
         ("GET", re.compile(r"^/api/income$"), "list_income"),
@@ -604,6 +609,45 @@ class _App:
             resultado = db.detectar_umbrales_credito(conn, mes)
             avisos_nuevos.extend(resultado["nuevos"])
         return avisos_nuevos
+
+    def update_expense(self, ctx, conn, start_response):
+        gasto_id = int(ctx.path_params["id"])
+        data, err = self._parse_json(ctx, start_response)
+        if err is not None:
+            return err
+        unknown = self._unknown_fields(data.keys(), EXPENSE_EDITABLE_FIELDS)
+        if unknown:
+            return self._error(start_response, 400, "campos desconocidos.")
+        if not data:
+            return self._error(start_response, 400, "se requiere al menos un campo para editar.")
+        if "fecha" in data and not _is_iso_date(data["fecha"]):
+            return self._error(start_response, 400, "fecha debe ser 'YYYY-MM-DD' válida.")
+        if not _valid_optional_strings(data, {
+            "moneda", "subcategoria", "medio_pago", "descripcion_original", "tarjeta_id",
+        }):
+            return self._error(start_response, 400, "campos de texto inválidos.")
+
+        existentes = db.get_gastos(conn)
+        fila = next((row for row in existentes if row["id"] == gasto_id), None)
+        if fila is None:
+            return self._error(start_response, 404, f"no existe gasto id={gasto_id}.")
+
+        resultante = {**fila, **data}
+        errores = validaciones.validar_expense(resultante)
+        if errores:
+            return self._error(start_response, 400, "edición de gasto inválida.")
+        if not _valid_money(resultante.get("monto")):
+            return self._error(start_response, 400, "monto fuera de rango o con más de dos decimales.")
+
+        try:
+            db.actualizar_gasto(conn, gasto_id, data)
+        except OverflowError:
+            return self._error(start_response, 400, "monto fuera de rango.")
+        except ValueError:
+            return self._error(start_response, 409, "no se pudo editar el gasto.")
+
+        actualizado = next(row for row in db.get_gastos(conn) if row["id"] == gasto_id)
+        return self._json(start_response, 200, {"expense": actualizado})
 
     def delete_expense(self, ctx, conn, start_response):
         gasto_id = int(ctx.path_params["id"])

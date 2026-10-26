@@ -133,6 +133,7 @@ test('every contracted method forwards the exact path and query to the configure
     ['GET', '/api/health'],
     ['GET', '/api/expenses?month=2026-10'],
     ['POST', '/api/expenses', '{}'],
+    ['PATCH', '/api/expenses/1', '{}'],
     ['DELETE', '/api/expenses/1'],
     ['POST', '/api/expenses/1/saldar'],
     ['GET', '/api/income'],
@@ -181,7 +182,7 @@ test('known paths reject wrong methods with Allow; unknown paths stay 404', asyn
   const wrong = [
     ['/api/health', 'POST', 'GET'],
     ['/api/expenses', 'PATCH', 'GET, POST'],
-    ['/api/expenses/1', 'GET', 'DELETE'],
+    ['/api/expenses/1', 'GET', 'PATCH, DELETE'],
     ['/api/expenses/1/saldar', 'GET', 'POST'],
     ['/api/income', 'DELETE', 'GET, POST'],
     ['/api/income/1', 'GET', 'PATCH, DELETE'],

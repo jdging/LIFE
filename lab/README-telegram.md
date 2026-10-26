@@ -416,8 +416,14 @@ Campos obligatorios por tipo:
 español rioplatense breve (`CTO-DISENO.md` §1(c)):
 
 - **Sin `campos_faltantes`:** muestra lo entendido (monto, categoría >
-  subcategoría, medio de pago/tarjeta, quién pagó, reparto, fecha) más
-  cualquier advertencia, y cierra con `"¿Subo así o cambio algo?"`.
+  subcategoría, descripción/comercio si la hay, medio de pago/tarjeta, quién
+  pagó, reparto, fecha) más cualquier advertencia, y cierra con `"¿Subo así o
+  cambio algo?"`. La descripción (`descripcion_original`, viene de
+  `comercio`/`descripcion` en la entrada) se agregó en t_b5c6e680 tras un
+  bug real: un gasto (id=856, "Panadería Distinción") se guardó sin
+  descripción porque el resumen de confirmación nunca la mostraba, así que
+  nadie lo notó al confirmar. Si no hay descripción, esa parte simplemente
+  no aparece (igual que `subcategoria`).
 - **Uno o varios campos faltantes:** siempre la misma lista numerada
   (`"Me falta esto para subirlo, contestame junto:"` + `1) ...`, `2) ...`),
   incluso con un solo campo -- no hay un formato especial sin número para

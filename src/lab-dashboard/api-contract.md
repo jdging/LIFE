@@ -55,6 +55,7 @@ El dashboard (`app.js`) solo conoce la primera capa: llama a rutas relativas
 | `GET /api/health` | Sin parámetros | `{"ok":true,"capabilities":["expenses","income","fixed"],"mode":"live"}` |
 | `GET /api/expenses?month=YYYY-MM` | `month` opcional | `{"expenses":[...]}`; excluye bajas lógicas |
 | `POST /api/expenses` | `fecha`, `monto`, `moneda`, `categoria`, `subcategoria`, `medio_pago`, `pagado_por`, `descripcion_original`, `tarjeta_id`, `tipo_proporcion`, `proporcion_jd`, `proporcion_pinki`, `cuotas_total` | `201 {"expenses":[...]}`; una fila por cuota |
+| `PATCH /api/expenses/:id` | Subconjunto no vacío de los campos del alta, **excepto `cuotas_total`** | `{"expense":{...}}`; `404` si no existe o está borrado |
 | `DELETE /api/expenses/:id` | Sin cuerpo | `{"deleted":true,"id":N}` |
 | `POST /api/expenses/:id/saldar` | Sin cuerpo | `{"expense":{...}}`; `404` si no existe, `409` si ya está borrado, ya saldado, o `pagado_por='Común'` |
 | `GET /api/income` | Sin parámetros | `{"income":[...]}` |
@@ -71,6 +72,13 @@ El dashboard (`app.js`) solo conoce la primera capa: llama a rutas relativas
 
 No existe `DELETE /api/income/:id`. `:id` es un entero decimal positivo (no
 se admiten ids tipo `F-1`).
+
+`PATCH /api/expenses/:id` no admite editar `cuotas_total` (ni `cuota_nro`,
+`cuota_ref`, `saldado`): un gasto con cuotas ya expandido es N filas
+independientes, y cambiar `cuotas_total` en una sola fila dejaría la serie
+inconsistente — ver detalle en `README-api.md`. Tampoco recalcula
+`avisos_credito` al editar `monto`/`medio_pago` de un gasto en Crédito
+(limitación conocida).
 
 ### Reparto de gastos fijos (regla vigente, ver `db.resolve_fixed_split`)
 

@@ -991,13 +991,21 @@ def _resumen_borrador(tipo, borrador, tarjetas):
             medio_fmt = f"💳 {nombre_tarjeta} ({medio.lower()})"
         else:
             medio_fmt = f"💳 {medio}"
-        partes = [f"💰 {monto_fmt}", categoria, medio_fmt, f"Pagó: {borrador.get('pagado_por')}"]
+        partes = [f"💰 {monto_fmt}", categoria]
+        if borrador.get("descripcion_original"):
+            partes.append(f"📝 {borrador['descripcion_original']}")
+        partes.append(medio_fmt)
+        partes.append(f"Pagó: {borrador.get('pagado_por')}")
         partes.append(_resumen_reparto(borrador))
         partes.append(f"Cuotas: {borrador.get('cuotas_total', 1)}")
         partes.append(f"📅 {fecha_fmt}")
         return " · ".join(partes)
 
-    partes = [f"💰 {monto_fmt}", categoria, f"Para: {borrador.get('persona')}", f"📅 {fecha_fmt}"]
+    partes = [f"💰 {monto_fmt}", categoria]
+    if borrador.get("descripcion_original"):
+        partes.append(f"📝 {borrador['descripcion_original']}")
+    partes.append(f"Para: {borrador.get('persona')}")
+    partes.append(f"📅 {fecha_fmt}")
     return " · ".join(partes)
 
 

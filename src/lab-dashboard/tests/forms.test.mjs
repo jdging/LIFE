@@ -248,6 +248,37 @@ assert.ok(api.collectForm('expense', null, { ...expenseValues, monto: '1.001' })
 assert.ok(api.collectForm('expense', null, { ...expenseValues, cuotas_total: '121' }).errors.cuotas_total);
 assert.ok(api.collectForm('expense', null, { ...expenseValues, proporcion_pinki: '99' }).errors.proporcion_jd);
 
+// PATCH /api/expenses/:id (t_b5c6e680, punto 3): mismo formulario de alta,
+// precargado, pero sin `cuotas_total` -- no es editable (ver db.py,
+// GASTO_CAMPOS_EDITABLES). `expense` tiene tipo_proporcion='custom'; pasar a
+// 'dinamico' en la edición debe limpiar proporcion_jd/proporcion_pinki a
+// `null` explícito, porque el servidor valida la fila RESULTANTE (fila
+// actual + estos cambios) y 'dinamico' no admite esos campos no nulos.
+const expenseEditValues = { fecha: '2026-10-06', monto: '45.00', categoria: 'Hogar',
+  subcategoria: 'Alquiler', descripcion_original: 'Alquiler editado', medio_pago: 'Transferencia',
+  pagado_por: 'Común', tarjeta_id: '', tipo_proporcion: 'dinamico', proporcion_jd: '50', proporcion_pinki: '50' };
+const collectedExpenseEdit = api.collectForm('expense-edit', expense, expenseEditValues);
+assert.equal(Object.keys(collectedExpenseEdit.errors).length, 0);
+assert.equal('cuotas_total' in collectedExpenseEdit.payload, false);
+assert.equal('cuotas_total' in api.collectForm('expense-edit', expense,
+  { ...expenseEditValues, cuotas_total: '5' }).payload, false, 'cuotas_total nunca viaja en el payload de edición, aunque el cliente lo mande');
+assert.equal(collectedExpenseEdit.payload.tarjeta_id, null);
+assert.equal(collectedExpenseEdit.payload.proporcion_jd, null);
+assert.equal(collectedExpenseEdit.payload.proporcion_pinki, null);
+
+const customExpenseEditValues = { ...expenseEditValues, tipo_proporcion: 'custom', proporcion_jd: '20', proporcion_pinki: '80' };
+const collectedCustomExpenseEdit = api.collectForm('expense-edit', expense, customExpenseEditValues);
+assert.equal(Object.keys(collectedCustomExpenseEdit.errors).length, 0);
+assert.equal(collectedCustomExpenseEdit.payload.proporcion_jd, 20);
+assert.equal(collectedCustomExpenseEdit.payload.proporcion_pinki, 80);
+assert.ok(api.collectForm('expense-edit', expense, { ...expenseEditValues, monto: '1.001' }).errors.monto);
+assert.ok(api.collectForm('expense-edit', expense, { ...expenseEditValues, categoria: '' }).errors.categoria);
+
+assert.deepEqual(Array.from(api.routeForForm('expense-edit', { id: expense.id })), ['PATCH', `/api/expenses/${expense.id}`]);
+assert.equal(api.routeForForm('expense-edit', { id: maxId })[1], `/api/expenses/${encodeURIComponent(maxId)}`);
+assert.match(api.describeForm('expense-edit', expense, collectedExpenseEdit.payload), /Editar gasto #21/);
+assert.match(api.describeForm('expense-edit', expense, collectedExpenseEdit.payload), /no cambian/);
+
 const incomeValues = { fecha: '2026-10-03', monto: '900', persona: 'JD',
   categoria: 'Salario', descripcion_original: 'Prueba sintética' };
 const collectedIncome = api.collectForm('income-edit', income, incomeValues);
@@ -278,6 +309,45 @@ assert.match(fixedMarkup, /value="custom" selected/);
 assert.match(fixedMarkup, /id="field-proporcion_jd"[^>]*value="0"/);
 assert.match(fixedMarkup, /id="fixed-pinki-percent"/);
 assert.doesNotMatch(fixedMarkup, /API.*no.*reparto/i);
+
+// formMarkup('expense-edit', ...): mismo formulario de alta, precargado con la
+// fila, salvo cuotas_total (no editable por PATCH, ver GASTO_CAMPOS_EDITABLES).
+const expenseMarkupApi = runInNewContext(`
+function todayLocalISO() { return '2026-10-17'; }
+function cuotaLabel(r) { return (r.cuotas_total > 1) ? r.cuota_nro + '/' + r.cuotas_total : '—'; }
+const escapeHtml = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+${slice('function formField(', 'async function openForm(')}
+({ formMarkup })`, { DATA: { gastos: [] } });
+const expenseEditMarkup = expenseMarkupApi.formMarkup('expense-edit', expense);
+assert.doesNotMatch(expenseEditMarkup, /name="cuotas_total"/, 'cuotas_total no debe poder editarse desde este form');
+assert.match(expenseEditMarkup, /cuota 2\/3/, 'debe avisar que la edición es solo de esta cuota');
+assert.match(expenseEditMarkup, /id="field-monto"[^>]*value="30"/);
+assert.match(expenseEditMarkup, /id="field-categoria"[^>]*value="Comida"/);
+assert.match(expenseEditMarkup, /id="field-subcategoria"[^>]*value="Almacén"/);
+assert.match(expenseEditMarkup, /id="field-descripcion_original"[^>]*value="Prueba sintética"/);
+assert.match(expenseEditMarkup, /<option value="Efectivo" selected>/);
+assert.match(expenseEditMarkup, /<option value="JD" selected>/);
+assert.match(expenseEditMarkup, /<option value="custom" selected>/);
+assert.match(expenseEditMarkup, /id="field-proporcion_jd"[^>]*value="0"/);
+assert.match(expenseEditMarkup, /id="field-proporcion_pinki"[^>]*value="100"/);
+const expenseAltaMarkup = expenseMarkupApi.formMarkup('expense', null);
+assert.match(expenseAltaMarkup, /name="cuotas_total"/, 'El alta sigue permitiendo elegir la cantidad de cuotas');
+// Con catálogo real (igual que en el alta, t_ce790609): el alta no debe
+// cambiar su markup exacto al agregar precarga de edición a la misma
+// función (sin selected, sin espacio extra antes de cerrar la etiqueta).
+const expenseAltaConCatalogo = expenseMarkupApi.formMarkup('expense', null, categoriesGastoFixture.categories);
+for (const entry of categoriesGastoFixture.categories) {
+  assert.match(expenseAltaConCatalogo, new RegExp(`<option value="${entry.categoria}">${entry.categoria}</option>`),
+    `El alta con catálogo no debe agregar "selected" a "${entry.categoria}" sin una fila`);
+}
+// Con catálogo real y una fila (expense-edit): categoría y subcategoría
+// deben venir preseleccionadas desde el render inicial, sin pasar por
+// onExpenseCategoriaChange() (que resetearía la subcategoría a '').
+const expenseEditConCatalogo = expenseMarkupApi.formMarkup('expense-edit', expense, categoriesGastoFixture.categories);
+assert.match(expenseEditConCatalogo, /<option value="Comida" selected>Comida<\/option>/);
+assert.match(expenseEditConCatalogo, /<option value="Almacén" selected>Almacén<\/option>/);
+assert.match(expenseEditConCatalogo, /<option value="Hogar">Hogar<\/option>/, 'las demás categorías no deben quedar marcadas');
+
 const expenseTableApi = runInNewContext(`
 ${slice('const escapeHtml = ', 'const fmtARS = ')}
 ${slice('const MAX_SQLITE_ID = ', 'function adaptLiveMovement(')}
@@ -295,6 +365,7 @@ ${slice('function renderGastosTable()', "document.querySelectorAll('#tabla-gasto
 expenseTableApi.renderGastosTable();
 const expenseTableHtml = element('tabla-body').innerHTML;
 assert.match(expenseTableHtml, new RegExp(`data-id="${largeId}"`));
+assert.match(expenseTableHtml, /openForm\('expense-edit', this\.dataset\.id\)/, 'la tabla de Gastos debe ofrecer un botón Editar por fila (t_b5c6e680)');
 assert.match(expenseTableHtml, /openForm\('expense-delete', this\.dataset\.id\)/);
 assert.doesNotMatch(expenseTableHtml, /<img/i);
 assert.match(expenseTableHtml, /&lt;img/);
@@ -361,6 +432,7 @@ assert.ok(newTramoIndex >= 0 && oldTramoIndex >= 0 && newTramoIndex < oldTramoIn
 
 const writes = [
   ['expense', null, collectedExpense.payload, '/api/expenses', 201, { expenses: [expense] }],
+  ['expense-edit', expense, collectedExpenseEdit.payload, '/api/expenses/21', 200, { expense }],
   ['expense-delete', expense, null, '/api/expenses/21', 200, { deleted: true, id: 21 }],
   ['income', null, api.collectForm('income', null, incomeValues).payload, '/api/income', 201, { income }],
   ['income-edit', income, collectedIncome.payload, '/api/income/31', 200, { income }],
@@ -547,6 +619,7 @@ assert.equal(calls.filter((call) => call.options.method === 'DELETE' && call.pat
 // También se comprueba el ID del envelope para cada método, sin convertirlo a Number.
 for (const [kind, row, payload, path, body] of [
   ['expense-delete', { ...expense, id: largeId }, null, `/api/expenses/${largeId}`, { deleted: true, id: 9007199254740992 }],
+  ['expense-edit', { ...expense, id: largeId }, collectedExpenseEdit.payload, `/api/expenses/${largeId}`, { expense: { ...expense, id: 9007199254740992 } }],
   ['income-edit', { ...income, id: largeId }, collectedIncome.payload, `/api/income/${largeId}`, { income: { ...income, id: 9007199254740992 } }],
   ['fixed-edit', { ...fixed, id: largeId }, amountOnly.payload, `/api/fixed/${largeId}`, { fixed: { ...fixed, id: maxId, fijo_grupo_id: largeId } }],
 ]) {
@@ -559,6 +632,8 @@ reply(`/api/expenses/${largeId}`, 200, { deleted: true, id: largeId });
 assert.equal((await api.writeForm('expense-delete', { ...expense, id: largeId }, null)).identityVerified, true);
 reply('/api/expenses', 201, { expenses: [{ ...expense, id: largeId }] });
 assert.equal((await api.writeForm('expense', null, collectedExpense.payload)).identityVerified, true);
+reply(`/api/expenses/${largeId}`, 200, { expense: { ...expense, id: largeId } });
+assert.equal((await api.writeForm('expense-edit', { ...expense, id: largeId }, collectedExpenseEdit.payload)).identityVerified, true);
 
 // El submit real valida antes de llegar al fetch simulado.
 const fixedModalElements = new Map();

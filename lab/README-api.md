@@ -88,6 +88,7 @@ el límite técnico, responden `422` sin números inventados.
 | `GET /api/health` | Sin parámetros | `{"ok":true,"capabilities":["expenses","income","fixed","inventory"],"mode":"live"}` |
 | `GET /api/expenses?month=YYYY-MM` | `month` opcional | `{"expenses":[...]}`; excluye bajas lógicas |
 | `POST /api/expenses` | `fecha`, `monto`, `moneda`, `categoria`, `subcategoria`, `medio_pago`, `pagado_por`, `descripcion_original`, `tarjeta_id`, `tipo_proporcion`, `proporcion_jd`, `proporcion_pinki`, `cuotas_total` | `201 {"expenses":[...]}`; una fila por cuota |
+| `PATCH /api/expenses/:id` | Subconjunto no vacío de los campos del alta, **excepto `cuotas_total`** (ver nota abajo) | `{"expense":{...}}`; rechaza con `404` si el gasto no existe o está borrado |
 | `DELETE /api/expenses/:id` | Sin cuerpo | `{"deleted":true,"id":N}`; borra lógicamente solo esa cuota |
 | `POST /api/expenses/:id/saldar` | Sin cuerpo | `{"expense":{...}}` con `saldado` en `YYYY-MM-DD`; `404` si no existe, `409` si ya está borrado, ya saldado, o `pagado_por='Común'` (un gasto común nunca genera deuda) |
 | `GET /api/income` | Sin parámetros | `{"income":[...]}`; excluye bajas lógicas |
@@ -120,6 +121,23 @@ cuerpo, `200` con `{"deleted":true,"id":N}`, `404` si el id no existe o ya
 está borrado, auditoría en `auditoria` con tabla `'ingresos'`, y `UPDATE`
 condicionado a `deleted_at IS NULL` para resolver la carrera de una doble
 baja concurrente.
+
+`PATCH /api/expenses/:id` (t_b5c6e680, punto 3) sigue el mismo contrato que
+`PATCH /api/income/:id`: valida el estado RESULTANTE (fila actual + cambios)
+con las mismas reglas de `POST /api/expenses`, rechaza `cambios` vacío o con
+campos desconocidos, y responde `404` si el gasto no existe o ya está
+borrado lógicamente. A diferencia del alta, **no admite editar
+`cuotas_total`**: un gasto con cuotas ya expandido es N filas independientes
+en `gastos` (ver `insert_gasto_con_cuotas`), y cambiar `cuotas_total` en una
+sola fila no reparte ni fusiona esas filas — dejaría la serie inconsistente
+sin avisar. Para cambiar la cantidad de cuotas hay que borrar el gasto y
+volver a cargarlo. Por el mismo motivo, `cuota_nro`, `cuota_ref` y `saldado`
+tampoco son editables por esta ruta (son metadata de la serie de cuotas y
+del saldado vía `POST /api/expenses/:id/saldar`, no campos de contenido).
+No recalcula `avisos_credito` (a diferencia del alta y la baja): si la
+edición cambia `monto` o `medio_pago` de un gasto en Crédito, los umbrales
+de aviso ya detectados para ese mes no se revisan de nuevo — limitación
+conocida, fuera del alcance de este brief.
 
 ### Reparto de gastos fijos
 

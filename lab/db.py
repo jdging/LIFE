@@ -961,6 +961,62 @@ def insert_gasto_con_cuotas(conn: sqlite3.Connection, gasto: dict, cuotas_total:
     return ids
 
 
+# `cuotas_total` queda deliberadamente fuera (t_b5c6e680, punto 3): editarlo
+# en un gasto que ya generó N filas de cuotas no reparte ni fusiona esas
+# filas, solo pisaría el número en la fila editada — dejaría la serie
+# inconsistente. Para cambiar cuotas hay que borrar el gasto y volver a
+# cargarlo. `cuota_nro`/`cuota_ref`/`saldado` tampoco son editables acá: son
+# metadata de la serie de cuotas y del saldado (`saldar_gasto`), no campos
+# de contenido del gasto.
+GASTO_CAMPOS_EDITABLES = (
+    "fecha", "monto", "moneda", "categoria", "subcategoria", "medio_pago",
+    "pagado_por", "descripcion_original", "tarjeta_id", "tipo_proporcion",
+    "proporcion_jd", "proporcion_pinki",
+)
+
+
+def actualizar_gasto(conn: sqlite3.Connection, gasto_id: int, cambios: dict) -> None:
+    """Edición parcial de un gasto existente.
+
+    Mismo contrato que `actualizar_ingreso`/`actualizar_inventario_bien`:
+    campos editables limitados a `GASTO_CAMPOS_EDITABLES`, valida el estado
+    RESULTANTE (fila actual + `cambios` superpuestos) con `validar_expense`
+    antes de aplicar nada, y rechaza `cambios` vacío o con claves no
+    editables. Lanza `ValueError` si el gasto no existe, si ya está borrado
+    lógicamente (ver `eliminar_gasto_logico` — un gasto de la papelera no se
+    edita, se debe restaurar explícitamente primero, lo que hoy no existe),
+    o si la validación falla.
+    """
+    if not cambios:
+        raise ValueError(
+            "actualizar_gasto requiere al menos un campo en `cambios` "
+            "(no se aceptan ediciones vacías)."
+        )
+
+    claves_invalidas = set(cambios) - set(GASTO_CAMPOS_EDITABLES)
+    if claves_invalidas:
+        raise ValueError(
+            f"Campos no editables en actualizar_gasto: {sorted(claves_invalidas)} "
+            f"(editables: {GASTO_CAMPOS_EDITABLES})."
+        )
+
+    fila = conn.execute("SELECT * FROM gastos WHERE id = ?", (gasto_id,)).fetchone()
+    if fila is None:
+        raise ValueError(f"No existe ningún gasto con id={gasto_id}.")
+    if fila["deleted_at"] is not None:
+        raise ValueError(f"No se puede editar el gasto id={gasto_id}: está borrado.")
+
+    resultante = {**dict(fila), **cambios}
+    errores = validar_expense(resultante)
+    if errores:
+        raise ValueError(f"Edición de gasto inválida: {errores}")
+
+    columnas = ", ".join(f"{campo} = ?" for campo in cambios)
+    valores = list(cambios.values()) + [gasto_id]
+    conn.execute(f"UPDATE gastos SET {columnas} WHERE id = ?", valores)
+    conn.commit()
+
+
 # --- Soft delete de gastos + auditoría --------------------------------------
 
 

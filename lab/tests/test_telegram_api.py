@@ -15,7 +15,41 @@ from unittest import mock
 import pytest
 
 import db
+import telegram_ingesta
 from tests.test_api import WsgiApiTestCase
+
+
+# --- t_b5c6e680 punto 4: fix de descripción ausente en el resumen ----------
+
+
+def test_resumen_borrador_incluye_descripcion_cuando_esta_presente():
+    """Bug real (gasto id=856, "Panadería Distinción"): el resumen de
+    confirmación de Telegram (`_resumen_borrador`, usado por `armar_pregunta`
+    cuando no faltan campos) no mostraba la descripción/comercio en ningún
+    lado, lo que permitió guardar ese gasto real sin descripción sin que
+    nadie lo notara en la confirmación. `lab/tests/test_telegram_ingesta.py`
+    queda fuera del alcance de escritura de esta tarea (t_b5c6e680); sus
+    snapshots exactos de `_resumen_borrador`/`armar_pregunta` no usan
+    `descripcion_original`/`comercio`, así que no requieren ajuste.
+    """
+    borrador = {
+        "monto": 100.0, "fecha": "2026-10-20", "categoria": "Comida",
+        "medio_pago": "Efectivo", "pagado_por": "JD", "cuotas_total": 1,
+        "descripcion_original": "Panadería Distinción",
+    }
+    resumen = telegram_ingesta._resumen_borrador("gasto", borrador, tarjetas=[])
+    assert "Panadería Distinción" in resumen
+
+    sin_descripcion = {k: v for k, v in borrador.items() if k != "descripcion_original"}
+    resumen_sin_descripcion = telegram_ingesta._resumen_borrador("gasto", sin_descripcion, tarjetas=[])
+    assert "Panadería" not in resumen_sin_descripcion
+
+    borrador_ingreso = {
+        "monto": 50.0, "fecha": "2026-10-20", "categoria": "Extra", "persona": "JD",
+        "descripcion_original": "Venta de bici",
+    }
+    resumen_ingreso = telegram_ingesta._resumen_borrador("ingreso", borrador_ingreso, tarjetas=[])
+    assert "Venta de bici" in resumen_ingreso
 
 
 # --- T1: migraciones a nivel db.py ------------------------------------------

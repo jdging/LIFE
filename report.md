@@ -1,147 +1,157 @@
-# Reporte — Card de Deuda (detalle+saldar) + acordeón exclusivo
+# Report — t_b5c6e680: editar gasto por fila + PATCH backend + fix descripción Telegram
 
-Tarjeta: t_3fce89aa (board lasso), hija de t_02402679. Rama `lab/reinvencion`,
-workdir aislado. No se tocó `main` ni `src/finanzas/index.html` (legacy, solo
-se leyó como referencia).
+## Alcance cubierto (4 puntos del brief)
 
-## 1. Card de Deuda: detalle de origen + saldar
+1. Botón "Editar" por fila en la tabla de Gastos (`src/lab-dashboard/`), con el
+   formulario genérico precargado.
+2. Columna "Monto" — **no tocada**, confirmado por Juan que no es un bug.
+3. `PATCH /api/expenses/:id` en el backend (`lab/api.py` + `lab/db.py`),
+   whitelist en `middleware.js`, documentación y tests.
+4. Fix de la descripción ausente en `_resumen_borrador()` (`lab/telegram_ingesta.py`).
 
-### Qué encontré
-- `src/lab-dashboard/app.js` ya tenía `tipo_proporcion`/`proporcion_jd`/
-  `proporcion_pinki`/`pagado_por`/`saldado` disponibles por fila en
-  `DATA.gastos` (mismo modelo que el Log legacy) — no hacía falta tocar el
-  esquema para mostrar composición.
-- Ya existía una función `getRowPct(row)` en `app.js` (usada por
-  `applyPersonaFiltro`) que resuelve el % JD/Pinki por fila igual que el
-  legacy (`custom` → reparto propio; `dinamico` → proporción del mes vía
-  `getMonthProportion`, con fallback 50/50). La reutilicé en vez de
-  duplicarla.
-- `lab/db.py` ya tenía `calcular_deudas_pendientes()` (misma lógica que uso
-  en el detalle, pero agregada en un solo neto) y la columna `gastos.saldado`
-  — pero **no existía ningún endpoint para escribirla** (marcar un gasto como
-  saldado). `lab/api.py` tenía `DELETE /api/expenses/:id` pero ningún
-  `PATCH`/`POST` sobre un gasto existente.
-
-### Qué implementé
-
-**Frontend (`src/lab-dashboard/app.js`)**
-- `getDebtRows()`: gastos sin saldar, pagados por JD o Pinki (nunca
-  "Común"), atemporal — mismo universo que ya usa la card (no respeta el
-  período activo, igual que `DATA.deudaPendiente`).
-- `renderDeudaDetail()` reescrita: antes solo mostraba el agregado
-  `{deudor, acreedor, monto}` de `DATA.deudaPendiente` (sin desglose). Ahora
-  renderiza una tabla fila por fila con mes de origen, fecha, descripción,
-  quién pagó, % y $ de reparto por persona, subtotales, y un botón
-  **Saldar** por fila.
-- La card (`g-deuda` / `g-deuda-quien`, función `renderDeudaCard`) **no se
-  tocó**: sigue mostrando el agregado del backend (`DATA.deudaPendiente`),
-  como pedía el brief.
-- Nuevo `kind` `'expense-saldar'` integrado al sistema de formularios
-  genérico existente (`openForm`/`collectForm`/`formMarkup`/`describeForm`/
-  `routeForForm`/`verifiedWriteEnvelope`), igual patrón que
-  `'expense-delete'`: dos pasos (revisar → confirmar), sin campos, `POST`
-  sin cuerpo a `/api/expenses/:id/saldar`.
-- El botón "Saldar" usa `data-write-action` y queda deshabilitado según las
-  mismas condiciones que el resto de las escrituras (`!liveMode ||
-  writePending || reloadPending || reloadFailed`). En modo snapshot (sin
-  backend de escritura) el detalle se ve igual, pero saldar queda
-  deshabilitado con una nota explícita — **no se simula ningún guardado**.
-
-**Backend (`lab/db.py`, `lab/api.py`) — endpoint nuevo, mínimo**
-No existía forma de marcar un gasto como saldado, así que agregué el mínimo
-necesario siguiendo los patrones ya establecidos en el archivo:
-- `db.saldar_gasto(conn, gasto_id, actor)`: mismo patrón de atomicidad que
-  `eliminar_gasto_logico` (UPDATE condicionado + `rowcount` + auditoría +
-  rollback explícito en caso de falla). Rechaza con `ValueError` si el gasto
-  no existe, está borrado, ya está saldado, o `pagado_por='Común'` (un gasto
-  común nunca generó deuda, no tiene sentido "saldarlo").
-- `POST /api/expenses/:id/saldar` en `api.py` (ruta nueva, handler
-  `saldar_expense`): `200 {"expense": {...}}`, `404` si no existe, `409`
-  para cualquier otro rechazo de `saldar_gasto` (borrado/ya saldado/Común).
-- `src/lab-dashboard/middleware.js`: agregada la ruta al whitelist del proxy
-  (`PROXY_ROUTES`), mismo criterio que el resto (sin query params, solo
-  `POST`).
-- Documentado en `lab/README-api.md` y `src/lab-dashboard/api-contract.md`.
-
-No se tocó ningún endpoint existente ni su contrato.
-
-## 2. Acordeón exclusivo (un solo panel abierto)
-
-`toggleDetail(kind)` ya era una función única compartida por las 4 cards
-(fijos/cuotas/credito/deuda) — mejor que lo que anticipaba el brief (el
-legacy tiene 4 funciones `toggleXDetail` separadas y asimétricas; acá ya
-estaba centralizado). Solo faltaba cerrar los demás paneles al abrir uno
-nuevo:
-- Agregué `DETAIL_KINDS` (lista de los 4 kinds) y `closeDetail(kind)`.
-- `toggleDetail(kind)` ahora cierra los otros 3 paneles (`panel.hidden =
-  true` + `aria-expanded="false"`) antes de abrir/cerrar el solicitado.
-- Confirmé que cada `render*Detail()` sigue aplicando sus propios filtros de
-  persona (`applyPersonaFiltro`, `computeFixedForPersona`, etc.) exactamente
-  igual que antes — no cambié esa lógica, solo la visibilidad del panel.
-- `renderGastosView()` ya tenía el patrón de re-renderizar el panel que
-  esté abierto tras cada recarga de datos (`if (!... .hidden) render...()`)
-  — como ahora solo puede haber un panel abierto a la vez, sigue funcionando
-  sin cambios.
+Rama `lab/reinvencion`. No se tocó `main`, `src/finanzas/index.html`, ni los
+cambios de la tarea previa de Deuda/acordeón (t_3fce89aa).
 
 ## Archivos tocados
-- `src/lab-dashboard/app.js`
-- `src/lab-dashboard/middleware.js`
-- `src/lab-dashboard/api-contract.md`
-- `src/lab-dashboard/tests/proxy.test.mjs` (casos nuevos para la ruta
-  `/api/expenses/:id/saldar`)
-- `lab/api.py`
-- `lab/db.py`
-- `lab/README-api.md`
-- `lab/tests/test_api.py` (casos nuevos: saldar OK, saldar ya saldado,
-  saldar inexistente, rechazo de `pagado_por='Común'`, rechazo de gasto
-  borrado)
 
-## Tests: NO pude ejecutarlos en esta sesión
+- `src/lab-dashboard/app.js`: botón "Editar" en `renderGastosTable()`; nuevo
+  `kind` `'expense-edit'` en `formMarkup`, `openForm`, `collectForm`,
+  `describeForm`, `routeForForm`, `verifiedWriteEnvelope`; `formExpenseCategorySelects`/
+  `formExpenseCategoryText` ahora aceptan una fila opcional para precargar
+  categoría/subcategoría.
+- `src/lab-dashboard/middleware.js`: `PROXY_ROUTES` — `/api/expenses/:id`
+  ahora acepta `PATCH` además de `DELETE`.
+- `src/lab-dashboard/api-contract.md`: documentada la fila nueva + nota de
+  `cuotas_total` no editable.
+- `src/lab-dashboard/tests/proxy.test.mjs`: PATCH agregado a las rutas
+  contractuales, al test de métodos permitidos (`Allow`) y verificado que
+  sigue exigiendo Origin/secreto igual que las demás escrituras.
+- `src/lab-dashboard/tests/forms.test.mjs`: tests nuevos de `collectForm`/
+  `describeForm`/`routeForForm`/`verifiedWriteEnvelope`/`writeForm` para
+  `'expense-edit'`; tests de `formMarkup('expense-edit', ...)` (con y sin
+  catálogo de categorías) verificando precarga y ausencia de `cuotas_total`;
+  test de que la tabla de Gastos renderiza el botón "Editar". De paso corregí
+  una regresión que yo mismo había introducido en `formExpenseCategorySelects`
+  (espacio extra antes de `>` cuando no hay fila — rompía un `assert.match`
+  exacto existente del alta); quedó cubierta por los tests nuevos de "alta con
+  catálogo real".
+- `lab/api.py`: `EXPENSE_EDITABLE_FIELDS` (= `ALLOWED_EXPENSE_FIELDS` menos
+  `cuotas_total`), ruta `PATCH /api/expenses/:id` → handler `update_expense`,
+  mismo patrón que `update_income`.
+- `lab/db.py`: `GASTO_CAMPOS_EDITABLES` + `actualizar_gasto()`, mismo patrón
+  de atomicidad/validación que `actualizar_ingreso`/`actualizar_inventario_bien`.
+- `lab/README-api.md`: fila de `PATCH /api/expenses/:id` en la tabla de
+  endpoints + párrafo explicando qué queda fuera (`cuotas_total`, `cuota_nro`,
+  `cuota_ref`, `saldado`) y la limitación conocida de `avisos_credito`.
+- `lab/telegram_ingesta.py`: `_resumen_borrador()` agrega
+  `📝 {descripcion_original}` (gasto e ingreso) cuando está presente, cerca de
+  la categoría.
+- `lab/README-telegram.md`: actualizada la lista de campos que muestra el
+  resumen sin campos faltantes, documentando el bug real (id=856) que motivó
+  el fix.
+- `lab/tests/test_api.py`: tests nuevos para `PATCH /api/expenses/:id`
+  (validación de campos editables, 404, `cuotas_total` rechazado, efecto en
+  `/api/summary`); ajustado un test existente (`Allow` de
+  `/api/expenses/:id` pasa de `DELETE` a `DELETE, PATCH`); agregado el caso al
+  test de whitelist de query y al de límites operacionales (`huge_id`).
+- `lab/tests/test_telegram_api.py`: test nuevo
+  `test_resumen_borrador_incluye_descripcion_cuando_esta_presente` que
+  reproduce el bug real (gasto + ingreso, con y sin descripción).
+- `report.md`: este archivo.
 
-Este wrapper no me dio una herramienta de shell/ejecución (solo Read/Edit/
-Write/Glob/Grep) — no hay forma de correr `pytest` ni `node --test` desde
-acá. (Nota: `README-proxy.md` de este mismo repo documenta la misma
-limitación en una sesión anterior, así que no es nuevo en este proyecto.)
+## Decisiones de diseño
 
-Hice una revisión estática cuidadosa en su lugar:
-- Repasé línea por línea cada función que edité (`db.py`, `api.py`,
-  `app.js`) buscando balance de llaves/backticks y coherencia de tipos.
-- Para `app.js` en particular, `tests/forms.test.mjs` extrae fragmentos de
-  código fuente por texto (`source.indexOf(...)`) y los corre en
-  `vm.runInNewContext` con sandboxes mínimos. Verifiqué que:
-  - Todo lo que agregué está dentro de ramas `if (kind === 'expense-saldar')`
-    que ningún test existente ejercita (ningún test llama
-    `collectForm`/`formMarkup`/`describeForm`/`routeForForm`/`openForm` con
-    ese `kind`), así que no pueden disparar un `ReferenceError` aunque el
-    sandbox de ese test no tenga `P1`/`P2`/`getRowPct` definidos.
-  - No creé un `getRowPct` duplicado (ya existía uno en `app.js`; mi primer
-    borrador lo duplicaba y lo corregí).
-  - `DETAIL_KINDS`/`closeDetail`/`getDebtRows`/`renderDeudaDetail` no
-    colisionan con nombres existentes (verificado con grep).
-- Para `lab/tests/test_api.py`, seguí el mismo harness (`WsgiApiTestCase`)
-  y los mismos helpers (`self.expense(...)`) que el resto del archivo.
+**Campos editables en el PATCH de gastos** (`EXPENSE_EDITABLE_FIELDS` /
+`GASTO_CAMPOS_EDITABLES`): mismo conjunto que el alta
+(`fecha, monto, moneda, categoria, subcategoria, medio_pago, pagado_por,
+descripcion_original, tarjeta_id, tipo_proporcion, proporcion_jd,
+proporcion_pinki`), **excepto `cuotas_total`**. Un gasto con cuotas ya se
+expandió en N filas independientes (`insert_gasto_con_cuotas`); editar
+`cuotas_total` en una sola fila no reparte ni fusiona esas filas — dejaría la
+serie inconsistente sin avisar a nadie. Para cambiar la cantidad de cuotas
+hay que borrar el gasto (ya existe `DELETE /api/expenses/:id`, que borra solo
+esa cuota) y volver a cargarlo. Por la misma razón, `cuota_nro`, `cuota_ref` y
+`saldado` tampoco son editables por esta ruta: son metadata de la serie de
+cuotas y del saldado (`POST /api/expenses/:id/saldar`), no contenido del
+gasto en sí. El frontend refleja esto: el formulario de edición no muestra el
+campo "Cantidad de cuotas" y avisa explícitamente ("Esta edición aplica solo
+a esta fila... La cantidad de cuotas no se puede editar desde aquí").
 
-**Pendiente para quien acepte este candidato:** correr
-```
-cd lab && python -m pytest -q tests
-cd src/lab-dashboard && node --test tests/fijos.test.mjs tests/forms.test.mjs
-cd src/lab-dashboard && node --test tests/proxy.test.mjs
-```
-antes de mergear, y confirmar visualmente en el navegador (QA manual de
-Juan) que:
-1. El panel de Deuda muestra el desglose y el botón "Saldar" funciona en
-   modo live (requiere que `VPS_API_BASE_URL`/`VPS_INTERNAL_SECRET` estén
-   configurados — hoy no lo están en ningún entorno real, según
-   `api-contract.md`).
-2. Abrir Fijos → Cuotas → Crédito → Deuda en secuencia reemplaza el panel
-   en vez de apilarlo, y los filtros de persona siguen funcionando igual
-   que antes en cada uno.
+**Reparto (`tipo_proporcion`/`proporcion_jd`/`proporcion_pinki`) en la
+edición:** si el usuario pasa de `'custom'` a `'dinamico'` al editar, el
+frontend manda explícitamente `proporcion_jd: null, proporcion_pinki: null`
+en el payload — si no se limpian, el servidor rechaza la fila resultante
+(`validar_expense`: `tipo_proporcion='dinamico'` no admite esos campos no
+nulos, y la validación es sobre fila actual + cambios superpuestos, no solo
+sobre los cambios).
 
-## Qué falta (fuera de esta sesión)
-- Push/deploy/merge a `main`: no los hice, quedan para Juan.
-- QA manual en navegador: no lo hice (sin entorno de browser disponible
-  acá tampoco).
-- `src/lab-dashboard/api-contract.md` tenía referencias ya desactualizadas
-  antes de este cambio (dice "No existe `DELETE /api/income/:id`", que sí
-  existe) — no las corregí, están fuera del alcance de este brief; solo
-  agregué la fila del endpoint nuevo.
+**`avisos_credito` no se recalcula en el PATCH** (a diferencia del alta y la
+baja, que sí llaman a `_avisos_credito_por_alta_o_baja`): si la edición
+cambia `monto` o `medio_pago` de un gasto en Crédito, los umbrales de aviso
+ya detectados para ese mes no se revisan de nuevo. No estaba en el alcance
+confirmado del brief; documentado como limitación conocida en
+`README-api.md` y `api-contract.md`. Si Juan lo necesita, es una extensión
+chica sobre el mismo helper que ya existe.
+
+**Fix de Telegram (`_resumen_borrador`):** la descripción se agrega como una
+parte más del resumen (`" · ".join(partes)`), justo después de la categoría,
+con el prefijo `📝` (no se usaba antes ningún emoji para este campo). Se
+omite por completo si no está presente — mismo criterio que `subcategoria`.
+Aplicado tanto a gasto como a ingreso (la función maneja ambos casos con el
+mismo bug), aunque el reporte original era específicamente sobre un gasto.
+
+**`lab/tests/test_telegram_ingesta.py` no se tocó:** no está en la lista de
+rutas habilitadas para escribir de esta tarea. Lo revisé igual: sus
+snapshots exactos de `_resumen_borrador`/`armar_pregunta`
+(`PreguntaTests.test_pregunta_sin_faltantes_snapshot` y
+`test_pregunta_sin_faltantes_snapshot_reparto_custom`) usan borradores sin
+`comercio`/`descripcion` en la entrada, así que `descripcion_original` nunca
+se setea en esos casos (ver `telegram_ingesta.py` línea ~697:
+`descripcion = datos.get("comercio") or datos.get("descripcion")`) y el fix
+no cambia su resultado — **no requieren ajuste**. Agregué en su lugar un
+test dedicado en `lab/tests/test_telegram_api.py` (sí habilitado) que
+reproduce el bug real directamente contra `_resumen_borrador`.
+
+## Pendiente explícito (NO hecho en este workdir, a propósito)
+
+- **Dato real id=856 ("Panadería Distinción") sin descripción**: NO se
+  corrigió. Según instrucción del brief, el coordinador lo hace contra la
+  base real después de que el PATCH nuevo esté probado — ahora que
+  `PATCH /api/expenses/:id` existe y tiene tests, se puede usar
+  `PATCH /api/expenses/856` con `{"descripcion_original": "Panadería
+  Distinción"}` (o el texto correcto que corresponda) para corregirlo.
+- Deploy/push de todo lo anterior.
+- QA manual de Juan: abrir el dashboard real, probar "Editar" en una fila de
+  Gasto (incluyendo un gasto con cuotas, para confirmar que el aviso y la
+  ausencia del campo de cuotas se entienden bien), y confirmar que el próximo
+  gasto cargado por Telegram con comercio/descripción la muestra en el
+  resumen de confirmación antes de guardar.
+- Posible extensión futura (no pedida): recalcular `avisos_credito` también
+  en el PATCH de gastos, si Juan lo considera necesario.
+
+## Tests
+
+**No tengo herramienta de shell en este entorno** (solo Read/Write/Edit/Grep/
+Glob) — no pude ejecutar `cd lab && python -m pytest -q tests` ni
+`cd src/lab-dashboard && node --test tests/*.mjs`. El coordinador debe
+correrlos. Repasé manualmente cada test nuevo/modificado contra el código
+final (incluida la regresión de espacios en `formExpenseCategorySelects` que
+detecté y corregí yo mismo durante la implementación, antes de reportar) para
+minimizar el riesgo de que fallen, pero no hay verificación automática real
+de mi parte.
+
+## Fix puntual posterior: `catalog.map is not a function` en `forms.test.mjs`
+
+El coordinador corrió `node --test tests/*.mjs` sobre la implementación de
+arriba y encontró que `tests/forms.test.mjs` fallaba con
+`TypeError: catalog.map is not a function` en `formExpenseCategorySelects`.
+Causa: dos llamadas a `expenseMarkupApi.formMarkup(...)` (líneas ~338 y ~346)
+pasaban el objeto fixture completo `categoriesGastoFixture`
+(`{"categories": [...]}`) donde `formMarkup`/`formExpenseCategorySelects`
+esperan directamente el array de categorías — mismo contrato que usa
+`openForm` con `categoriesCatalog`. Corregido pasando
+`categoriesGastoFixture.categories` en ambas llamadas. No se tocó `app.js`
+(el código de producto ya esperaba un array, correcto) ni ningún otro
+archivo. Sigo sin herramienta de shell en este entorno, así que no pude
+correr `node --test tests/*.mjs` para confirmar los 3 suites en verde — el
+coordinador debe verificarlo.

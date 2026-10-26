@@ -953,27 +953,46 @@ function formSelect(name, label, choices, value) {
 // Catálogo vía <select> dependiente (GET /api/categories?tipo=Gasto, t_ce790609).
 // Sin catálogo (fetch falló o vino vacío) se cae a los inputs de texto + datalist
 // de siempre, para que el alta de gasto nunca quede bloqueada por ese endpoint.
-function formExpenseCategorySelects(catalog) {
-  const options = catalog.map((c) => `<option value="${escapeHtml(c.categoria)}">${escapeHtml(c.categoria)}</option>`).join('');
+function formExpenseCategorySelects(catalog, row = null) {
+  // Sin `row` (alta), ningún `selected` aplica: mismo markup exacto que
+  // antes de admitir precarga, sin el espacio extra que deja un atributo
+  // condicional vacío (`" " + ''`) antes de cerrar la etiqueta.
+  const options = catalog.map((c) => {
+    const selected = c.categoria === row?.categoria ? ' selected' : '';
+    return `<option value="${escapeHtml(c.categoria)}"${selected}>${escapeHtml(c.categoria)}</option>`;
+  }).join('');
+  // Precarga (expense-edit): las subcategorías se calculan acá para la
+  // categoría ya elegida, en vez de delegar en onExpenseCategoriaChange()
+  // (esa función reconstruye la lista PERO siempre resetea el valor a ''
+  // -- correcto cuando el usuario cambia de categoría a mano, pero pisaría
+  // la subcategoría precargada si se llamara también en el render inicial).
+  const entry = row?.categoria ? catalog.find((c) => c.categoria === row.categoria) : null;
+  const subOptions = (entry ? entry.subcategorias : []).map((s) => {
+    const selected = s === row?.subcategoria ? ' selected' : '';
+    return `<option value="${escapeHtml(s)}"${selected}>${escapeHtml(s)}</option>`;
+  }).join('');
+  const categoriaPlaceholderSelected = row?.categoria ? '' : ' selected';
+  const subcategoriaPlaceholderSelected = row?.subcategoria ? '' : ' selected';
   return `<label class="form-field" for="field-categoria">Categoría
     <select id="field-categoria" name="categoria" required aria-describedby="error-categoria">
-      <option value="" disabled selected>Elegí una categoría</option>
+      <option value="" disabled${categoriaPlaceholderSelected}>Elegí una categoría</option>
       ${options}
     </select>
     <span class="field-error" id="error-categoria"></span></label>
     <label class="form-field" for="field-subcategoria">Subcategoría
     <select id="field-subcategoria" name="subcategoria" aria-describedby="error-subcategoria">
-      <option value="">Sin subcategoría</option>
+      <option value=""${subcategoriaPlaceholderSelected}>Sin subcategoría</option>
+      ${subOptions}
     </select>
     <span class="field-error" id="error-subcategoria"></span></label>`;
 }
 
-function formExpenseCategoryText() {
+function formExpenseCategoryText(row = null) {
   const categories = [...new Set(DATA.gastos.map((item) => item.categoria).filter(Boolean))].sort();
   const subcategories = [...new Set(DATA.gastos.map((item) => item.subcategoria).filter(Boolean))].sort();
-  return `${formField('categoria', 'Categoría', '', 'text', 'required list="expense-categories"')}
+  return `${formField('categoria', 'Categoría', row?.categoria || '', 'text', 'required list="expense-categories"')}
     <datalist id="expense-categories">${categories.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
-    ${formField('subcategoria', 'Subcategoría', '', 'text', 'list="expense-subcategories"')}
+    ${formField('subcategoria', 'Subcategoría', row?.subcategoria || '', 'text', 'list="expense-subcategories"')}
     <datalist id="expense-subcategories">${subcategories.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>`;
 }
 
@@ -1029,26 +1048,31 @@ function formMarkup(kind, row, categoriesCatalog) {
       ${formSelect('estado', 'Estado', INVENTARIO_ESTADOS, row?.estado || 'Activo')}
       ${formField('notas', 'Notas', row?.notas || '')}`;
   }
-  if (kind === 'expense') {
+  if (kind === 'expense' || kind === 'expense-edit') {
+    const isEdit = kind === 'expense-edit';
     const cards = [...new Set(DATA.gastos.map((item) => item.tarjeta_id).filter(Boolean))].sort();
-    const categoryFields = categoriesCatalog ? formExpenseCategorySelects(categoriesCatalog) : formExpenseCategoryText();
-    return `${formField('monto', 'Monto total (ARS)', '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
-      ${formField('fecha', 'Fecha', todayLocalISO(), 'date', 'required')}
+    const categoryFields = categoriesCatalog ? formExpenseCategorySelects(categoriesCatalog, row) : formExpenseCategoryText(row);
+    const tipoProporcion = row?.tipo_proporcion || 'dinamico';
+    const proporcionJd = tipoProporcion === 'custom' && row?.proporcion_jd != null ? row.proporcion_jd : '50';
+    const proporcionPinki = tipoProporcion === 'custom' && row?.proporcion_pinki != null ? row.proporcion_pinki : '50';
+    return `${isEdit ? `<p class="form-help">Esta edición aplica solo a esta fila (cuota ${escapeHtml(cuotaLabel(row))} de ${escapeHtml(String(row.cuotas_total))}); las demás cuotas de este gasto no cambian. La cantidad de cuotas no se puede editar desde aquí.</p>` : ''}
+      ${formField('monto', 'Monto total (ARS)', row?.monto ?? '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
+      ${formField('fecha', 'Fecha', row?.fecha || todayLocalISO(), 'date', 'required')}
       ${categoryFields}
-      ${formField('descripcion_original', 'Descripción', '')}
-      ${formSelect('medio_pago', 'Medio de pago', ['Efectivo', 'Transferencia', 'Débito', 'Crédito'], 'Efectivo')}
-      ${formField('tarjeta_id', 'ID de tarjeta (opcional; ingresalo si corresponde)', '', 'text', 'list="expense-cards"')}
+      ${formField('descripcion_original', 'Descripción', row?.descripcion_original || '')}
+      ${formSelect('medio_pago', 'Medio de pago', ['Efectivo', 'Transferencia', 'Débito', 'Crédito'], row?.medio_pago || 'Efectivo')}
+      ${formField('tarjeta_id', 'ID de tarjeta (opcional; ingresalo si corresponde)', row?.tarjeta_id || '', 'text', 'list="expense-cards"')}
       <datalist id="expense-cards">${cards.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
       <p class="form-help">${cards.length ? 'Sugerencias tomadas de los gastos cargados. También podés ingresar un ID explícito.' : 'No hay un catálogo de tarjetas disponible. Ingresá el ID explícito si corresponde.'}</p>
-      ${formSelect('pagado_por', 'Pagó', ['Común', 'JD', 'Pinki'], 'Común')}
+      ${formSelect('pagado_por', 'Pagó', ['Común', 'JD', 'Pinki'], row?.pagado_por || 'Común')}
       ${formSelect('tipo_proporcion', 'Reparto', [
         { value: 'dinamico', label: 'Dinámico según salarios del mes' },
         { value: '50/50', label: 'Mitad y mitad' },
         { value: 'custom', label: 'Manual por porcentajes' },
-      ], 'dinamico')}
-      <div id="custom-proportion" hidden>${formField('proporcion_jd', 'JD (%)', '50', 'number', 'min="0" max="100" step="0.01"')}
-      ${formField('proporcion_pinki', 'Pinki (%)', '50', 'number', 'min="0" max="100" step="0.01"')}</div>
-      ${formField('cuotas_total', 'Cantidad de cuotas', '1', 'number', 'required min="1" max="120" step="1"')}`;
+      ], tipoProporcion)}
+      <div id="custom-proportion" hidden>${formField('proporcion_jd', 'JD (%)', proporcionJd, 'number', 'min="0" max="100" step="0.01"')}
+      ${formField('proporcion_pinki', 'Pinki (%)', proporcionPinki, 'number', 'min="0" max="100" step="0.01"')}</div>
+      ${isEdit ? '' : formField('cuotas_total', 'Cantidad de cuotas', '1', 'number', 'required min="1" max="120" step="1"')}`;
   }
   if (kind === 'income' || kind === 'income-edit') return `
     ${formField('monto', 'Monto (ARS)', row?.monto ?? '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
@@ -1096,7 +1120,7 @@ async function openForm(kind, id = null) {
   const returnFocus = activeForm ? activeForm.returnFocus : document.activeElement;
   const form = activeForm = { kind, row, returnFocus, confirmed: false, payload: null };
   const titles = {
-    expense: 'Agregar gasto', 'expense-delete': 'Dar de baja una cuota', 'expense-saldar': 'Saldar gasto',
+    expense: 'Agregar gasto', 'expense-edit': 'Editar gasto', 'expense-delete': 'Dar de baja una cuota', 'expense-saldar': 'Saldar gasto',
     income: 'Agregar ingreso', 'income-edit': 'Editar ingreso', 'income-delete': 'Dar de baja ingreso',
     inventory: 'Agregar bien', 'inventory-edit': 'Editar bien', 'inventory-delete': 'Dar de baja bien',
     fixed: 'Agregar fijo', 'fixed-edit': 'Crear versión de fijo', 'fixed-delete': 'Dar de baja fijo',
@@ -1111,7 +1135,7 @@ async function openForm(kind, id = null) {
   document.getElementById('form-close').disabled = false;
   let catalog = null;
   let catalogWarning = '';
-  if (kind === 'expense') {
+  if (kind === 'expense' || kind === 'expense-edit') {
     // Mostrar el modal YA, en estado de carga: así Escape/Cancelar operan sobre el
     // listener del modal mientras el catálogo todavía no resolvió, en vez de dejar
     // el foco afuera en el disparador durante el fetch.
@@ -1307,16 +1331,20 @@ function collectForm(kind, row, values) {
   if (kind.endsWith('delete')) return { payload: kind === 'fixed-delete' ? { fecha_baja: values.fecha_baja } : null, errors };
   const moneyKey = kind.startsWith('fixed') ? 'monto_estimado' : 'monto';
   if (!validMoney(values[moneyKey])) errors[moneyKey] = 'Ingresá un monto positivo, finito, de hasta 2 decimales y máximo 1 billón.';
-  if (kind === 'expense') {
+  if (kind === 'expense' || kind === 'expense-edit') {
+    const isEdit = kind === 'expense-edit';
     if (!values.categoria?.trim()) errors.categoria = 'Ingresá una categoría.';
-    const cuotas = Number(values.cuotas_total);
-    if (!/^\d+$/.test(values.cuotas_total) || !Number.isInteger(cuotas) || cuotas < 1 || cuotas > 120 ||
-        Math.round(Number(values.monto) * 100) < cuotas) errors.cuotas_total = 'Entre 1 y 120 cuotas, con al menos un centavo por cuota.';
     const payload = { fecha: values.fecha, monto: Number(values.monto), categoria: values.categoria.trim(),
       subcategoria: values.subcategoria.trim(), descripcion_original: values.descripcion_original.trim(),
-      medio_pago: values.medio_pago, pagado_por: values.pagado_por, tipo_proporcion: values.tipo_proporcion,
-      cuotas_total: cuotas };
+      medio_pago: values.medio_pago, pagado_por: values.pagado_por, tipo_proporcion: values.tipo_proporcion };
+    if (!isEdit) {
+      const cuotas = Number(values.cuotas_total);
+      if (!/^\d+$/.test(values.cuotas_total) || !Number.isInteger(cuotas) || cuotas < 1 || cuotas > 120 ||
+          Math.round(Number(values.monto) * 100) < cuotas) errors.cuotas_total = 'Entre 1 y 120 cuotas, con al menos un centavo por cuota.';
+      payload.cuotas_total = cuotas;
+    }
     if (values.tarjeta_id.trim()) payload.tarjeta_id = values.tarjeta_id.trim();
+    else if (isEdit) payload.tarjeta_id = null;
     if (values.tipo_proporcion === 'custom') {
       const jd = Number(values.proporcion_jd), pinki = Number(values.proporcion_pinki);
       if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(values.proporcion_jd) ||
@@ -1327,6 +1355,13 @@ function collectForm(kind, row, values) {
       }
       payload.proporcion_jd = jd;
       payload.proporcion_pinki = pinki;
+    } else if (isEdit) {
+      // Al editar, cambiar de 'custom' a otro reparto debe limpiar explícitamente
+      // los porcentajes guardados -- sin esto, validar_expense rechaza la edición
+      // (tipo_proporcion='dinamico' no admite proporcion_jd/proporcion_pinki, y
+      // el servidor valida la fila RESULTANTE: fila actual + estos cambios).
+      payload.proporcion_jd = null;
+      payload.proporcion_pinki = null;
     }
     return { payload, errors };
   }
@@ -1365,6 +1400,7 @@ function describeForm(kind, row, payload) {
   if (kind === 'expense-delete') return `Baja solo de la cuota ${cuotaLabel(row)} del gasto #${row.id}, ${fmtARSExact(row.monto)}. Otras cuotas no se borran.`;
   if (kind === 'fixed-delete') return `Baja de ${row.nombre} desde ${payload.fecha_baja}. Se crea una versión inactiva; el historial permanece.`;
   if (kind === 'expense') return `Gasto ${payload.categoria}${payload.subcategoria ? ` / ${payload.subcategoria}` : ''}: ${fmtARSExact(payload.monto)}, ${payload.fecha}, ${payload.cuotas_total} cuota(s). ${payload.descripcion_original || 'Sin descripción'}. Medio: ${payload.medio_pago}${payload.tarjeta_id ? `, tarjeta ${payload.tarjeta_id}` : ''}. Pagó ${payload.pagado_por}; reparto ${payload.tipo_proporcion}${payload.tipo_proporcion === 'custom' ? ` (${payload.proporcion_jd}% JD / ${payload.proporcion_pinki}% Pinki)` : ''}.`;
+  if (kind === 'expense-edit') return `Editar gasto #${canonicalId(row.id)} (cuota ${cuotaLabel(row)} de ${row.cuotas_total}): ${payload.categoria}${payload.subcategoria ? ` / ${payload.subcategoria}` : ''}, ${fmtARSExact(payload.monto)}, ${payload.fecha}. ${payload.descripcion_original || 'Sin descripción'}. Medio: ${payload.medio_pago}${payload.tarjeta_id ? `, tarjeta ${payload.tarjeta_id}` : ''}. Pagó ${payload.pagado_por}; reparto ${payload.tipo_proporcion}${payload.tipo_proporcion === 'custom' ? ` (${payload.proporcion_jd}% JD / ${payload.proporcion_pinki}% Pinki)` : ''}. Las demás cuotas de este gasto no cambian.`;
   if (kind === 'income-delete') return `Baja del ingreso de ${row.persona} del ${row.fecha}, ${fmtARSExact(row.monto)}.${row.categoria === 'Salario' ? ' Es un ingreso de Salario: puede cambiar la proporción del mes y las deudas.' : ''}`;
   if (kind.startsWith('income')) return `${kind === 'income-edit' ? 'Editar' : 'Agregar'} ingreso ${payload.categoria} de ${payload.persona}: ${fmtARSExact(payload.monto)} el ${payload.fecha}. ${payload.descripcion_original || 'Sin descripción'}.${row?.categoria === 'Salario' || payload.categoria === 'Salario' ? ' Este cambio salarial puede modificar las proporciones de los meses afectados y sus deudas.' : ''}`;
   if (kind === 'inventory-delete') return `Baja del bien "${row.nombre}"${row.categoria ? ` (${row.categoria})` : ''}, valor estimado ${fmtARSExact(row.valor_estimado)}, estado ${row.estado || 'Activo'}.`;
@@ -1378,6 +1414,7 @@ function describeForm(kind, row, payload) {
 
 function routeForForm(kind, row) {
   if (kind === 'expense') return ['POST', '/api/expenses'];
+  if (kind === 'expense-edit') return ['PATCH', `/api/expenses/${encodeURIComponent(canonicalId(row.id))}`];
   if (kind === 'expense-delete') return ['DELETE', `/api/expenses/${encodeURIComponent(canonicalId(row.id))}`];
   if (kind === 'expense-saldar') return ['POST', `/api/expenses/${encodeURIComponent(canonicalId(row.id))}/saldar`];
   if (kind === 'income') return ['POST', '/api/income'];
@@ -1397,6 +1434,8 @@ function verifiedWriteEnvelope(kind, row, result) {
     }
     if (kind === 'expense') return Array.isArray(result?.expenses) && result.expenses.length > 0 &&
       result.expenses.every((expense) => !!canonicalId(expense?.id));
+    if (kind === 'expense-edit') return !!canonicalId(result?.expense?.id) &&
+      canonicalId(result.expense.id) === canonicalId(row.id);
     if (kind === 'expense-saldar') return !!canonicalId(result?.expense?.id) &&
       canonicalId(result.expense.id) === canonicalId(row.id) && result.expense.saldado != null;
     if (kind.startsWith('income')) return !!canonicalId(result?.income?.id);
@@ -1963,7 +2002,10 @@ function renderGastosTable() {
       <td data-label="Medio de pago" class="td-muted">${escapeHtml(g.medio_pago)}</td>
       <td data-label="Pagó"><span class="pill ${pillClassFor(g.pagado_por)}">${escapeHtml(g.pagado_por)}</span></td>
       <td data-label="Cuota" class="td-muted">${cuotaLabel(g)}</td>
-      <td data-label="Acción"><button type="button" class="fijos-secondary table-action" data-write-action data-id="${escapeHtml(canonicalId(g.id))}" onclick="openForm('expense-delete', this.dataset.id)" aria-label="Dar de baja solo la cuota ${escapeHtml(cuotaLabel(g))} del gasto ${escapeHtml(canonicalId(g.id))}" ${!liveMode || writePending || reloadPending || reloadFailed ? 'disabled' : ''}>Dar de baja</button></td>
+      <td data-label="Acción">
+        <button type="button" class="fijos-secondary table-action" data-write-action data-id="${escapeHtml(canonicalId(g.id))}" onclick="openForm('expense-edit', this.dataset.id)" aria-label="Editar la cuota ${escapeHtml(cuotaLabel(g))} del gasto ${escapeHtml(canonicalId(g.id))}" ${!liveMode || writePending || reloadPending || reloadFailed ? 'disabled' : ''}>Editar</button>
+        <button type="button" class="fijos-secondary table-action" data-write-action data-id="${escapeHtml(canonicalId(g.id))}" onclick="openForm('expense-delete', this.dataset.id)" aria-label="Dar de baja solo la cuota ${escapeHtml(cuotaLabel(g))} del gasto ${escapeHtml(canonicalId(g.id))}" ${!liveMode || writePending || reloadPending || reloadFailed ? 'disabled' : ''}>Dar de baja</button>
+      </td>
     </tr>`).join('');
 
   document.getElementById('tabla-count').textContent = `${sorted.length} de ${gastosTableRows.length} gastos`;

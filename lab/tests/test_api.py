@@ -139,7 +139,7 @@ class ApiTest(WsgiApiTestCase):
         self.assertEqual(self.request("DELETE", "/api/expenses/999")[0], 404)
         status, _, headers = self.request("GET", "/api/expenses/999")
         self.assertEqual(status, 405)
-        self.assertEqual(headers["Allow"], "DELETE")
+        self.assertEqual(headers["Allow"], "DELETE, PATCH")
 
     def test_expense_installments_and_single_installment_delete(self):
         status, body, _ = self.request(
@@ -202,6 +202,39 @@ class ApiTest(WsgiApiTestCase):
         self.assertEqual(self.request("DELETE", f"/api/expenses/{deleted_id}")[0], 200)
         status, _, _ = self.request("POST", f"/api/expenses/{deleted_id}/saldar")
         self.assertEqual(status, 409)
+
+    def test_update_expense_editable_fields_validation_and_not_found(self):
+        status, body, _ = self.request("POST", "/api/expenses", self.expense(monto=100, pagado_por="JD"))
+        self.assertEqual(status, 201)
+        expense_id = body["expenses"][0]["id"]
+
+        self.assertEqual(self.request("PATCH", f"/api/expenses/{expense_id}", {})[0], 400)
+        # cuotas_total queda deliberadamente fuera de lo editable (t_b5c6e680).
+        self.assertEqual(
+            self.request("PATCH", f"/api/expenses/{expense_id}", {"cuotas_total": 2})[0], 400
+        )
+        self.assertEqual(
+            self.request("PATCH", f"/api/expenses/{expense_id}", {"monto": -1})[0], 400
+        )
+        self.assertEqual(
+            self.request("PATCH", f"/api/expenses/{expense_id}", {"pagado_por": "Nadie"})[0], 400
+        )
+        self.assertEqual(self.request("PATCH", "/api/expenses/999999", {"monto": 50})[0], 404)
+
+        status, updated, _ = self.request("PATCH", f"/api/expenses/{expense_id}", {
+            "monto": 50, "categoria": "Comida", "descripcion_original": "Panadería",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(updated["expense"]["monto"], 50)
+        self.assertEqual(updated["expense"]["categoria"], "Comida")
+        self.assertEqual(updated["expense"]["descripcion_original"], "Panadería")
+
+        self.assertEqual(self.request("GET", "/api/summary?month=2026-04")[1]["expenses_total"], 50)
+
+        self.assertEqual(self.request("DELETE", f"/api/expenses/{expense_id}")[0], 200)
+        self.assertEqual(
+            self.request("PATCH", f"/api/expenses/{expense_id}", {"monto": 10})[0], 404
+        )
 
     def test_expense_installments_120_uses_original_total(self):
         status, body, _ = self.request(
@@ -637,6 +670,7 @@ class ApiTest(WsgiApiTestCase):
         fixed_id = self.request("POST", "/api/fixed", self.fixed())[1]["fixed"]["id"]
         operations = (
             ("POST", "/api/expenses", self.expense()),
+            ("PATCH", f"/api/expenses/{expense_id}", {"monto": 50}),
             ("DELETE", f"/api/expenses/{expense_id}", None),
             ("POST", "/api/income", self.income()),
             ("PATCH", f"/api/income/{income_id}", {"monto": 200}),
@@ -684,6 +718,7 @@ class ApiTest(WsgiApiTestCase):
         self.assertEqual(self.request("POST", "/api/expenses", self.expense(cuotas_total=121))[0], 400)
         huge_id = "9" * 5000
         self.assertEqual(self.request("DELETE", f"/api/expenses/{huge_id}")[0], 400)
+        self.assertEqual(self.request("PATCH", f"/api/expenses/{huge_id}", {"monto": 2})[0], 400)
         self.assertEqual(self.request("PATCH", f"/api/income/{huge_id}", {"monto": 2})[0], 400)
         self.assertEqual(self.request("DELETE", f"/api/income/{huge_id}")[0], 400)
         self.assertEqual(self.request("GET", f"/api/fixed/{huge_id}/historial")[0], 400)
