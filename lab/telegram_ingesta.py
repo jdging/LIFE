@@ -93,17 +93,6 @@ ALIASES_SUBCATEGORIA = {
     "super": "supermercado",
 }
 
-ETIQUETAS_CAMPO = {
-    "monto": "el monto",
-    "fecha": "la fecha",
-    "categoria": "la categoría",
-    "medio_pago": "el medio de pago",
-    "tarjeta": "la tarjeta",
-    "pagado_por": "quién pagó",
-    "persona": "para quién es",
-    "proporcion_jd": "el % de JD",
-}
-
 PREGUNTAS_CAMPO_FIJAS = {
     "monto": "¿Cuánto fue?",
     "fecha": "¿Qué día fue?",
@@ -411,18 +400,40 @@ def _resolver_categoria(categorias, categoria_in, subcategoria_in):
 def _resolver_tarjeta(tarjetas, valor):
     """Busca `valor` contra `GET /api/tarjetas` por id, nombre o banco, con
     matching tolerante (sin acentos/mayúsculas). Devuelve la fila de tarjeta
-    o `None`."""
+    o `None` si no matchea ninguna, o si matchea más de una (ambiguo, ya sea
+    por nombre repetido -- "Visa" de dos bancos distintos -- o por banco con
+    varias tarjetas): nunca elige la primera coincidencia en silencio, ver
+    `_tarjetas_candidatas_por_valor` para la lista completa de candidatas en
+    ese caso."""
     slug_valor = _slug(valor)
     for t in tarjetas:
         if t["id"] == valor or _slug(t["id"]) == slug_valor:
             return t
-    for t in tarjetas:
-        if _slug(t["nombre"]) == slug_valor:
-            return t
+    por_nombre = [t for t in tarjetas if _slug(t["nombre"]) == slug_valor]
+    if len(por_nombre) == 1:
+        return por_nombre[0]
+    if por_nombre:
+        return None
     por_banco = [t for t in tarjetas if t.get("banco") and _slug(t["banco"]) == slug_valor]
     if len(por_banco) == 1:
         return por_banco[0]
     return None
+
+
+def _tarjetas_candidatas_por_valor(tarjetas, valor):
+    """Candidatas ambiguas para `valor` cuando `_resolver_tarjeta` devuelve
+    `None` por ambigüedad (nombre repetido o banco con varias tarjetas) --
+    mismo orden de prioridad que `_resolver_tarjeta`. Lista vacía si `valor`
+    no matchea ninguna tarjeta (ahí la tarjeta es directamente desconocida,
+    no ambigua)."""
+    slug_valor = _slug(valor)
+    por_nombre = [t for t in tarjetas if _slug(t["nombre"]) == slug_valor]
+    if len(por_nombre) > 1:
+        return por_nombre
+    por_banco = [t for t in tarjetas if t.get("banco") and _slug(t["banco"]) == slug_valor]
+    if len(por_banco) > 1:
+        return por_banco
+    return []
 
 
 # --- extraer-campos: parseo determinista de comprobantes (solo regex) ------
@@ -702,8 +713,9 @@ def normalizar_borrador(tipo, datos, usuarios, client):
             borrador["subcategoria"] = resuelta["subcategoria"]
 
     pagado_por_sugerido = None
+    tarjetas_candidatas = None
     if tipo == "gasto":
-        pagado_por_sugerido = _normalizar_gasto(
+        pagado_por_sugerido, tarjetas_candidatas = _normalizar_gasto(
             datos, borrador, usuarios, client, campos_faltantes, defaults_aplicados, advertencias,
         )
     else:
@@ -721,6 +733,12 @@ def normalizar_borrador(tipo, datos, usuarios, client):
         # expenses/telegram`, que rechaza campos desconocidos (ver
         # `api.ALLOWED_EXPENSE_TELEGRAM_FIELDS`).
         resultado["pagado_por_sugerido"] = pagado_por_sugerido
+    if tarjetas_candidatas:
+        # Mismo criterio que `pagado_por_sugerido`: al nivel del resultado,
+        # nunca dentro de `borrador`. `pregunta` la usa para mostrar, en la
+        # MISMA pregunta consolidada, las opciones reales de la tarjeta
+        # ambigua (nombre/banco) en vez de preguntar de nuevo en otro turno.
+        resultado["tarjetas_candidatas"] = tarjetas_candidatas
     return resultado
 
 
@@ -737,6 +755,7 @@ def _validar_proporcion_jd(valor):
 
 def _normalizar_gasto(datos, borrador, usuarios, client, campos_faltantes, defaults_aplicados, advertencias):
     pagado_por_sugerido = None
+    tarjetas_candidatas = None
     medio_pago = datos.get("medio_pago")
     if medio_pago:
         if medio_pago not in MEDIOS_PAGO_VALIDOS:
@@ -750,10 +769,18 @@ def _normalizar_gasto(datos, borrador, usuarios, client, campos_faltantes, defau
         tarjetas = client.get_tarjetas()
         resuelta = _resolver_tarjeta(tarjetas, tarjeta_in)
         if resuelta is None:
-            por_banco = [t for t in tarjetas if t.get("banco") and _slug(t["banco"]) == _slug(tarjeta_in)]
-            if len(por_banco) > 1:
+            candidatas = _tarjetas_candidatas_por_valor(tarjetas, tarjeta_in)
+            if candidatas:
+                # Ambigua (nombre repetido entre bancos, ej. dos "Visa", o
+                # un banco con varias tarjetas): va a `campos_faltantes`
+                # como cualquier otro campo pendiente, con la lista real de
+                # candidatas -- `pregunta` la usa para mostrar las opciones
+                # en la MISMA pregunta consolidada, nunca en un segundo turno.
                 campos_faltantes.append("tarjeta")
-                advertencias.append("tarjeta ambigua: indicá el ID o nombre de la tarjeta.")
+                tarjetas_candidatas = candidatas
+                advertencias.append(
+                    f"tarjeta ambigua: {tarjeta_in!r} coincide con varias -- elegí una de las opciones."
+                )
             else:
                 opciones = ", ".join(f"{t['nombre']} ({t.get('banco') or t['id']})" for t in tarjetas)
                 raise CliError(f"tarjeta desconocida: {tarjeta_in!r} (opciones: {opciones}).")
@@ -842,7 +869,7 @@ def _normalizar_gasto(datos, borrador, usuarios, client, campos_faltantes, defau
     if borrador.get("monto") is not None and Decimal(str(borrador["monto"])) * 100 < borrador["cuotas_total"]:
         raise CliError("cuotas_total excede los centavos disponibles del monto.")
 
-    return pagado_por_sugerido
+    return pagado_por_sugerido, tarjetas_candidatas
 
 
 def _normalizar_ingreso(datos, borrador, campos_faltantes, advertencias):
@@ -874,13 +901,62 @@ def calcular_campos_faltantes(tipo, borrador):
     raise CliError(f"tipo inválido: {tipo!r} (usar 'gasto' o 'ingreso').")
 
 
-def _pregunta_para_campo(campo, categorias, tarjetas):
+def _etiqueta_tarjeta(tarjeta, catalogo):
+    """Nombre de `tarjeta` para una pregunta, desambiguado con el banco (y
+    los últimos dígitos, si el catálogo los trae) solo cuando hay más de una
+    tarjeta con el mismo nombre en `catalogo` -- nunca lista "Visa, Visa"
+    sin forma de distinguirlas; si ninguna tarjeta ambigua tiene banco
+    (caso límite), cae al `id` como último desambiguador."""
+    nombre = tarjeta["nombre"]
+    if sum(1 for t in catalogo if t["nombre"] == nombre) <= 1:
+        return nombre
+    detalle = []
+    if tarjeta.get("banco"):
+        detalle.append(tarjeta["banco"])
+    if tarjeta.get("ultimos_digitos"):
+        detalle.append(f"terminada en {tarjeta['ultimos_digitos']}")
+    if not detalle:
+        detalle.append(tarjeta["id"])
+    return f"{nombre} ({', '.join(detalle)})"
+
+
+def _etiqueta_tarjeta_candidata(tarjeta):
+    """Etiqueta de una tarjeta CANDIDATA (ambigua), siempre con banco y
+    últimos dígitos si existen -- a diferencia de `_etiqueta_tarjeta`
+    (catálogo completo, donde el detalle solo se agrega si el nombre está
+    repetido): una candidata ya es, por definición, el resultado de una
+    ambigüedad (por nombre O por banco, ver `_tarjetas_candidatas_por_
+    valor`), así que el detalle completo tiene que mostrarse siempre --
+    ocultar el banco cuando la ambigüedad es justamente POR banco (ej. dos
+    tarjetas con nombres distintos, "Visa"/"Mastercard", del mismo banco)
+    es lo que rompía la regla de "una sola pregunta con todo lo que falta"
+    (QA real de Juan, candidato s2s3-pregunta-unica)."""
+    nombre = tarjeta["nombre"]
+    detalle = []
+    if tarjeta.get("banco"):
+        detalle.append(tarjeta["banco"])
+    if tarjeta.get("ultimos_digitos"):
+        detalle.append(f"terminada en {tarjeta['ultimos_digitos']}")
+    if not detalle:
+        detalle.append(tarjeta["id"])
+    return f"{nombre} ({', '.join(detalle)})"
+
+
+def _pregunta_para_campo(campo, categorias, tarjetas, tarjetas_candidatas=None):
     if campo == "categoria":
         opciones = ", ".join(c["categoria"] for c in categorias)
         return f"¿Categoría? (opciones: {opciones})"
     if campo == "tarjeta":
-        opciones = ", ".join(t["nombre"] for t in tarjetas)
+        # Si la tarjeta quedó ambigua (nombre repetido entre bancos, o un
+        # banco con varias tarjetas), mostrar solo esas candidatas reales en
+        # vez del catálogo completo -- ver `_tarjetas_candidatas_por_valor`.
+        if tarjetas_candidatas:
+            opciones = ", ".join(_etiqueta_tarjeta_candidata(t) for t in tarjetas_candidatas)
+        else:
+            opciones = ", ".join(_etiqueta_tarjeta(t, tarjetas) for t in tarjetas)
         return f"¿Con qué tarjeta? (opciones: {opciones})"
+    if campo == "tipo_proporcion":
+        return "¿Cómo repartimos este gasto? (opciones: dinámico / custom (indicá %))"
     return PREGUNTAS_CAMPO_FIJAS.get(campo, f"¿{campo}?")
 
 
@@ -925,7 +1001,7 @@ def _resumen_borrador(tipo, borrador, tarjetas):
     return " · ".join(partes)
 
 
-def armar_pregunta(tipo, borrador, campos_faltantes, advertencias, categorias, tarjetas):
+def armar_pregunta(tipo, borrador, campos_faltantes, advertencias, categorias, tarjetas, tarjetas_candidatas=None):
     if not campos_faltantes:
         lineas = [
             "Che, esto es lo que entendí — avisame si hay que corregir algo:",
@@ -936,15 +1012,9 @@ def armar_pregunta(tipo, borrador, campos_faltantes, advertencias, categorias, t
         lineas.append("¿Subo así o cambio algo?")
         return "\n".join(lineas)
 
-    if len(campos_faltantes) == 1:
-        campo = campos_faltantes[0]
-        etiqueta = ETIQUETAS_CAMPO.get(campo, campo)
-        pregunta = _pregunta_para_campo(campo, categorias, tarjetas)
-        return f"Todavía me falta {etiqueta} — {pregunta}"
-
     lineas = ["Me falta esto para subirlo, contestame junto:"]
     for indice, campo in enumerate(campos_faltantes, start=1):
-        lineas.append(f"{indice}) {_pregunta_para_campo(campo, categorias, tarjetas)}")
+        lineas.append(f"{indice}) {_pregunta_para_campo(campo, categorias, tarjetas, tarjetas_candidatas)}")
     return "\n".join(lineas)
 
 
@@ -983,7 +1053,7 @@ def _pregunta_pagado_por_con_sugerencia(pagado_por_sugerido):
 
 
 def armar_pregunta_con_comprobante(
-    borrador, campos_faltantes, categorias, tarjetas, pagado_por_sugerido=None,
+    borrador, campos_faltantes, categorias, tarjetas, pagado_por_sugerido=None, tarjetas_candidatas=None,
 ):
     """Variante de `armar_pregunta` para gastos cargados desde un
     comprobante leído completo (`--con-comprobante`/campo `con_comprobante`
@@ -1017,7 +1087,7 @@ def armar_pregunta_con_comprobante(
         if campo == "pagado_por":
             lineas.append(f"{indice}) {_pregunta_pagado_por_con_sugerencia(pagado_por_sugerido)}")
         else:
-            lineas.append(f"{indice}) {_pregunta_para_campo(campo, categorias, tarjetas)}")
+            lineas.append(f"{indice}) {_pregunta_para_campo(campo, categorias, tarjetas, tarjetas_candidatas)}")
     lineas.append(_resumen_reparto(borrador))
     return "\n".join(lineas)
 
@@ -1396,6 +1466,7 @@ def cmd_pregunta(args):
     if campos_faltantes is None:
         campos_faltantes = calcular_campos_faltantes(args.tipo, borrador)
     advertencias = datos.get("advertencias") or []
+    tarjetas_candidatas = datos.get("tarjetas_candidatas") or None
     con_comprobante = (
         args.con_comprobante or bool(datos.get("con_comprobante")) or bool(borrador.get("con_comprobante"))
     )
@@ -1407,10 +1478,12 @@ def cmd_pregunta(args):
     if con_comprobante and args.tipo == "gasto":
         pagado_por_sugerido = datos.get("pagado_por_sugerido")
         mensaje = armar_pregunta_con_comprobante(
-            borrador, campos_faltantes, categorias, tarjetas, pagado_por_sugerido,
+            borrador, campos_faltantes, categorias, tarjetas, pagado_por_sugerido, tarjetas_candidatas,
         )
     else:
-        mensaje = armar_pregunta(args.tipo, borrador, campos_faltantes, advertencias, categorias, tarjetas)
+        mensaje = armar_pregunta(
+            args.tipo, borrador, campos_faltantes, advertencias, categorias, tarjetas, tarjetas_candidatas,
+        )
     return {"mensaje": mensaje}
 
 

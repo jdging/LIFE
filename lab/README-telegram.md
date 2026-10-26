@@ -418,14 +418,47 @@ español rioplatense breve (`CTO-DISENO.md` §1(c)):
 - **Sin `campos_faltantes`:** muestra lo entendido (monto, categoría >
   subcategoría, medio de pago/tarjeta, quién pagó, reparto, fecha) más
   cualquier advertencia, y cierra con `"¿Subo así o cambio algo?"`.
-- **Un solo campo faltante:** re-pregunta puntual, `"Todavía me falta
-  <campo> — <pregunta>"`.
-- **Varios campos faltantes:** una lista numerada, una sola vez, con
-  opciones reales (categorías/tarjetas de la API) cuando corresponde.
+- **Uno o varios campos faltantes:** siempre la misma lista numerada
+  (`"Me falta esto para subirlo, contestame junto:"` + `1) ...`, `2) ...`),
+  incluso con un solo campo -- no hay un formato especial sin número para
+  el caso de un solo faltante, con opciones reales (categorías/tarjetas de
+  la API) cuando corresponde.
 
 Vuelve a consultar `GET /api/categories`/`GET /api/tarjetas` para mostrar
 siempre nombres y opciones reales (nunca inventados ni cacheados del lado
 del cliente).
+
+**No existen preguntas en dos pasos.** Todo lo pendiente (incluida una
+tarjeta ambigua) sale en la MISMA llamada a `pregunta`, nunca en un segundo
+turno. En particular, una tarjeta ambigua (`tarjeta` en `campos_faltantes`
+con `tarjetas_candidatas` en la salida de `normalizar`, ver más abajo) es
+un campo faltante más: entra en la misma lista numerada junto con cualquier
+otro campo pendiente (categoría, medio de pago, quién pagó, etc.), con sus
+candidatas reales como opciones -- **nunca** se resuelve aparte, ni antes
+ni después del resto de la pregunta. QA real de Juan (2026-10-25,
+candidato s2s3-pregunta-unica): probar con 2+ tarjetas candidatas (mismo
+nombre en bancos distintos, o mismo banco con nombres distintos) más algún
+otro campo también faltante (ej. categoría) y confirmar que **una sola**
+llamada a `pregunta` trae todo junto -- ver
+`tests/test_telegram_ingesta.py::PreguntaTests::
+test_pregunta_tarjeta_ambigua_por_nombre_y_categoria_en_una_sola_llamada`
+y `test_pregunta_tarjeta_ambigua_por_banco_con_nombres_distintos_muestra_el_banco`.
+
+**Candidatas ambiguas, siempre con detalle completo:** a diferencia del
+catálogo completo (donde el nombre de la tarjeta alcanza si no hay otra
+igual), cada tarjeta candidata se etiqueta siempre con nombre + banco +
+últimos dígitos (si el catálogo los trae) -- sin condicionarlo a que el
+nombre esté repetido. Si la ambigüedad es por banco (dos tarjetas de
+nombres distintos, ej. "Visa"/"Mastercard", del mismo banco), el banco
+tiene que verse igual en las opciones: `"¿Con qué tarjeta? (opciones: Visa
+(BNA), Mastercard (BNA))"`.
+
+**`tipo_proporcion` en `campos_faltantes`:** igual que `categoria` o
+`tarjeta`, si `tipo_proporcion` aparece como campo faltante (típicamente
+porque el JSON de entrada lo trae así explícito, ya que `normalizar`
+siempre le aplica un default -- ver tabla de "Defaults" más arriba), la
+pregunta muestra sus opciones reales: `"¿Cómo repartimos este gasto?
+(opciones: dinámico / custom (indicá %))"`.
 
 **`--con-comprobante`** (equivalente: campo `"con_comprobante": true` en el
 borrador o en el JSON de entrada -- brief, parte D, para un gasto cargado
@@ -561,8 +594,13 @@ límite personal 100/0, `custom` sin `proporcion_jd` yendo a
 `campos_faltantes`, `dinamico` -- explícito o por default -- con
 `proporcion_jd` ignorándola con advertencia, y un monto entero enorme dando
 error de validación limpio), `pregunta` (snapshot exacto de texto para
-cero, uno y varios campos faltantes, reparto dinámico y reparto custom, y
-que nunca formatea `None` aunque el JSON de entrada sea inconsistente),
+cero, uno y varios campos faltantes -- un solo faltante usa el mismo
+formato numerado que varios, sin texto especial --, reparto dinámico y
+reparto custom, `tipo_proporcion` en `campos_faltantes` mostrando sus
+opciones (dinámico/custom), tarjeta ambigua por nombre y por banco
+consolidada con categoría en la MISMA llamada a `pregunta` -- QA real de
+Juan, caso del candidato s2s3-pregunta-unica --, y que nunca formatea
+`None` aunque el JSON de entrada sea inconsistente),
 `pregunta --con-comprobante` (snapshot con resumen de lo leído + preguntas
 mínimas, sugerencia de `pagado_por_sugerido` mostrada para confirmar, cierre
 igual que la pregunta normal sin faltantes, y equivalencia con el campo
