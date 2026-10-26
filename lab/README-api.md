@@ -89,6 +89,7 @@ el límite técnico, responden `422` sin números inventados.
 | `GET /api/expenses?month=YYYY-MM` | `month` opcional | `{"expenses":[...]}`; excluye bajas lógicas |
 | `POST /api/expenses` | `fecha`, `monto`, `moneda`, `categoria`, `subcategoria`, `medio_pago`, `pagado_por`, `descripcion_original`, `tarjeta_id`, `tipo_proporcion`, `proporcion_jd`, `proporcion_pinki`, `cuotas_total` | `201 {"expenses":[...]}`; una fila por cuota |
 | `DELETE /api/expenses/:id` | Sin cuerpo | `{"deleted":true,"id":N}`; borra lógicamente solo esa cuota |
+| `POST /api/expenses/:id/saldar` | Sin cuerpo | `{"expense":{...}}` con `saldado` en `YYYY-MM-DD`; `404` si no existe, `409` si ya está borrado, ya saldado, o `pagado_por='Común'` (un gasto común nunca genera deuda) |
 | `GET /api/income` | Sin parámetros | `{"income":[...]}`; excluye bajas lógicas |
 | `POST /api/income` | `fecha`, `monto`, `moneda`, `categoria`, `persona`, `descripcion_original` | `201 {"income":{...}}` |
 | `PATCH /api/income/:id` | Subconjunto no vacío de los campos del alta | `{"income":{...}}`; rechaza con `404` si el ingreso está borrado |

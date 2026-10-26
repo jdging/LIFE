@@ -302,6 +302,7 @@ class _App:
         ("GET", re.compile(r"^/api/expenses$"), "list_expenses"),
         ("POST", re.compile(r"^/api/expenses$"), "create_expense"),
         ("DELETE", re.compile(r"^/api/expenses/(?P<id>\d+)$"), "delete_expense"),
+        ("POST", re.compile(r"^/api/expenses/(?P<id>\d+)/saldar$"), "saldar_expense"),
         ("GET", re.compile(r"^/api/income$"), "list_income"),
         ("POST", re.compile(r"^/api/income$"), "create_income"),
         ("PATCH", re.compile(r"^/api/income/(?P<id>\d+)$"), "update_income"),
@@ -631,6 +632,22 @@ class _App:
         return self._json(start_response, 200, {
             "deleted": True, "id": gasto_id, "avisos_credito_nuevos": avisos_nuevos,
         })
+
+    def saldar_expense(self, ctx, conn, start_response):
+        gasto_id = int(ctx.path_params["id"])
+        # db.saldar_gasto es autocontenida (mismo patrón que
+        # eliminar_gasto_logico): hace su propio SELECT + UPDATE condicionado
+        # + rollback interno en caso de falla, así que no hace falta reservar
+        # el escritor desde el handler (no leemos nada antes de llamarla).
+        try:
+            actualizada = db.saldar_gasto(conn, gasto_id, SERVER_ACTOR)
+        except ValueError as exc:
+            mensaje = str(exc)
+            if mensaje.startswith(f"No existe ningún gasto con id={gasto_id}"):
+                return self._error(start_response, 404, f"no existe gasto id={gasto_id}.")
+            return self._error(start_response, 409, mensaje)
+        _stored_money(actualizada["monto"])
+        return self._json(start_response, 200, {"expense": actualizada})
 
     # --- income ----------------------------------------------------------
 

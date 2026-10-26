@@ -1017,6 +1017,64 @@ def eliminar_gasto_logico(conn: sqlite3.Connection, gasto_id: int, actor: str) -
     conn.commit()
 
 
+def saldar_gasto(conn: sqlite3.Connection, gasto_id: int, actor: str) -> dict:
+    """Marca `gastos.id = gasto_id` como saldado (columna `saldado`).
+
+    Solo tiene sentido para gastos que generan deuda entre JD y Pinki
+    (`pagado_por` en 'JD'/'Pinki'): un gasto 'Común' no se saldea, nunca
+    generó deuda. Levanta `ValueError` si el gasto no existe, está borrado
+    lógicamente, ya estaba saldado, o su `pagado_por` es 'Común'.
+
+    Mismo patrón de atomicidad que `eliminar_gasto_logico`: el `UPDATE`
+    filtra además por `saldado IS NULL` y se verifica `cursor.rowcount == 1`,
+    para no pisar un saldado concurrente de otra conexión. Si falla el
+    `INSERT` en `auditoria` (o cualquier paso posterior al `UPDATE`), se
+    hace `rollback()` explícito antes de propagar la excepción.
+
+    Devuelve la fila actualizada (dict), con `saldado` en formato
+    'YYYY-MM-DD' (mismo formato que el resto del Log, ver comentario de la
+    columna en `init_db`).
+    """
+    fila = conn.execute("SELECT * FROM gastos WHERE id = ?", (gasto_id,)).fetchone()
+    if fila is None:
+        raise ValueError(f"No existe ningún gasto con id={gasto_id}.")
+    if fila["deleted_at"] is not None:
+        raise ValueError(f"El gasto id={gasto_id} está borrado; no se puede saldar.")
+    if fila["pagado_por"] not in ("JD", "Pinki"):
+        raise ValueError(
+            f"El gasto id={gasto_id} no genera deuda (pagado_por={fila['pagado_por']!r})."
+        )
+    if fila["saldado"] is not None:
+        raise ValueError(f"El gasto id={gasto_id} ya está saldado.")
+
+    snapshot_antes = json.dumps(dict(fila), ensure_ascii=False)
+    hoy = date.today().isoformat()
+
+    try:
+        cursor = conn.execute(
+            "UPDATE gastos SET saldado = ? WHERE id = ? AND saldado IS NULL",
+            (hoy, gasto_id),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError(
+                f"El gasto id={gasto_id} ya fue saldado por otra operación "
+                "concurrente (detectado al aplicar el saldado)."
+            )
+        actualizada = dict(conn.execute("SELECT * FROM gastos WHERE id = ?", (gasto_id,)).fetchone())
+        conn.execute(
+            """
+            INSERT INTO auditoria (tabla, fila_id, accion, actor, antes_json, despues_json, creado_en)
+            VALUES ('gastos', ?, 'saldar', ?, ?, ?, ?)
+            """,
+            (gasto_id, actor, snapshot_antes, json.dumps(actualizada, ensure_ascii=False), _now()),
+        )
+    except Exception:
+        conn.rollback()
+        raise
+    conn.commit()
+    return actualizada
+
+
 def get_estado(
     conn: sqlite3.Connection, chat_id: str, usuario: Optional[str] = None
 ) -> Optional[dict]:

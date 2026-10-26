@@ -109,6 +109,22 @@ function getMonthProportion(month) {
   return previous.length ? previous[previous.length - 1] : undefined;
 }
 
+// Gastos que generan deuda ENTRE JD y Pinki y todavía no fueron saldados:
+// pagados por una sola persona (nunca 'Común') y sin `saldado`. Atemporal
+// — no respeta el período activo, igual que el saldo que muestra la card
+// (DATA.deudaPendiente): una deuda de un mes anterior sigue vigente hasta
+// que se salda explícitamente.
+function getDebtRows() {
+  return DATA.gastos.filter((r) => {
+    if (r.saldado) return false;
+    if (r.pagado_por !== P1 && r.pagado_por !== P2) return false;
+    const { pct1, pct2 } = getRowPct(r);
+    if (r.pagado_por === P1 && pct2 === 0) return false;
+    if (r.pagado_por === P2 && pct1 === 0) return false;
+    return true;
+  });
+}
+
 // ── ESTADO ────────────────────────────────────────────────────────────────
 
 const DATA = {
@@ -977,6 +993,11 @@ function onExpenseCategoriaChange() {
 
 function formMarkup(kind, row, categoriesCatalog) {
   if (kind === 'expense-delete') return `<p>Se dará de baja únicamente esta fila: ${escapeHtml(row.descripcion_original || row.categoria)} · ${escapeHtml(row.fecha)} · cuota ${cuotaLabel(row)} · ${fmtARSExact(row.monto)}. Las demás cuotas permanecen.</p>`;
+  if (kind === 'expense-saldar') {
+    const { pct1, pct2 } = getRowPct(row);
+    const monto = Number(row.monto) || 0;
+    return `<p>Se marcará como saldado: ${escapeHtml(row.descripcion_original || row.categoria)} · ${escapeHtml(row.fecha)} · ${fmtARSExact(monto)}, pagado por ${escapeHtml(row.pagado_por)} (reparto ${pct1}% ${P1} / ${pct2}% ${P2}). Deja de computar en la deuda neta; no se puede deshacer desde el dashboard.</p>`;
+  }
   if (kind === 'income-delete') return `<p>Se dará de baja el ingreso de ${escapeHtml(row.persona)}: ${escapeHtml(row.descripcion_original || row.categoria)} · ${escapeHtml(row.fecha)} · ${fmtARSExact(row.monto)}.${row.categoria === 'Salario' ? ' Es un ingreso de Salario: esta baja puede cambiar la proporción del mes y las deudas.' : ''}</p>`;
   if (kind === 'fixed-delete') return `<p>La baja de ${escapeHtml(row.nombre)} crea una versión inactiva. El historial permanece.</p>${formField('fecha_baja', 'Fecha de baja', todayLocalISO(), 'date', 'required')}`;
   if (kind === 'inventory-delete') return `<p>Se dará de baja el bien "${escapeHtml(row.nombre)}"${row.categoria ? ` (${escapeHtml(row.categoria)})` : ''}, valor estimado ${fmtARSExact(row.valor_estimado)}.</p>`;
@@ -1075,13 +1096,14 @@ async function openForm(kind, id = null) {
   const returnFocus = activeForm ? activeForm.returnFocus : document.activeElement;
   const form = activeForm = { kind, row, returnFocus, confirmed: false, payload: null };
   const titles = {
-    expense: 'Agregar gasto', 'expense-delete': 'Dar de baja una cuota',
+    expense: 'Agregar gasto', 'expense-delete': 'Dar de baja una cuota', 'expense-saldar': 'Saldar gasto',
     income: 'Agregar ingreso', 'income-edit': 'Editar ingreso', 'income-delete': 'Dar de baja ingreso',
     inventory: 'Agregar bien', 'inventory-edit': 'Editar bien', 'inventory-delete': 'Dar de baja bien',
     fixed: 'Agregar fijo', 'fixed-edit': 'Crear versión de fijo', 'fixed-delete': 'Dar de baja fijo',
   };
   document.getElementById('form-title').textContent = titles[kind];
-  document.getElementById('form-intro').textContent = kind.includes('delete') ? 'Revisá qué cambio se aplicará.' : 'Completá los datos y revisá el resumen antes de guardar.';
+  document.getElementById('form-intro').textContent = kind.includes('delete') || kind === 'expense-saldar'
+    ? 'Revisá qué cambio se aplicará.' : 'Completá los datos y revisá el resumen antes de guardar.';
   document.getElementById('form-errors').textContent = '';
   document.getElementById('form-confirm').hidden = true;
   document.getElementById('form-back').hidden = true;
@@ -1226,6 +1248,7 @@ function validDate(raw) {
 
 function collectForm(kind, row, values) {
   const errors = {};
+  if (kind === 'expense-saldar') return { payload: null, errors };
   // Inventario tiene su propia forma (campos y fecha opcional distintos de
   // gastos/ingresos/fijos): se resuelve aparte en vez de forzarla en la
   // lógica genérica de dateKey/moneyKey de abajo, pensada para esos tres.
@@ -1338,6 +1361,7 @@ function collectForm(kind, row, values) {
 }
 
 function describeForm(kind, row, payload) {
+  if (kind === 'expense-saldar') return `Saldar el gasto #${canonicalId(row.id)}, ${fmtARSExact(row.monto)} pagado por ${row.pagado_por}. Deja de computar en la deuda neta.`;
   if (kind === 'expense-delete') return `Baja solo de la cuota ${cuotaLabel(row)} del gasto #${row.id}, ${fmtARSExact(row.monto)}. Otras cuotas no se borran.`;
   if (kind === 'fixed-delete') return `Baja de ${row.nombre} desde ${payload.fecha_baja}. Se crea una versión inactiva; el historial permanece.`;
   if (kind === 'expense') return `Gasto ${payload.categoria}${payload.subcategoria ? ` / ${payload.subcategoria}` : ''}: ${fmtARSExact(payload.monto)}, ${payload.fecha}, ${payload.cuotas_total} cuota(s). ${payload.descripcion_original || 'Sin descripción'}. Medio: ${payload.medio_pago}${payload.tarjeta_id ? `, tarjeta ${payload.tarjeta_id}` : ''}. Pagó ${payload.pagado_por}; reparto ${payload.tipo_proporcion}${payload.tipo_proporcion === 'custom' ? ` (${payload.proporcion_jd}% JD / ${payload.proporcion_pinki}% Pinki)` : ''}.`;
@@ -1355,6 +1379,7 @@ function describeForm(kind, row, payload) {
 function routeForForm(kind, row) {
   if (kind === 'expense') return ['POST', '/api/expenses'];
   if (kind === 'expense-delete') return ['DELETE', `/api/expenses/${encodeURIComponent(canonicalId(row.id))}`];
+  if (kind === 'expense-saldar') return ['POST', `/api/expenses/${encodeURIComponent(canonicalId(row.id))}/saldar`];
   if (kind === 'income') return ['POST', '/api/income'];
   if (kind === 'income-edit') return ['PATCH', `/api/income/${encodeURIComponent(canonicalId(row.id))}`];
   if (kind === 'income-delete') return ['DELETE', `/api/income/${encodeURIComponent(canonicalId(row.id))}`];
@@ -1372,6 +1397,8 @@ function verifiedWriteEnvelope(kind, row, result) {
     }
     if (kind === 'expense') return Array.isArray(result?.expenses) && result.expenses.length > 0 &&
       result.expenses.every((expense) => !!canonicalId(expense?.id));
+    if (kind === 'expense-saldar') return !!canonicalId(result?.expense?.id) &&
+      canonicalId(result.expense.id) === canonicalId(row.id) && result.expense.saldado != null;
     if (kind.startsWith('income')) return !!canonicalId(result?.income?.id);
     if (kind.startsWith('inventory')) return !!canonicalId(result?.inventory?.id);
     canonicalId(result?.fixed?.id);
@@ -1960,11 +1987,27 @@ document.querySelectorAll('#tabla-gastos thead th[data-key]').forEach((th) => {
 
 // ── PANELES DE DETALLE (fijos / cuotas / crédito / deuda) ──────────────
 
+// Las 4 cards con panel desplegable (fijos/cuotas/credito/deuda) comparten
+// un único slot visible: abrir una cierra cualquier otra que haya quedado
+// abierta, en vez de apilarse debajo de la vista.
+const DETAIL_KINDS = ['fijos', 'cuotas', 'credito', 'deuda'];
+
+function closeDetail(kind) {
+  const panel = document.getElementById(kind + '-detail');
+  const card = document.getElementById('card-' + kind + '-wrap');
+  if (!panel || panel.hidden) return;
+  panel.hidden = true;
+  if (card) card.setAttribute('aria-expanded', 'false');
+}
+
 function toggleDetail(kind) {
   const panel = document.getElementById(kind + '-detail');
   const card = document.getElementById('card-' + kind + '-wrap');
   if (!panel) return;
   const opening = panel.hidden;
+  for (const other of DETAIL_KINDS) {
+    if (other !== kind) closeDetail(other);
+  }
   panel.hidden = !opening;
   if (card) card.setAttribute('aria-expanded', String(opening));
   if (!opening) return;
@@ -2069,34 +2112,72 @@ function renderCreditoDetail() {
   }).join('') + `<div class="credito-tarjeta-header">Total crédito · ${fmtARS(total)}</div>`;
 }
 
-// Detalle de deuda: muestra el saldo pendiente actual (mismo dato que la
-// card), no un histórico mes a mes de deudas ya saldadas — Juan pidió
-// explícitamente no ver eso. data/deuda_pendiente.json es un agregado (no
-// tiene desglose por gasto individual en este snapshot).
+// Detalle de deuda: composición gasto a gasto del saldo pendiente actual
+// (mismo universo que la card — atemporal, ver getDebtRows), con de dónde
+// viene cada ítem (mes, quién pagó, % de reparto) y, si hay conexión en
+// vivo, la posibilidad de saldarlo ahí mismo. Si DATA.gastos no cargó, no
+// hay gastos individuales para desglosar (data/deuda_pendiente.json y
+// DATA.deudaPendiente son un agregado, sin eso).
 function renderDeudaDetail() {
   const inner = document.getElementById('deuda-detail-inner');
-  const d = DATA.deudaPendiente;
-  if (!d) {
-    inner.textContent = 'No hay un saldo confirmado para mostrar.';
+  if (DATA.loadErrors.gastos) {
+    inner.innerHTML = '<div class="section-error" role="alert">No se pudo cargar data/gastos.json — no se puede mostrar el detalle de la deuda.</div>';
     return;
   }
-  if (!d.deudor) {
+  const rows = getDebtRows().sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+  if (!rows.length) {
     inner.innerHTML = '<div class="empty-state">Sin deuda pendiente — todo saldado.</div>';
     return;
   }
+  let debeP1 = 0, debeP2 = 0;
+  const rowsData = rows.map((r) => {
+    const monto = Number(r.monto) || 0;
+    const { pct1, pct2 } = getRowPct(r);
+    const montoP1 = monto * (pct1 / 100);
+    const montoP2 = monto * (pct2 / 100);
+    if (r.pagado_por === P1) debeP2 += montoP2;
+    else debeP1 += montoP1;
+    return { r, monto, pct1, pct2, montoP1, montoP2 };
+  });
+  const net = debeP2 - debeP1;
+  const saldoText = Math.abs(net) < 1
+    ? 'sin saldo neto'
+    : net > 0 ? `${P2} debe ${fmtARS(net)} a ${P1}` : `${P1} debe ${fmtARS(Math.abs(net))} a ${P2}`;
+  const canWrite = !(!liveMode || writePending || reloadPending || reloadFailed);
   inner.innerHTML = `
+    <p class="td-muted" style="font-size:11px;margin:4px 0 10px">${rows.length} ítem${rows.length === 1 ? '' : 's'} sin saldar · neto ${saldoText}.
+      Incluye todo gasto pagado por ${P1} o ${P2} (nunca "Común"), sin importar el mes de origen — una deuda sigue vigente hasta que se salda explícitamente.
+      ${canWrite ? '' : ' Saldar requiere conexión en vivo; en modo snapshot el detalle es de solo lectura.'}</p>
     <table>
-      <thead><tr><th>Deudor</th><th>Acreedor</th><th style="text-align:right">Monto pendiente</th></tr></thead>
+      <thead><tr>
+        <th>Mes</th><th>Fecha</th><th>Descripción</th>
+        <th style="text-align:right">Monto</th>
+        <th style="text-align:right">% ${P1}</th><th style="text-align:right">% ${P2}</th>
+        <th style="text-align:right">$ ${P1}</th><th style="text-align:right">$ ${P2}</th>
+        <th></th>
+      </tr></thead>
       <tbody>
-        <tr>
-          <td>${escapeHtml(d.deudor)}</td>
-          <td>${escapeHtml(d.acreedor)}</td>
-          <td class="td-amount td-accent">${fmtARS(d.monto)}</td>
-        </tr>
+        ${rowsData.map(({ r, monto, pct1, pct2, montoP1, montoP2 }) => `<tr>
+          <td class="td-muted">${escapeHtml((r.fecha || '').slice(0, 7) || '—')}</td>
+          <td class="td-muted">${escapeHtml(r.fecha || '—')}</td>
+          <td>${escapeHtml(r.descripcion_original || r.subcategoria || r.categoria)}
+            <br><span class="td-muted" style="font-size:11px">pagó: ${escapeHtml(r.pagado_por)}</span>
+          </td>
+          <td class="td-amount">${fmtARS(monto)}</td>
+          <td class="td-muted" style="text-align:right">${pct1}%</td>
+          <td class="td-muted" style="text-align:right">${pct2}%</td>
+          <td class="td-amount">${fmtARS(montoP1)}</td>
+          <td class="td-amount">${fmtARS(montoP2)}</td>
+          <td style="text-align:center"><button type="button" class="fijos-secondary table-action" data-write-action data-id="${escapeHtml(canonicalId(r.id))}" onclick="openForm('expense-saldar', this.dataset.id)" aria-label="Saldar gasto ${escapeHtml(r.descripcion_original || r.categoria)} del ${escapeHtml(r.fecha)}" ${canWrite ? '' : 'disabled'}>Saldar</button></td>
+        </tr>`).join('')}
       </tbody>
-    </table>
-    <p class="detail-note">Suma de todos los gastos compartidos aún no saldados entre JD y
-    Pinki, sin importar de qué mes sean. No incluye lo ya compensado.</p>`;
+      <tfoot><tr>
+        <td colspan="6" class="td-muted">Subtotales deuda activa</td>
+        <td class="td-amount td-accent">${fmtARS(debeP1)}</td>
+        <td class="td-amount td-accent">${fmtARS(debeP2)}</td>
+        <td></td>
+      </tr></tfoot>
+    </table>`;
 }
 
 // ── VISTA INGRESOS ───────────────────────────────────────────────────────

@@ -56,6 +56,7 @@ El dashboard (`app.js`) solo conoce la primera capa: llama a rutas relativas
 | `GET /api/expenses?month=YYYY-MM` | `month` opcional | `{"expenses":[...]}`; excluye bajas lógicas |
 | `POST /api/expenses` | `fecha`, `monto`, `moneda`, `categoria`, `subcategoria`, `medio_pago`, `pagado_por`, `descripcion_original`, `tarjeta_id`, `tipo_proporcion`, `proporcion_jd`, `proporcion_pinki`, `cuotas_total` | `201 {"expenses":[...]}`; una fila por cuota |
 | `DELETE /api/expenses/:id` | Sin cuerpo | `{"deleted":true,"id":N}` |
+| `POST /api/expenses/:id/saldar` | Sin cuerpo | `{"expense":{...}}`; `404` si no existe, `409` si ya está borrado, ya saldado, o `pagado_por='Común'` |
 | `GET /api/income` | Sin parámetros | `{"income":[...]}` |
 | `POST /api/income` | `fecha`, `monto`, `moneda`, `categoria`, `persona`, `descripcion_original` | `201 {"income":{...}}` |
 | `PATCH /api/income/:id` | Subconjunto no vacío de los campos del alta | `{"income":{...}}` |

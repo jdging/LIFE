@@ -170,6 +170,39 @@ class ApiTest(WsgiApiTestCase):
                            if row["id"] == rows[1]["id"])
             self.assertEqual(deleted["deleted_by"], "sesion_compartida:no_verificado")
 
+    def test_saldar_expense(self):
+        status, body, _ = self.request("POST", "/api/expenses", self.expense(pagado_por="JD"))
+        self.assertEqual(status, 201)
+        expense_id = body["expenses"][0]["id"]
+
+        status, body, _ = self.request("POST", f"/api/expenses/{expense_id}/saldar")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["expense"]["id"], expense_id)
+        self.assertIsNotNone(body["expense"]["saldado"])
+
+        status, listed, _ = self.request("GET", "/api/expenses")
+        self.assertEqual(listed["expenses"][0]["saldado"], body["expense"]["saldado"])
+
+        # Ya saldado: la segunda llamada no puede volver a aplicar el cambio.
+        status, _, _ = self.request("POST", f"/api/expenses/{expense_id}/saldar")
+        self.assertEqual(status, 409)
+
+        self.assertEqual(self.request("POST", "/api/expenses/999/saldar")[0], 404)
+
+    def test_saldar_expense_rejects_comun_and_deleted(self):
+        status, body, _ = self.request("POST", "/api/expenses", self.expense(pagado_por="Común"))
+        self.assertEqual(status, 201)
+        comun_id = body["expenses"][0]["id"]
+        status, _, _ = self.request("POST", f"/api/expenses/{comun_id}/saldar")
+        self.assertEqual(status, 409)
+
+        status, body, _ = self.request("POST", "/api/expenses", self.expense(pagado_por="Pinki"))
+        self.assertEqual(status, 201)
+        deleted_id = body["expenses"][0]["id"]
+        self.assertEqual(self.request("DELETE", f"/api/expenses/{deleted_id}")[0], 200)
+        status, _, _ = self.request("POST", f"/api/expenses/{deleted_id}/saldar")
+        self.assertEqual(status, 409)
+
     def test_expense_installments_120_uses_original_total(self):
         status, body, _ = self.request(
             "POST", "/api/expenses", self.expense(monto=120, cuotas_total=120)

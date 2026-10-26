@@ -134,6 +134,7 @@ test('every contracted method forwards the exact path and query to the configure
     ['GET', '/api/expenses?month=2026-10'],
     ['POST', '/api/expenses', '{}'],
     ['DELETE', '/api/expenses/1'],
+    ['POST', '/api/expenses/1/saldar'],
     ['GET', '/api/income'],
     ['POST', '/api/income', '{}'],
     ['PATCH', '/api/income/2', '{}'],
@@ -181,6 +182,7 @@ test('known paths reject wrong methods with Allow; unknown paths stay 404', asyn
     ['/api/health', 'POST', 'GET'],
     ['/api/expenses', 'PATCH', 'GET, POST'],
     ['/api/expenses/1', 'GET', 'DELETE'],
+    ['/api/expenses/1/saldar', 'GET', 'POST'],
     ['/api/income', 'DELETE', 'GET, POST'],
     ['/api/income/1', 'GET', 'PATCH, DELETE'],
     ['/api/inventory', 'DELETE', 'GET, POST'],
@@ -195,7 +197,7 @@ test('known paths reject wrong methods with Allow; unknown paths stay 404', asyn
   ];
   const unknown = [
     '/api/gastos', '/api/ingresos', '/api/fijos', '/api/inventario', '/api/expenses/F-1',
-    '/api/expenses/0', '/api/income/-1', '/api/inventory/0', '/api/inventory/-1',
+    '/api/expenses/0', '/api/expenses/1/saldar/x', '/api/income/-1', '/api/inventory/0', '/api/inventory/-1',
     '/api/fixed/0/historial', '/api/fixed/1/versions', '/api/fixed/1%2Fhistorial',
     '/api/unknown', '/api',
   ];
