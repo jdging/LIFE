@@ -321,6 +321,34 @@ assert.match(markupApi.formMarkup('fixed-edit', fixedWithCategoriaRow), /id="fie
 const fixedAltaMarkup = markupApi.formMarkup('fixed', null);
 assert.match(fixedAltaMarkup, /id="field-categoria"[^>]*value=""/, 'El alta no precarga ninguna categoría');
 
+// Categoría/subcategoría de fijo con catálogo real (brief t_38a7253f F1b,
+// hallazgo A): mismo patrón que el formulario de gasto -- <select> + <select>
+// dependiente poblados desde /api/categories?tipo=Gasto -- pero OPCIONALES
+// (sin `required`, a diferencia de gasto) y preservando un valor ya guardado
+// que no esté en el catálogo, en vez de perderlo en silencio.
+const fixedAltaConCatalogo = markupApi.formMarkup('fixed', null, categoriesGastoFixture.categories);
+assert.match(fixedAltaConCatalogo, /<select id="field-categoria" name="categoria" aria-describedby/,
+  'El select de categoría de fijo no debe ser obligatorio (a diferencia del de gasto)');
+for (const entry of categoriesGastoFixture.categories) {
+  assert.match(fixedAltaConCatalogo, new RegExp(`<option value="${entry.categoria}">${entry.categoria}</option>`));
+}
+assert.match(fixedAltaConCatalogo, /<option value="" selected>Sin categoría<\/option>/,
+  'El alta sin fila no debe preseleccionar ninguna categoría del catálogo');
+
+const fixedEditEnCatalogo = { ...customFixed, categoria: 'Hogar', subcategoria: 'Alquiler' };
+const fixedEditConCatalogoHtml = markupApi.formMarkup('fixed-edit', fixedEditEnCatalogo, categoriesGastoFixture.categories);
+assert.match(fixedEditConCatalogoHtml, /<option value="Hogar" selected>Hogar<\/option>/);
+assert.match(fixedEditConCatalogoHtml, /<option value="Alquiler" selected>Alquiler<\/option>/);
+assert.match(fixedEditConCatalogoHtml, /<option value="Comida">Comida<\/option>/, 'las demás categorías no deben quedar marcadas');
+
+// Valor legacy fuera del catálogo: se conserva como opción extra, nunca se pierde.
+const fixedEditFueraDeCatalogo = { ...customFixed, categoria: 'Categoría vieja', subcategoria: 'Sub vieja' };
+const fixedEditFueraDeCatalogoHtml = markupApi.formMarkup('fixed-edit', fixedEditFueraDeCatalogo, categoriesGastoFixture.categories);
+assert.match(fixedEditFueraDeCatalogoHtml, /<option value="Categoría vieja" selected>Categoría vieja<\/option>/,
+  'Una categoría guardada que ya no está en el catálogo debe conservarse como opción extra');
+assert.match(fixedEditFueraDeCatalogoHtml, /<option value="Sub vieja" selected>Sub vieja<\/option>/,
+  'Una subcategoría guardada que ya no está en el catálogo debe conservarse como opción extra');
+
 // formMarkup('expense-edit', ...): mismo formulario de alta, precargado con la
 // fila, salvo cuotas_total (no editable por PATCH, ver GASTO_CAMPOS_EDITABLES).
 const expenseMarkupApi = runInNewContext(`
@@ -377,10 +405,10 @@ ${slice('const escapeHtml = ', 'const fmtARS = ')}
 ${slice('const MAX_SQLITE_ID = ', 'function adaptLiveMovement(')}
 const P1 = 'JD', P2 = 'Pinki';
 ${slice('function getRowPct(', '// ── FILTROS DE DATOS')}
-const TABLE_KEY_MAP = { monto_total: 'monto', pago: 'pagado_por' };
-let tableFiltroCat = '', sortState = { key: 'fecha', dir: 'desc' };
+const TABLE_KEY_MAP = { monto_total: 'monto_propio', pago: 'pagado_por' };
+let tableFiltroCat = '', sortState = { key: 'fecha', dir: 'desc' }, personaFiltro = 'comun';
 let gastosTableRows = [{ ...expenseRow, id: bigId, categoria: '<img src=x onerror=alert(1)>',
-  descripcion_original: '<svg onload=alert(2)>' }];
+  descripcion_original: '<svg onload=alert(2)>', monto_propio: expenseRow.monto }];
 let liveMode = true, writePending = false, reloadPending = false, reloadFailed = false;
 function iconFor() { return '🔸'; }
 function fmtARS(value) { return '$' + value; }
@@ -405,6 +433,119 @@ assert.match(expenseTableHtml, /data-label="\$ JD"[^>]*>\$0</);
 assert.match(expenseTableHtml, /data-label="\$ Pinki"[^>]*>\$30</);
 assert.doesNotMatch(expenseTableHtml, /<svg/i, 'Un payload XSS en descripcion_original no debe crear un elemento');
 assert.match(expenseTableHtml, /&lt;svg onload=alert\(2\)&gt;/, 'La descripción maliciosa debe llegar escapada al innerHTML');
+
+// ── HALLAZGO B (QA Juan, t_38a7253f F1b): "Monto" de la tabla de detalle de
+// gastos siempre muestra el TOTAL del gasto, nunca la porción recortada por
+// un filtro de persona activo -- "$ JD"/"$ Pinki" ya muestran esa porción, y
+// mostrarla también en "Monto" hacía parecer un error donde no lo había.
+// Casos reales del QA: gasto 856 ($15.600, reparto custom 50/50) y 857
+// ($7.000, reparto dinámico 69.4113/30.5887 de octubre 2026).
+const montoColumnApi = runInNewContext(`
+${slice('const escapeHtml = ', 'const fmtARS = ')}
+${slice('const MAX_SQLITE_ID = ', 'function adaptLiveMovement(')}
+const P1 = 'JD', P2 = 'Pinki';
+${slice('function getMonthProportion(', 'function getDebtRows(')}
+${slice('function getRowPct(', 'function setPersonaFiltro(')}
+const TABLE_KEY_MAP = { monto_total: 'monto_propio', pago: 'pagado_por' };
+let tableFiltroCat = '', sortState = { key: 'fecha', dir: 'desc' }, personaFiltro = 'comun';
+let liveMode = true, writePending = false, reloadPending = false, reloadFailed = false;
+let gastosTableRows = [];
+function iconFor() { return '🔸'; }
+function fmtARS(value) { return '$' + (Math.round(value * 100) / 100); }
+function pillClassFor() { return 'pill-jd'; }
+function cuotaLabel() { return '—'; }
+${slice('function renderGastosTable()', "document.querySelectorAll('#tabla-gastos thead th[data-key]')")}
+({ renderGastosTable,
+   setFiltro(value) { personaFiltro = value; },
+   setSort(key, dir) { sortState = { key, dir }; },
+   buildRows(rows) {
+     const personaFilteredRows = applyPersonaFiltro(rows);
+     gastosTableRows = applyPersonaMonto(personaFilteredRows)
+       .map((r, i) => ({ ...r, monto_propio: personaFilteredRows[i].monto }));
+   } })`,
+  { document, DATA: { resumen: [
+    { mes: '2026-10', proporcion_jd: 69.4113, proporcion_pinki: 30.5887, total_ingresos: 100 },
+  ] } });
+
+const gasto856 = { id: 856, fecha: '2026-10-05', monto: 15600, categoria: 'Comida',
+  descripcion_original: 'Super', medio_pago: 'Efectivo', pagado_por: 'JD',
+  tipo_proporcion: 'custom', proporcion_jd: 50, proporcion_pinki: 50 };
+const gasto857 = { id: 857, fecha: '2026-10-06', monto: 7000, categoria: 'Transporte',
+  descripcion_original: 'Nafta', medio_pago: 'Efectivo', pagado_por: 'Pinki',
+  tipo_proporcion: 'dinamico' };
+
+const rowFor = (html, id) => (html.match(/<tr>[\s\S]*?<\/tr>/g) || [])
+  .find((row) => row.includes(`data-id="${id}"`));
+const cellFor = (rowHtml, label) => rowHtml.match(new RegExp(`data-label="${label}"[^>]*>([^<]*)<`))?.[1];
+
+for (const filtro of ['jd_comun', 'comun']) {
+  montoColumnApi.setFiltro(filtro);
+  montoColumnApi.buildRows([gasto856, gasto857]);
+  montoColumnApi.renderGastosTable();
+  const html = element('tabla-body').innerHTML;
+  const row856 = rowFor(html, 856);
+  const row857 = rowFor(html, 857);
+  assert.equal(cellFor(row856, 'Monto'), '$15600', `filtro=${filtro}: Monto de 856 debe ser el total, no la porción filtrada`);
+  assert.equal(cellFor(row856, '\\$ JD'), '$7800');
+  assert.equal(cellFor(row856, '\\$ Pinki'), '$7800');
+  assert.equal(cellFor(row857, 'Monto'), '$7000', `filtro=${filtro}: Monto de 857 debe ser el total, no la porción filtrada`);
+  assert.equal(cellFor(row857, '\\$ JD'), '$4858.79');
+  assert.equal(cellFor(row857, '\\$ Pinki'), '$2141.21');
+}
+
+// Con filtro de persona activo, la columna de esa persona queda resaltada
+// (clase CSS); con filtro 'comun' (sin una persona puntual) no se resalta ninguna.
+montoColumnApi.setFiltro('jd_comun');
+montoColumnApi.buildRows([gasto856, gasto857]);
+montoColumnApi.renderGastosTable();
+let htmlJd = element('tabla-body').innerHTML;
+assert.match(rowFor(htmlJd, 856), /data-label="\$ JD" class="td-amount td-persona-jd"/);
+assert.doesNotMatch(rowFor(htmlJd, 856), /data-label="\$ Pinki" class="td-amount td-persona-pinki"/);
+
+montoColumnApi.setFiltro('pinki_comun');
+montoColumnApi.buildRows([gasto856, gasto857]);
+montoColumnApi.renderGastosTable();
+let htmlPinki = element('tabla-body').innerHTML;
+assert.match(rowFor(htmlPinki, 856), /data-label="\$ Pinki" class="td-amount td-persona-pinki"/);
+assert.doesNotMatch(rowFor(htmlPinki, 856), /data-label="\$ JD" class="td-amount td-persona-jd"/);
+
+montoColumnApi.setFiltro('comun');
+montoColumnApi.buildRows([gasto856, gasto857]);
+montoColumnApi.renderGastosTable();
+let htmlComun = element('tabla-body').innerHTML;
+assert.doesNotMatch(htmlComun, /td-persona-jd|td-persona-pinki/, 'Sin filtro de una persona puntual no debe resaltarse ninguna columna');
+
+// El ordenamiento por "Monto" debe ordenar por el total mostrado (monto_propio),
+// no por la porción recortada por el filtro -- con estos montos y reparto,
+// un sort por la porción filtrada (jd_comun) daría el orden inverso.
+const gastoChico = { id: 901, fecha: '2026-10-01', monto: 5000, categoria: 'Hogar',
+  descripcion_original: 'Chico', medio_pago: 'Efectivo', pagado_por: 'Común',
+  tipo_proporcion: 'custom', proporcion_jd: 90, proporcion_pinki: 10 };
+const gastoGrande = { id: 902, fecha: '2026-10-02', monto: 10000, categoria: 'Hogar',
+  descripcion_original: 'Grande', medio_pago: 'Efectivo', pagado_por: 'Común',
+  tipo_proporcion: 'custom', proporcion_jd: 10, proporcion_pinki: 90 };
+montoColumnApi.setFiltro('jd_comun');
+montoColumnApi.buildRows([gastoGrande, gastoChico]);
+montoColumnApi.setSort('monto_total', 'asc');
+montoColumnApi.renderGastosTable();
+const sortedHtml = element('tabla-body').innerHTML;
+const sortedIds = Array.from(sortedHtml.matchAll(/data-id="(\d+)"/g), (m) => m[1]);
+assert.deepEqual([...new Set(sortedIds)], ['901', '902'],
+  'Orden ascendente por Monto debe seguir el total (5000 < 10000), no la porción recortada por el filtro jd_comun (que la invertiría)');
+
+// Mismo chequeo en orden DESCENDENTE (cobertura pedida por QA, brief
+// t_38a7253f F1b-fix2 punto 3): con filtro de persona activo, el total
+// manda igual que en ascendente, solo invertido.
+montoColumnApi.setFiltro('jd_comun');
+montoColumnApi.buildRows([gastoGrande, gastoChico]);
+montoColumnApi.setSort('monto_total', 'desc');
+montoColumnApi.renderGastosTable();
+const sortedHtmlDesc = element('tabla-body').innerHTML;
+const sortedIdsDesc = Array.from(sortedHtmlDesc.matchAll(/data-id="(\d+)"/g), (m) => m[1]);
+assert.deepEqual([...new Set(sortedIdsDesc)], ['902', '901'],
+  'Orden descendente por Monto debe seguir el total (10000 > 5000), no la porción recortada por el filtro jd_comun');
+
+console.log('Tabla de detalle de gastos: columna Monto = total, resaltado de persona filtrada y orden por total (asc/desc) verificados');
 
 // renderDeudaDetail (brief fix4 #4): tras quitar la columna "Mes" el thead
 // quedó en 8 columnas (Fecha, Descripción, Monto, %JD, %Pinki, $JD, $Pinki,
@@ -561,6 +702,17 @@ assert.equal('categoria' in api.collectForm('fixed', null, fixedValues).payload,
   'Sin categoria en el form, el campo no viaja en el payload');
 assert.equal('categoria' in api.collectForm('fixed-edit', fixed, fixedValues).payload, false,
   'Editar sin categoria no la manda -- la nueva versión hereda la vigente');
+
+// Subcategoría de gasto fijo (brief t_38a7253f F1b, hallazgo A): misma regla
+// de herencia que categoría.
+const fixedWithSubcategoriaValues = { ...fixedValues, categoria: 'Hogar', subcategoria: 'Alquiler' };
+const collectedFixedSubcategoria = api.collectForm('fixed', null, fixedWithSubcategoriaValues);
+assert.equal(collectedFixedSubcategoria.payload.subcategoria, 'Alquiler');
+assert.match(api.describeForm('fixed', null, collectedFixedSubcategoria.payload), /Nuevo fijo Prueba sintética nueva \(Hogar \/ Alquiler\)/);
+assert.equal('subcategoria' in api.collectForm('fixed', null, fixedValues).payload, false,
+  'Sin subcategoria en el form, el campo no viaja en el payload');
+assert.equal('subcategoria' in api.collectForm('fixed-edit', fixed, fixedValues).payload, false,
+  'Editar sin subcategoria no la manda -- la nueva versión hereda la vigente');
 
 const writes = [
   ['expense', null, collectedExpense.payload, '/api/expenses', 201, { expenses: [expense] }],
@@ -881,11 +1033,15 @@ function cuotaLabel(row) { return (row.cuota_nro || 1) + '/' + (row.cuotas_total
 ${slice('const escapeHtml = ', 'const fmtARS = ')}
 let liveMode = true, writePending = false, reloadPending = false, reloadFailed = false;
 let currentView = 'fijos';
-let activeForm = null;
+let activeForm = null, categoriesGastoCache = null, activeExpenseCatalog = null;
 const DATA = { gastos: [], ingresos: [], fijos: [] };
 function updateAvailability() {}
 function showWriteNotice() {}
 async function saveAndReload() { return { saved: true, reloaded: true }; }
+// Catálogo disponible (no es el foco de este ciclo de modal): sin esto,
+// openForm('fixed') tomaría el camino fail-closed (brief t_38a7253f
+// F1b-fix2 #1) y nunca llegaría a pintar los campos que este test ejercita.
+async function loadCategoriasGasto() { return [{ categoria: 'Hogar', subcategorias: ['Alquiler'] }]; }
 ${slice('function formField(', 'function routeForForm(')}
 ${slice('async function handleFormSubmit(', "document.getElementById('life-form').addEventListener")}
 ({ openForm, closeForm, handleFormSubmit })`,
@@ -897,7 +1053,14 @@ const modalFixedValues = { nombre: 'Prueba ciclo', monto_estimado: '50', periodi
 const modalSubmit = () => ({ preventDefault() {}, currentTarget: { values: modalFixedValues } });
 
 // Ciclo 1: abrir → confirmar → guardar (closeForm se dispara dentro de handleFormSubmit) → reabrir.
-modalCycleApi.openForm('fixed');
+// openForm() es async (carga el catálogo de categorías antes de pintar los
+// campos reales, ver fail-closed de fijos): si no se espera acá, su
+// continuación pendiente queda encolada como microtask y puede resolverse
+// DESPUÉS del handleFormSubmit siguiente, repintando #form-fields con el
+// catálogo recién llegado y pisando el estado de confirmación que
+// handleFormSubmit ya había dejado (hidden=true). Awaitear openForm() antes
+// de interactuar con el form evita esa carrera.
+await modalCycleApi.openForm('fixed');
 assert.equal(modalCycleElement('form-fields').hidden, false);
 assert.equal(modalCycleElement('form-confirm').hidden, true);
 assert.equal(modalCycleElement('form-back').hidden, true);
@@ -905,7 +1068,7 @@ await modalCycleApi.handleFormSubmit(modalSubmit());
 assert.equal(modalCycleElement('form-fields').hidden, true, 'La confirmación oculta los campos');
 assert.equal(modalCycleElement('form-confirm').hidden, false);
 await modalCycleApi.handleFormSubmit(modalSubmit());
-modalCycleApi.openForm('fixed');
+await modalCycleApi.openForm('fixed');
 assert.equal(modalCycleElement('form-fields').hidden, false, 'openForm debe dejar #form-fields visible tras guardar');
 assert.equal(modalCycleElement('form-confirm').hidden, true, 'openForm debe ocultar #form-confirm al reabrir');
 assert.equal(modalCycleElement('form-back').hidden, true, 'openForm debe ocultar #form-back al reabrir');
@@ -918,7 +1081,7 @@ modalCycleApi.closeForm();
 assert.equal(modalCycleElement('form-fields').hidden, false, 'Cancelar desde la confirmación debe revertir el estado');
 assert.equal(modalCycleElement('form-confirm').hidden, true);
 assert.equal(modalCycleElement('form-back').hidden, true);
-modalCycleApi.openForm('fixed');
+await modalCycleApi.openForm('fixed');
 assert.equal(modalCycleElement('form-fields').hidden, false, 'Reabrir tras cancelar deja #form-fields visible');
 assert.equal(modalCycleElement('form-errors').textContent, '');
 
@@ -1161,10 +1324,11 @@ function makeExpenseFormHarness() {
   const document = { getElementById: element, querySelectorAll: () => [], activeElement: null };
   const api = runInNewContext(`'use strict';
     let liveMode = true, writePending = false, reloadPending = false, reloadFailed = false;
-    let activeForm = null, categoriesGastoCache = null, activeExpenseCatalog = null;
+    let activeForm = null, categoriesGastoCache = null, activeExpenseCatalog = null, currentView = 'gastos';
     const DATA = { gastos: [], ingresos: [], fijos: [] };
     ${expenseFormSliceSetup}
-    ({ openForm, closeForm, formMarkup, onExpenseCategoriaChange, collectForm, writeForm })`,
+    ({ openForm, closeForm, formMarkup, onExpenseCategoriaChange, collectForm, writeForm, retryFixedCatalog,
+       get activeForm() { return activeForm; } })`,
     { document, fetch: mockFetch, Date, Number, Math, String, Array, Set,
       FormData: class { constructor(target) { this.target = target; } entries() { return Object.entries(this.target.values || {}); } } });
   return { api, calls, postQueue, element, setCategoriesReply(reply) { categoriesReply = reply; } };
@@ -1254,6 +1418,236 @@ assert.doesNotMatch(xssSubHtml, /<svg/i);
 assert.match(xssSubHtml, /&lt;svg onload=alert\(2\)&gt;/);
 
 console.log('Categorías de gasto: select dependiente, caché en memoria, payload POST, fallback a texto y escape de XSS verificados');
+
+// ── CATÁLOGO DE CATEGORÍAS EN EL FORM DE FIJO (brief t_38a7253f F1b, hallazgo A) ──
+// Mismo mecanismo que el form de gasto (mismo endpoint, misma caché en
+// memoria vía makeExpenseFormHarness), con dos diferencias a propósito:
+// categoría/subcategoría quedan OPCIONALES (sin `required`), y el fallback
+// de texto libre sugiere desde los fijos ya cargados, no desde los gastos.
+const fixedCatalogForm = makeExpenseFormHarness();
+fixedCatalogForm.setCategoriesReply({ status: 200, body: categoriesGastoFixture });
+await fixedCatalogForm.api.openForm('fixed');
+const fixedCatalogHtml = fixedCatalogForm.element('form-fields').innerHTML;
+assert.match(fixedCatalogHtml, /<select id="field-categoria"/);
+assert.doesNotMatch(fixedCatalogHtml, /<select id="field-categoria" name="categoria" required/,
+  'A diferencia de gasto, la categoría de un fijo no debe ser obligatoria');
+assert.doesNotMatch(fixedCatalogHtml, /list="fixed-categorias"/,
+  'Con catálogo disponible no debe quedar el datalist de texto libre');
+for (const entry of categoriesGastoFixture.categories) {
+  assert.match(fixedCatalogHtml, new RegExp(`<option value="${entry.categoria}">${entry.categoria}</option>`),
+    `Falta la categoría "${entry.categoria}" del catálogo en el select de fijo`);
+}
+assert.equal(fixedCatalogForm.calls.filter((c) => c.path === '/api/categories?tipo=Gasto').length, 1);
+
+// Subcategoría dependiente: mismo onExpenseCategoriaChange() que gasto, ya
+// que ambos formularios comparten los ids #field-categoria/#field-subcategoria.
+fixedCatalogForm.element('field-categoria').value = 'Hogar';
+fixedCatalogForm.api.onExpenseCategoriaChange();
+const fixedSubcatHtml = fixedCatalogForm.element('field-subcategoria').innerHTML;
+assert.match(fixedSubcatHtml, />Alquiler</);
+assert.doesNotMatch(fixedSubcatHtml, />Supermercado</, 'No debe mezclar subcategorías de otra categoría');
+
+// Payload de alta con catálogo: categoria/subcategoria viajan como texto plano.
+const chosenFixedValues = { nombre: 'Alquiler', monto_estimado: '200000', periodicidad: 'mensual',
+  responsable: 'Común', fixed_tipo_proporcion: 'dinamica', vigente_desde: '2026-10-15',
+  categoria: 'Hogar', subcategoria: 'Alquiler' };
+const { payload: chosenFixedPayload, errors: chosenFixedErrors } = fixedCatalogForm.api.collectForm('fixed', null, chosenFixedValues);
+assert.equal(Object.keys(chosenFixedErrors).length, 0);
+assert.equal(chosenFixedPayload.categoria, 'Hogar');
+assert.equal(chosenFixedPayload.subcategoria, 'Alquiler');
+
+// ── SEMÁNTICA OMITIDO/NULL EN EDICIÓN DE FIJO (brief t_38a7253f F1b-fix2,
+// hallazgo 2 del revisor): campo AUSENTE del form = heredar; "Sin
+// categoría/subcategoría" elegido sobre un valor existente = null explícito.
+const fixedConAmbas = { categoria: 'Hogar', subcategoria: 'Alquiler' };
+
+// Heredar: el <select> sigue mostrando el valor vigente, sin tocarlo -- se omite.
+const heredarValues = { nombre: 'Alquiler', monto_estimado: '200000', periodicidad: 'mensual',
+  responsable: 'Común', fixed_tipo_proporcion: 'dinamica', vigente_desde: '2026-10-15',
+  categoria: 'Hogar', subcategoria: 'Alquiler' };
+const heredar = fixedCatalogForm.api.collectForm('fixed-edit', fixedConAmbas, heredarValues);
+assert.equal(Object.keys(heredar.errors).length, 0);
+assert.equal('categoria' in heredar.payload, false, 'Sin cambios, categoria se omite (hereda)');
+assert.equal('subcategoria' in heredar.payload, false, 'Sin cambios, subcategoria se omite (hereda)');
+assert.match(api.describeForm('fixed-edit', fixedConAmbas, heredar.payload),
+  /categoría: Hogar; subcategoría: Alquiler/, 'Revisar debe mostrar los valores heredados');
+
+// Cambiar: un valor nuevo viaja explícito.
+const cambiarValues = { ...heredarValues, categoria: 'Comida', subcategoria: 'Supermercado' };
+const cambiar = fixedCatalogForm.api.collectForm('fixed-edit', fixedConAmbas, cambiarValues);
+assert.equal(Object.keys(cambiar.errors).length, 0);
+assert.equal(cambiar.payload.categoria, 'Comida');
+assert.equal(cambiar.payload.subcategoria, 'Supermercado');
+assert.match(api.describeForm('fixed-edit', fixedConAmbas, cambiar.payload),
+  /categoría: Comida; subcategoría: Supermercado/, 'Revisar debe mostrar ambos valores cambiados');
+
+// Vaciar categoría ("Sin categoría" elegido sobre un fijo que la tenía):
+// el <select> de subcategoría ya quedó resetado por onExpenseCategoriaChange
+// (simulado acá con subcategoria: '') -- ambas viajan null explícito.
+const vaciarCategoriaValues = { ...heredarValues, categoria: '', subcategoria: '' };
+const vaciarCategoria = fixedCatalogForm.api.collectForm('fixed-edit', fixedConAmbas, vaciarCategoriaValues);
+assert.equal(Object.keys(vaciarCategoria.errors).length, 0);
+assert.equal(vaciarCategoria.payload.categoria, null);
+assert.equal(vaciarCategoria.payload.subcategoria, null);
+assert.match(api.describeForm('fixed-edit', fixedConAmbas, vaciarCategoria.payload),
+  /categoría: Sin categoría; subcategoría: Sin subcategoría/, 'Revisar debe mostrar la limpieza explícita');
+
+// Vaciar sólo subcategoría: la categoría no cambió (se omite), subcategoria viaja null.
+const vaciarSubcategoriaValues = { ...heredarValues, categoria: 'Hogar', subcategoria: '' };
+const vaciarSubcategoria = fixedCatalogForm.api.collectForm('fixed-edit', fixedConAmbas, vaciarSubcategoriaValues);
+assert.equal(Object.keys(vaciarSubcategoria.errors).length, 0);
+assert.equal('categoria' in vaciarSubcategoria.payload, false);
+assert.equal(vaciarSubcategoria.payload.subcategoria, null);
+assert.match(api.describeForm('fixed-edit', fixedConAmbas, vaciarSubcategoria.payload),
+  /categoría: Hogar; subcategoría: Sin subcategoría/, 'Revisar combina categoría heredada y limpieza de subcategoría');
+const asignarLegacy = fixedCatalogForm.api.collectForm('fixed-edit', { categoria: null, subcategoria: null }, heredarValues);
+assert.match(api.describeForm('fixed-edit', { categoria: null, subcategoria: null }, asignarLegacy.payload),
+  /categoría: Hogar; subcategoría: Alquiler/, 'Revisar muestra la asignación a un fijo legacy');
+assert.match(api.describeForm('fixed-edit', { categoria: 'Hogar', subcategoria: 'Alquiler' },
+  { ...heredar.payload, categoria: null }), /categoría: Sin categoría; subcategoría: Sin subcategoría/,
+  'Si solo se envía categoría null, Revisar debe reflejar la limpieza en cascada del backend');
+
+// Cambio de categoría limpia la subcategoría vieja: simulado de punta a
+// punta con el <select> dependiente real (onExpenseCategoriaChange), no a
+// mano -- así se prueba que el flujo de UI completo (no solo collectForm)
+// termina mandando subcategoria: null cuando la vieja no pertenece a la nueva.
+const cambioCategoriaForm = makeExpenseFormHarness();
+cambioCategoriaForm.setCategoriesReply({ status: 200, body: categoriesGastoFixture });
+await cambioCategoriaForm.api.openForm('fixed-edit');
+cambioCategoriaForm.element('field-categoria').value = 'Comida';
+cambioCategoriaForm.api.onExpenseCategoriaChange();
+assert.equal(cambioCategoriaForm.element('field-subcategoria').value, '',
+  'Cambiar de categoría debe resetear la subcategoría elegida');
+const cambioCategoriaValues = { ...heredarValues, categoria: 'Comida', subcategoria: '' };
+const cambioCategoria = cambioCategoriaForm.api.collectForm('fixed-edit', fixedConAmbas, cambioCategoriaValues);
+assert.equal(cambioCategoria.payload.categoria, 'Comida');
+assert.equal(cambioCategoria.payload.subcategoria, null,
+  'La subcategoria vieja ("Alquiler", de Hogar) no pertenece a la nueva categoría ("Comida") -- debe viajar null, no heredarse');
+
+// Defensa en profundidad en el propio form: subcategoria sin categoria se
+// rechaza aunque alguien fuerce ese estado salteando el <select> dependiente.
+const subcatSinCategoriaValues = { ...heredarValues, categoria: '', subcategoria: 'Forzada' };
+const subcatSinCategoria = fixedCatalogForm.api.collectForm('fixed-edit', fixedConAmbas, subcatSinCategoriaValues);
+assert.ok(subcatSinCategoria.errors.subcategoria, 'No puede quedar subcategoria sin categoria, ni en el form');
+const subcatSinCategoriaAlta = fixedCatalogForm.api.collectForm('fixed', null,
+  { ...heredarValues, categoria: '', subcategoria: 'Forzada' });
+assert.ok(subcatSinCategoriaAlta.errors.subcategoria, 'La misma regla aplica en alta');
+
+console.log('Fijo: semántica omitido/null en edición (heredar, cambiar, vaciar, cascada, cambio de categoría) verificada');
+
+// Combinación pedida por QA (brief t_38a7253f F1b-fix2, punto 3): categoría
+// EN el catálogo pero subcategoría FUERA de él (no en la lista de esa
+// categoría) en el form de edición -- a diferencia de la #345, donde ambas
+// estaban afuera, acá solo la subcategoría quedó obsoleta.
+const fixedCategoriaEnCatalogoSubFuera = { categoria: 'Hogar', subcategoria: 'Sub vieja ya no vigente' };
+const mixtoHtml = markupApi.formMarkup('fixed-edit', fixedCategoriaEnCatalogoSubFuera, categoriesGastoFixture.categories);
+assert.match(mixtoHtml, /<option value="Hogar" selected>Hogar<\/option>/, 'La categoría sigue en el catálogo, sin agregarse como extra');
+assert.equal(mixtoHtml.match(/<option value="Hogar"/g).length, 1, 'La categoría del catálogo no debe duplicarse como extra');
+assert.match(mixtoHtml, /<option value="Sub vieja ya no vigente" selected>Sub vieja ya no vigente<\/option>/,
+  'La subcategoría fuera de catálogo se preserva como opción extra seleccionada');
+for (const sub of categoriesGastoFixture.categories.find((c) => c.categoria === 'Hogar').subcategorias) {
+  assert.match(mixtoHtml, new RegExp(`<option value="${sub}">${sub}</option>`),
+    'Las subcategorías reales de Hogar deben seguir disponibles junto a la extra');
+}
+
+console.log('Fijo: combinación categoría-en-catálogo + subcategoría-fuera-de-catálogo en edición verificada');
+
+// Fail-closed si el catálogo no carga (brief t_38a7253f F1b-fix2, hallazgo 1
+// del revisor): a diferencia de gasto, NO hay texto libre de respaldo -- el
+// form queda bloqueado (sin ningún campo, ni siquiera nombre/monto) con un
+// aviso y un botón "Reintentar"; "Revisar" queda oculto e inalcanzable.
+const fixedBlockedForm = makeExpenseFormHarness();
+fixedBlockedForm.setCategoriesReply('throw');
+await fixedBlockedForm.api.openForm('fixed');
+const fixedBlockedHtml = fixedBlockedForm.element('form-fields').innerHTML;
+assert.doesNotMatch(fixedBlockedHtml, /<select id="field-categoria"/);
+assert.doesNotMatch(fixedBlockedHtml, /id="field-categoria"/, 'Sin catálogo no debe quedar ningún campo del form, ni siquiera texto libre');
+assert.doesNotMatch(fixedBlockedHtml, /id="field-nombre"/, 'Nombre tampoco debe quedar editable: el form entero está bloqueado');
+assert.match(fixedBlockedHtml, /No se pudo cargar el catálogo de categorías/);
+assert.match(fixedBlockedHtml, /id="fixed-catalog-retry"/);
+assert.equal(fixedBlockedForm.element('form-submit').hidden, true, '"Revisar" debe quedar oculto mientras el catálogo no cargó');
+assert.equal(fixedBlockedForm.element('form-submit').disabled, true);
+assert.equal(fixedBlockedForm.api.activeForm.catalogBlocked, true);
+
+// Reintentar con la misma falla: se mantiene bloqueado, sin fallback.
+fixedBlockedForm.setCategoriesReply('throw');
+await fixedBlockedForm.api.retryFixedCatalog();
+assert.equal(fixedBlockedForm.api.activeForm.catalogBlocked, true, 'Un segundo fallo debe seguir bloqueado');
+assert.match(fixedBlockedForm.element('form-fields').innerHTML, /No se pudo cargar el catálogo de categorías/);
+assert.equal(fixedBlockedForm.element('form-submit').hidden, true);
+
+// Reintentar con éxito: recién ahí se pinta el form real con el catálogo.
+fixedBlockedForm.setCategoriesReply({ status: 200, body: categoriesGastoFixture });
+await fixedBlockedForm.api.retryFixedCatalog();
+assert.equal(fixedBlockedForm.api.activeForm.catalogBlocked, false);
+const fixedRecoveredHtml = fixedBlockedForm.element('form-fields').innerHTML;
+assert.match(fixedRecoveredHtml, /<select id="field-categoria"/);
+assert.equal(fixedBlockedForm.element('form-submit').hidden, false);
+assert.equal(fixedBlockedForm.element('form-submit').disabled, false);
+assert.equal(fixedBlockedForm.element('form-submit').textContent, 'Revisar');
+
+// Un catálogo vacío cae en el mismo bloqueo (no en texto libre).
+const fixedEmptyCatalogForm = makeExpenseFormHarness();
+fixedEmptyCatalogForm.setCategoriesReply({ status: 200, body: { categories: [] } });
+await fixedEmptyCatalogForm.api.openForm('fixed');
+assert.equal(fixedEmptyCatalogForm.api.activeForm.catalogBlocked, true, 'Un catálogo vacío también debe bloquear, no caer a texto libre');
+assert.doesNotMatch(fixedEmptyCatalogForm.element('form-fields').innerHTML, /id="field-nombre"/);
+
+// Un array no vacío puede estar malformado. Ninguna entrada inválida debe
+// activar el formulario ni poblar la caché; el reintento usa el catálogo real.
+for (const invalidCategories of [
+  [{}],
+  [{ categoria: 'Hogar' }],
+  [{ categoria: '   ', subcategorias: [] }],
+  [{ categoria: 7, subcategorias: [] }],
+  [{ categoria: 'Hogar', subcategorias: 'Alquiler' }],
+  [{ categoria: 'Hogar', subcategorias: [''] }],
+  [{ categoria: 'Hogar', subcategorias: [null] }],
+]) {
+  const malformedForm = makeExpenseFormHarness();
+  malformedForm.setCategoriesReply({ status: 200, body: { categories: invalidCategories } });
+  await malformedForm.api.openForm('fixed');
+  assert.equal(malformedForm.api.activeForm.catalogBlocked, true, 'Un catálogo inválido debe bloquear el fijo');
+  assert.equal(malformedForm.element('form-submit').hidden, true);
+  assert.doesNotMatch(malformedForm.element('form-fields').innerHTML, /undefined|id="field-nombre"/);
+  malformedForm.setCategoriesReply({ status: 200, body: categoriesGastoFixture });
+  await malformedForm.api.retryFixedCatalog();
+  assert.equal(malformedForm.api.activeForm.catalogBlocked, false, 'El catálogo válido debe permitir el reintento');
+  assert.match(malformedForm.element('form-fields').innerHTML, /<select id="field-categoria"/);
+  assert.equal(malformedForm.calls.filter((call) => call.path === '/api/categories?tipo=Gasto').length, 2,
+    'La respuesta inválida no debe quedar cacheada');
+}
+const malformedExpense = makeExpenseFormHarness();
+malformedExpense.setCategoriesReply({ status: 200, body: { categories: [{}] } });
+await malformedExpense.api.openForm('expense');
+assert.match(malformedExpense.element('form-fields').innerHTML, /list="expense-categories"/,
+  'Gastos conserva su fallback de texto libre ante un catálogo malformado');
+assert.doesNotMatch(malformedExpense.element('form-fields').innerHTML, /undefined/);
+
+console.log('Categorías de fijo: select opcional dependiente, caché compartida con gasto y fail-closed con reintento verificados');
+
+// Regresión (revisor, t_38a7253f F1b-fix4 hallazgo 1): el bloqueo fail-closed
+// de fijos oculta "Revisar" (renderFixedCatalogBlocked), pero openForm/closeForm
+// no restauraban `hidden` -- quedaba oculto para cualquier formulario abierto
+// después, aunque su catálogo cargara bien.
+const hiddenLeakForm = makeExpenseFormHarness();
+hiddenLeakForm.setCategoriesReply('throw');
+await hiddenLeakForm.api.openForm('fixed');
+assert.equal(hiddenLeakForm.element('form-submit').hidden, true, 'Catálogo fallido: "Revisar" oculto (fail-closed)');
+hiddenLeakForm.api.closeForm();
+hiddenLeakForm.setCategoriesReply({ status: 200, body: categoriesGastoFixture });
+await hiddenLeakForm.api.openForm('expense');
+assert.equal(hiddenLeakForm.element('form-submit').hidden, false,
+  '"Revisar" debe volver a mostrarse al abrir otro formulario, aunque el anterior haya quedado bloqueado');
+assert.equal(hiddenLeakForm.element('form-submit').disabled, false);
+
+hiddenLeakForm.api.closeForm();
+await hiddenLeakForm.api.openForm('fixed');
+assert.equal(hiddenLeakForm.element('form-submit').hidden, false,
+  'Lo mismo al reabrir un fijo con catálogo OK tras un fijo bloqueado previo');
+assert.equal(hiddenLeakForm.element('form-submit').disabled, false);
+
+console.log('Fail-closed de fijos: "Revisar" no queda oculto para formularios posteriores (regresión t_38a7253f F1b-fix4)');
 
 // ── CARRERA ASYNC EN openForm (revisor 3f12e4c8, t_ce790609 #1) ─────────────
 // openForm('expense') espera el catálogo con `await`. Si dos aperturas se

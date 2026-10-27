@@ -36,6 +36,52 @@ assert.equal(history[3].supersedida_mismo_dia, true);
 assert.equal(history[4].tiene_intervalo_vigencia, true);
 assert.equal(history.at(-1).vigente_hasta, null);
 
+// Historial visible: cada versión conserva sus dos etiquetas, incluso si la
+// serie empezó antes de que existieran categoría y subcategoría.
+const versionBase = { fijo_grupo_id: 99, nombre: 'Servicio', monto_mensual: 100,
+  periodicidad: 'mensual', responsable: 'Común', tipo_proporcion: 'dinamica', activo: 1 };
+const versionsWithCategories = [
+  { ...versionBase, id: 201, vigente_desde: '2026-01-01', categoria: null, subcategoria: null },
+  { ...versionBase, id: 202, vigente_desde: '2026-02-01', categoria: 'Hogar', subcategoria: null },
+  { ...versionBase, id: 203, vigente_desde: '2026-03-01', categoria: 'Hogar', subcategoria: 'Alquiler' },
+  { ...versionBase, id: 204, vigente_desde: '2026-04-01', categoria: 'Comida', subcategoria: 'Supermercado' },
+  { ...versionBase, id: 205, vigente_desde: '2026-05-01', categoria: 'Comida', subcategoria: null },
+  { ...versionBase, id: 206, vigente_desde: '2026-06-01', categoria: null, subcategoria: null },
+];
+const detail = { hidden: true, innerHTML: '' };
+const historyRenderApi = runInNewContext(`
+const DATA = { fijos: versionsWithCategories };
+let fijosChart = null;
+function fijosHistorial(rows) { return rows; }
+function canonicalId(value) { return String(value); }
+function escapeHtml(value) { return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+function fijosDateLabel(value) { return value; }
+function fmtARS(value) { return '$' + value; }
+function pillClassFor() { return ''; }
+function fijosResponsable(row) { return row.responsable; }
+function fijosRepartoLabel() { return 'Dinámico'; }
+function fijosEvolutionData() { return { dates: [], amounts: [] }; }
+${source.slice(source.indexOf('function renderFijosSeriesDetail('), source.indexOf('function openFijosInfo('))}
+({ renderFijosSeriesDetail })`, {
+  versionsWithCategories, document: { getElementById(id) { return id === 'fijos-series-detail' ? detail : {}; } },
+  Chart: class { destroy() {} },
+});
+historyRenderApi.renderFijosSeriesDetail('99');
+assert.match(detail.innerHTML, /<th>Categoría<\/th><th>Subcategoría<\/th>/);
+const versionBody = detail.innerHTML.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1] || '';
+const versionRows = Array.from(versionBody.matchAll(/<tr>[\s\S]*?<\/tr>/g), (match) => match[0]);
+assert.equal(versionRows.length, 6);
+const rowById = (id) => versionRows.find((html) => html.includes(`data-label="Desde">2026-0${id - 200}-01`));
+assert.match(rowById(201), /data-label="Categoría">Sin categoría<\/td>[\s\S]*data-label="Subcategoría">Sin subcategoría<\/td>/);
+assert.match(rowById(202), /data-label="Categoría">Hogar<\/td>[\s\S]*data-label="Cambios"[^>]*>Categoría<\/td>/);
+assert.match(rowById(203), /data-label="Subcategoría">Alquiler<\/td>[\s\S]*data-label="Cambios"[^>]*>Subcategoría<\/td>/);
+assert.match(rowById(204), /data-label="Categoría">Comida<\/td>[\s\S]*data-label="Subcategoría">Supermercado<\/td>[\s\S]*data-label="Cambios"[^>]*>Categoría, Subcategoría<\/td>/);
+assert.match(rowById(205), /data-label="Subcategoría">Sin subcategoría<\/td>[\s\S]*data-label="Cambios"[^>]*>Subcategoría<\/td>/);
+assert.match(rowById(206), /data-label="Categoría">Sin categoría<\/td>[\s\S]*data-label="Cambios"[^>]*>Categoría<\/td>/);
+for (const versionRow of versionRows.slice(0, 5)) {
+  assert.doesNotMatch(versionRow, /Sin cambio en los campos mostrados/);
+}
+
 const tramos = api.fijosTramos(rows, '2026-04-01', '2026-06-30').filter((row) => row.fijo_grupo_id === '101');
 assert.equal(tramos.length, 3, 'El rango conserva cada tramo visible');
 assert.deepEqual(Array.from(tramos, (row) => [row.id, row.tramo_desde, row.tramo_hasta]), [

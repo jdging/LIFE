@@ -1081,6 +1081,18 @@ tfoot td {
   font-weight: 600;
 }
 
+/* Resalta la columna $ JD o $ Pinki en la tabla de detalle de gastos cuando
+   hay un filtro de esa persona activo (brief F1b, hallazgo B). */
+.td-persona-jd {
+  color: var(--terracotta);
+  font-weight: 700;
+}
+
+.td-persona-pinki {
+  color: #9c7a20;
+  font-weight: 700;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;

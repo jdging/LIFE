@@ -52,7 +52,9 @@ valores enviados por el cliente. Se usan `400` para entrada
 inválida, `401` para autenticación, `404` para recurso inexistente, `405` para
 método no admitido, `409` para conflictos de estado, integridad o SQLite ocupado,
 `413` para cuerpos de más de 64 KiB y `422` si datos legacy o acumulados
-impiden calcular una respuesta fiable. Una falla inesperada devuelve un error genérico `500`
+impiden calcular una respuesta fiable, con la excepción documentada de
+`GET /api/categories` (`tipo` ausente/inválido también responde `422`, ver
+más abajo). Una falla inesperada devuelve un error genérico `500`
 sin traza ni secreto. Se rechazan claves JSON repetidas, campos y parámetros
 desconocidos, parámetros repetidos, `NaN`, infinito y booleanos en campos
 numéricos. Las respuestas se serializan con `allow_nan=False`: no contienen
@@ -104,8 +106,8 @@ el límite técnico, responden `422` sin números inventados.
 | `GET /api/fixed/versions` | Sin parámetros | `{"versions":[...]}`; todas las versiones, incluidas las bajas, con `monto_mensual` |
 | `GET /api/fixed/range?fromISO=...&toISO=...` | Dos fechas obligatorias, rango inclusivo | `{"range":[{"fijo_grupo_id":N,"tramos":[...]}]}` |
 | `GET /api/fixed/:id/historial` | `id` de cualquier versión | `{"historial":[...]}` de toda la serie, con `vigente_hasta` y `monto_mensual` |
-| `POST /api/fixed` | `nombre`, `monto_estimado`, `periodicidad`, `responsable`, `vigente_desde` obligatorios; `categoria` opcional; `tipo_proporcion` y `proporcion_jd` según la tabla siguiente | `201 {"fixed":{...}}` |
-| `PATCH /api/fixed/:id` | `vigente_desde` obligatorio y cambios en `nombre`, `categoria`, `monto_estimado`, `periodicidad`, `responsable`, `tipo_proporcion`, `proporcion_jd` | `{"fixed":{...}}` con id de la nueva versión |
+| `POST /api/fixed` | `nombre`, `monto_estimado`, `periodicidad`, `responsable`, `vigente_desde` obligatorios; `categoria`, `subcategoria` opcionales; `tipo_proporcion` y `proporcion_jd` según la tabla siguiente | `201 {"fixed":{...}}` |
+| `PATCH /api/fixed/:id` | `vigente_desde` obligatorio y cambios en `nombre`, `categoria`, `subcategoria`, `monto_estimado`, `periodicidad`, `responsable`, `tipo_proporcion`, `proporcion_jd` | `{"fixed":{...}}` con id de la nueva versión |
 | `DELETE /api/fixed/:id` | `{"fecha_baja":"YYYY-MM-DD"}` | `{"fixed":{...}}` con versión inactiva nueva |
 | `GET /api/summary?month=YYYY-MM` | `month` opcional | Con mes: objeto resumen; sin mes: `{"months":[...]}` |
 | `GET /api/categories?tipo=Gasto\|Ingreso\|Inversión` | `tipo` obligatorio, uno de esos tres valores exactos | `{"categories":[{"categoria":"Hogar","subcategorias":["Alquiler","Expensas",...]},...]}` |
@@ -226,16 +228,34 @@ alterar versiones previas. Un `PATCH` sin cambio real devuelve `400` y no crea
 versión ni auditoría. También devuelven `400` las combinaciones inválidas de
 reparto, antes de escribir.
 
-**Categoría de un fijo (brief t_38a7253f, punto 5).** `categoria` es un string
-libre, opcional, sin catálogo cerrado (a diferencia de `categoria`/
+**Categoría de un fijo (brief t_38a7253f, punto 5; `subcategoria` agregada en
+F1b, hallazgo A; semántica omitido/null en F1b-fix2, hallazgo 2 del
+revisor).** `categoria` y `subcategoria` son strings libres, opcionales, sin
+catálogo cerrado a nivel de dominio (a diferencia de `categoria`/
 `subcategoria` de gastos, que sí tienen un catálogo en `GET
-/api/categories?tipo=Gasto`). `POST /api/fixed` la guarda si se envía; si se
-omite, queda `NULL` — igual que un fijo legacy migrado sin categoría, que
-sigue existiendo y editable, sin que la API le invente una. `PATCH
-/api/fixed/:id` la cambia si se envía un string no vacío; si se omite, la
-nueva versión hereda la categoría de la versión vigente en `vigente_desde`
-(mismo criterio que `nombre`/`periodicidad`). No hay forma de volver a
-`NULL` una categoría ya asignada desde esta ruta.
+/api/categories?tipo=Gasto`) — el dashboard sugiere valores de ese mismo
+catálogo de Gasto en el `<select>` del formulario de fijo, pero la API los
+sigue aceptando como texto libre, sin validarlos contra ese catálogo. `POST
+/api/fixed` guarda cada uno si se envía; si se omite, queda `NULL` — igual
+que un fijo legacy migrado sin categoría, que sigue existiendo y editable,
+sin que la API le invente una.
+
+`PATCH /api/fixed/:id` distingue el campo AUSENTE del payload de `null`
+EXPLÍCITO:
+- **Ausente** (la clave no está en el JSON): la nueva versión HEREDA el
+  valor de la versión vigente en `vigente_desde` (mismo criterio que
+  `nombre`/`periodicidad`).
+- **`null` explícito** (`"categoria": null`): VACÍA el campo en la nueva
+  versión.
+- **String no vacío**: lo REEMPLAZA.
+
+Vaciar `categoria` explícitamente sin tocar `subcategoria` vacía también la
+`subcategoria` en cascada — no tiene sentido conservar una subcategoría de
+una categoría que ya no existe. Regla de dominio (validada en backend y en
+el formulario del dashboard): no puede quedar `subcategoria` asignada sin
+`categoria`; mandar ambos valores en conflicto explícito (ej. vaciar
+`categoria` pero insistir con una `subcategoria` no vacía en el mismo
+`PATCH`) devuelve `400`.
 
 Una baja repetida de un gasto o de un ingreso devuelve `404`: el recurso ya no
 existe como activo. Dos bajas concurrentes (mismo id, misma tabla) se

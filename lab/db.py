@@ -2112,6 +2112,42 @@ def resolve_fixed_split(responsable, tipo_proporcion=_FIXED_UNSET,
     return "custom", float(pct)
 
 
+class FixedCategoriaError(ValueError):
+    """Invalid categoria/subcategoria combination supplied by a caller."""
+
+
+def resolve_fixed_categoria(categoria=_FIXED_UNSET, subcategoria=_FIXED_UNSET, anterior=None):
+    """Resuelve categoria/subcategoria de una nueva versión de fijo sin tocar
+    la base (brief t_38a7253f F1b-fix2, hallazgo 2 del revisor) -- mismo rol
+    que `resolve_fixed_split` para el reparto: lo llama tanto `api.py` (para
+    devolver 400 antes de tocar la base) como `crear_version_fijo` (para
+    insertar la fila ya resuelta).
+
+    Centinela `_FIXED_UNSET` para distinguir OMITIDO de `None` EXPLÍCITO:
+      - Omitido (default): hereda de `anterior` (o `None` si no hay versión
+        anterior -- alta nueva, sin inheritance posible).
+      - `None` explícito: vacía el campo.
+      - String no vacío: lo reemplaza.
+    Vaciar `categoria` explícitamente sin tocar `subcategoria` vacía también
+    la `subcategoria` en cascada: no tiene sentido conservar una
+    subcategoría de una categoría que ya no existe.
+
+    Lanza `FixedCategoriaError` si el resultado deja `subcategoria` asignada
+    sin `categoria` (ej. el llamador vació la categoría pero mandó una
+    subcategoria explícita en el mismo pedido).
+    """
+    categoria_anterior = anterior["categoria"] if anterior is not None else None
+    subcategoria_anterior = anterior["subcategoria"] if anterior is not None else None
+    nueva_categoria = categoria_anterior if categoria is _FIXED_UNSET else categoria
+    if subcategoria is _FIXED_UNSET:
+        nueva_subcategoria = None if nueva_categoria is None else subcategoria_anterior
+    else:
+        nueva_subcategoria = subcategoria
+    if nueva_subcategoria is not None and nueva_categoria is None:
+        raise FixedCategoriaError("subcategoria no puede quedar asignada sin categoria.")
+    return nueva_categoria, nueva_subcategoria
+
+
 def _auditar_fijo(conn, fila_id, accion, actor, antes, despues):
     conn.execute(
         "INSERT INTO auditoria (tabla, fila_id, accion, actor, antes_json, despues_json, creado_en) "
@@ -2170,6 +2206,7 @@ def insert_gasto_fijo(conn: sqlite3.Connection, gasto_fijo: dict, actor: Optiona
             "nombre": gasto_fijo.get("nombre"),
             "periodicidad": gasto_fijo.get("periodicidad"),
             "categoria": gasto_fijo.get("categoria"),
+            "subcategoria": gasto_fijo.get("subcategoria"),
         }
     )
     if errores:
@@ -2241,7 +2278,8 @@ def crear_version_fijo(
     actor: Optional[str] = None,
     tipo_proporcion=_FIXED_UNSET,
     proporcion_jd=_FIXED_UNSET,
-    categoria: Optional[str] = None,
+    categoria=_FIXED_UNSET,
+    subcategoria=_FIXED_UNSET,
 ) -> int:
     """Crea una versión NUEVA de un gasto fijo, vigente desde `vigente_desde`.
 
@@ -2278,12 +2316,18 @@ def crear_version_fijo(
     de reparto se agregan al final para conservar la posición de `actor`;
     su centinela distingue omisión, NULL explícito y porcentaje cero.
 
-    `categoria` (brief t_38a7253f, punto 5): `None` (default) hereda la
-    categoría de la versión vigente, igual que `nombre`/`periodicidad`. Un
-    string no vacío la reemplaza en la nueva versión. No hay forma de
-    volver a `None` una categoría ya asignada desde esta función — no se
-    pidió, y evitaría inventarle un estado "sin categoría" a un fijo que ya
-    la tenía.
+    `categoria`/`subcategoria` (brief t_38a7253f F1b-fix2, hallazgo 2 del
+    revisor): centinela `_FIXED_UNSET` para distinguir OMITIDO de `None`
+    EXPLÍCITO, igual que `tipo_proporcion`/`proporcion_jd` más arriba.
+      - Omitido (`_FIXED_UNSET`, default): hereda el valor de la versión
+        vigente, igual que `nombre`/`periodicidad`.
+      - `None` explícito: vacía el campo en la nueva versión.
+      - String no vacío: lo reemplaza.
+    Vaciar `categoria` explícitamente, sin tocar `subcategoria`, vacía
+    también la `subcategoria` en cascada -- no tiene sentido conservar una
+    subcategoría de una categoría que ya no existe, y el dominio no admite
+    esa combinación (ver `validar_gasto_fijo`, que la rechaza si el llamador
+    insiste en mandar ambos valores explícitos inconsistentes).
     """
     fila_referencia = conn.execute(
         "SELECT * FROM gastos_fijos WHERE id = ?", (gasto_fijo_id,)
@@ -2309,15 +2353,15 @@ def crear_version_fijo(
     nuevo_nombre = nombre if nombre is not None else anterior["nombre"]
     nueva_periodicidad = periodicidad if periodicidad is not None else anterior["periodicidad"]
     nuevo_monto = monto_nuevo if monto_nuevo is not None else anterior["monto_estimado"]
-    nueva_categoria = categoria if categoria is not None else anterior["categoria"]
+    nueva_categoria, nueva_subcategoria = resolve_fixed_categoria(categoria, subcategoria, anterior)
     nuevo_tipo, nueva_proporcion = resolve_fixed_split(
         nuevo_responsable, tipo_proporcion, proporcion_jd, anterior
     )
     if (nuevo_nombre, nuevo_monto, nueva_periodicidad, nuevo_responsable,
-            nuevo_tipo, nueva_proporcion, nueva_categoria) == (
+            nuevo_tipo, nueva_proporcion, nueva_categoria, nueva_subcategoria) == (
             anterior["nombre"], anterior["monto_estimado"], anterior["periodicidad"],
             anterior["responsable"], anterior["tipo_proporcion"], anterior["proporcion_jd"],
-            anterior["categoria"]):
+            anterior["categoria"], anterior["subcategoria"]):
         raise FixedNoChangeError("La nueva versión no tiene cambios reales.")
 
     errores = validar_gasto_fijo(
@@ -2328,6 +2372,7 @@ def crear_version_fijo(
             "nombre": nuevo_nombre,
             "periodicidad": nueva_periodicidad,
             "categoria": nueva_categoria,
+            "subcategoria": nueva_subcategoria,
         }
     )
     if errores:
@@ -2341,7 +2386,7 @@ def crear_version_fijo(
                  tipo_proporcion, proporcion_jd, medio_pago, vigente_desde, fijo_grupo_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (nuevo_nombre, nuevo_monto, nueva_periodicidad, anterior["dia_vencimiento"],
-             nueva_categoria, anterior["subcategoria"], anterior["activo"],
+             nueva_categoria, nueva_subcategoria, anterior["activo"],
              _now(), nuevo_responsable, nuevo_tipo,
              nueva_proporcion, anterior["medio_pago"], vigente_desde,
              fijo_grupo_id),

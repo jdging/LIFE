@@ -45,7 +45,9 @@ El dashboard (`app.js`) solo conoce la primera capa: llama a rutas relativas
   interno ausente/incorrecto), `404` recurso inexistente, `405` método no
   admitido (con header `Allow`), `409` conflicto de estado/SQLite ocupado,
   `413` cuerpo de más de 64 KiB, `422` si datos legacy o acumulados impiden
-  calcular una respuesta fiable, `500`/`502`/`504` errores de servidor o
+  calcular una respuesta fiable (con la excepción documentada de
+  `GET /api/categories`, que también responde `422` si `tipo` está
+  ausente o es inválido), `500`/`502`/`504` errores de servidor o
   del proxy upstream (ver `README-proxy.md`).
 
 ## Rutas (contrato completo en `README-api.md`)
@@ -66,8 +68,8 @@ El dashboard (`app.js`) solo conoce la primera capa: llama a rutas relativas
 | `GET /api/fixed/versions` | Sin parámetros | `{"versions":[...]}`; todas las versiones |
 | `GET /api/fixed/range?fromISO=...&toISO=...` | Dos fechas obligatorias | `{"range":[{"fijo_grupo_id":N,"tramos":[...]}]}` |
 | `GET /api/fixed/:id/historial` | `id` de cualquier versión | `{"historial":[...]}` |
-| `POST /api/fixed` | `nombre`, `monto_estimado`, `periodicidad`, `responsable`, `vigente_desde` obligatorios; `categoria` opcional (sin catálogo cerrado); `tipo_proporcion`/`proporcion_jd` según tabla de reparto | `201 {"fixed":{...}}` |
-| `PATCH /api/fixed/:id` | `vigente_desde` obligatorio + cambios (incluido `categoria`) | `{"fixed":{...}}` con id de la nueva versión |
+| `POST /api/fixed` | `nombre`, `monto_estimado`, `periodicidad`, `responsable`, `vigente_desde` obligatorios; `categoria`/`subcategoria` opcionales (texto libre, sin catálogo cerrado a nivel de dominio; el dashboard sugiere el catálogo de Gasto en el `<select>`); `tipo_proporcion`/`proporcion_jd` según tabla de reparto | `201 {"fixed":{...}}` |
+| `PATCH /api/fixed/:id` | `vigente_desde` obligatorio + cambios (incluidos `categoria`/`subcategoria`) | `{"fixed":{...}}` con id de la nueva versión |
 | `DELETE /api/fixed/:id` | `{"fecha_baja":"YYYY-MM-DD"}` | `{"fixed":{...}}` con versión inactiva nueva |
 | `GET /api/summary?month=YYYY-MM` | `month` opcional | Con mes: objeto resumen; sin mes: `{"months":[...]}` |
 
@@ -94,6 +96,24 @@ inconsistente — ver detalle en `README-api.md`. Tampoco recalcula
 personal** (`JD`/`Pinki`): es redundante con el 100/0 implícito y la API
 responde `400` si se envían. Ver punto 2 de `INTEGRACION.md` para el
 ajuste equivalente en `migrar_datos_reales.py`.
+
+### `categoria`/`subcategoria` de un fijo en `PATCH /api/fixed/:id` (brief
+t_38a7253f F1b-fix2, hallazgo 2 del revisor)
+
+| Payload | Resultado en la nueva versión |
+| --- | --- |
+| Campo ausente | Hereda el valor de la versión vigente |
+| `"categoria": null` (sin tocar `subcategoria`) | Vacía `categoria` Y `subcategoria` (cascada) |
+| `"subcategoria": null` (sin tocar `categoria`) | Vacía solo `subcategoria`; `categoria` se hereda |
+| `"categoria": "X"` (string no vacío) | Reemplaza `categoria` |
+| `"subcategoria": "Y"` con `categoria` resultante `null` | `400`: no puede quedar `subcategoria` sin `categoria` |
+
+El dashboard (`collectForm` en `app.js`) aplica la misma regla antes de
+enviar el `PATCH`: elegir "Sin categoría/subcategoría" sobre un valor ya
+guardado manda `null` explícito; dejar el `<select>` sin tocar omite el
+campo. Cambiar la categoría resetea el `<select>` de subcategoría
+(`onExpenseCategoriaChange`), así que la subcategoría vieja nunca viaja
+heredada junto a una categoría nueva.
 
 ## Query permitida y rutas vía proxy
 

@@ -177,7 +177,7 @@ let inventarioRowsRendered = [];
 // automática (onInventoryUsdSugerido) no pisa lo que escribió (t_0e38e74e,
 // hallazgo 4 del revisor 46d4f3d5). Se resetea en cada apertura del form.
 let inventoryUsdEditedManually = false;
-const TABLE_KEY_MAP = { monto_total: 'monto', pago: 'pagado_por' };
+const TABLE_KEY_MAP = { monto_total: 'monto_propio', pago: 'pagado_por' };
 
 // ── CARGA DE DATOS ───────────────────────────────────────────────────────
 
@@ -347,9 +347,15 @@ async function loadCategoriasGasto() {
   const data = await fetchJSON('/api/categories?tipo=Gasto');
   const list = requireList(data, 'categories');
   if (!list.length) throw new Error('Catálogo de categorías de gasto vacío.');
+  if (!list.every((item) => item && typeof item === 'object' && !Array.isArray(item) &&
+      typeof item.categoria === 'string' && item.categoria.trim() &&
+      Array.isArray(item.subcategorias) &&
+      item.subcategorias.every((name) => typeof name === 'string' && name.trim()))) {
+    throw new Error('Catálogo de categorías de gasto inválido.');
+  }
   categoriesGastoCache = list.map((item) => ({
-    categoria: String(item.categoria),
-    subcategorias: Array.isArray(item.subcategorias) ? item.subcategorias.map(String) : [],
+    categoria: item.categoria.trim(),
+    subcategorias: item.subcategorias.map((name) => name.trim()),
   }));
   return categoriesGastoCache;
 }
@@ -883,11 +889,13 @@ function renderFijosSeriesDetail(groupId) {
     <button type="button" class="fijos-secondary" onclick="closeFijosDetail()">Cerrar detalle</button></div>
     <p class="td-muted">Serie #${escapeHtml(groupId)}. Cada cambio crea una versión; las anteriores se conservan.</p>
     <div class="fijos-version-list"><table class="fijos-versions-table">
-      <thead><tr><th>Desde</th><th>Hasta</th><th>Descripción</th><th>Monto mensual</th><th>Responsable</th><th>Reparto</th><th>Estado</th><th>Cambios</th></tr></thead>
+      <thead><tr><th>Desde</th><th>Hasta</th><th>Descripción</th><th>Categoría</th><th>Subcategoría</th><th>Monto mensual</th><th>Responsable</th><th>Reparto</th><th>Estado</th><th>Cambios</th></tr></thead>
       <tbody>${[...versions].reverse().map((row) => {
       const previous = versions[versions.findIndex((item) => canonicalId(item.id) === canonicalId(row.id)) - 1];
       const changes = previous ? [
         previous.nombre !== row.nombre ? 'Descripción' : null,
+        (previous.categoria || '') !== (row.categoria || '') ? 'Categoría' : null,
+        (previous.subcategoria || '') !== (row.subcategoria || '') ? 'Subcategoría' : null,
         previous.monto_mensual !== row.monto_mensual ? 'Monto' : null,
         previous.responsable !== row.responsable ? 'Responsable' : null,
         previous.tipo_proporcion !== row.tipo_proporcion || previous.proporcion_jd !== row.proporcion_jd ? 'Reparto' : null,
@@ -899,6 +907,8 @@ function renderFijosSeriesDetail(groupId) {
         <td data-label="Desde">${fijosDateLabel(row.vigente_desde)}</td>
         <td data-label="Hasta">${row.supersedida_mismo_dia ? 'reemplazada ese día' : row.vigente_hasta ? fijosDateLabel(row.vigente_hasta) : 'vigente'}</td>
         <td data-label="Descripción">${escapeHtml(row.nombre)}</td>
+        <td data-label="Categoría">${escapeHtml(row.categoria || 'Sin categoría')}</td>
+        <td data-label="Subcategoría">${escapeHtml(row.subcategoria || 'Sin subcategoría')}</td>
         <td data-label="Monto mensual">${fmtARS(row.monto_mensual)}${row.periodicidad === 'bimestral' ? `<small>bruto ${fmtARS(row.monto_estimado)}</small>` : ''}</td>
         <td data-label="Responsable"><span class="pill ${pillClassFor(row.responsable)}">${escapeHtml(fijosResponsable(row))}</span></td>
         <td data-label="Reparto">${escapeHtml(fijosRepartoLabel(row))}</td>
@@ -996,6 +1006,63 @@ function formExpenseCategoryText(row = null) {
     <datalist id="expense-subcategories">${subcategories.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>`;
 }
 
+// Catálogo vía <select> dependiente para el formulario de FIJO (brief
+// t_38a7253f hallazgo A): mismo catálogo de /api/categories?tipo=Gasto que
+// el formulario de gasto, pero con dos diferencias a propósito:
+//   - categoría/subcategoría quedan OPCIONALES (sin `required`), porque
+//     `validar_gasto_fijo` las trata como opcionales -- un fijo legacy sin
+//     categoría asignada sigue siendo válido.
+//   - si el valor actual de la fila no está en el catálogo (fijo legacy con
+//     una categoría libre, o el catálogo cambió desde que se guardó), se
+//     agrega como opción extra seleccionada en vez de perderse en silencio.
+function formFixedCategorySelects(catalog, row = null) {
+  const categoriaEnCatalogo = !row?.categoria || catalog.some((c) => c.categoria === row.categoria);
+  const options = catalog.map((c) => {
+    const selected = c.categoria === row?.categoria ? ' selected' : '';
+    return `<option value="${escapeHtml(c.categoria)}"${selected}>${escapeHtml(c.categoria)}</option>`;
+  }).join('') + (row?.categoria && !categoriaEnCatalogo
+    ? `<option value="${escapeHtml(row.categoria)}" selected>${escapeHtml(row.categoria)}</option>` : '');
+  const entry = row?.categoria ? catalog.find((c) => c.categoria === row.categoria) : null;
+  const subcategorias = entry ? entry.subcategorias : [];
+  const subcategoriaEnCatalogo = !row?.subcategoria || subcategorias.includes(row.subcategoria);
+  const subOptions = subcategorias.map((s) => {
+    const selected = s === row?.subcategoria ? ' selected' : '';
+    return `<option value="${escapeHtml(s)}"${selected}>${escapeHtml(s)}</option>`;
+  }).join('') + (row?.subcategoria && !subcategoriaEnCatalogo
+    ? `<option value="${escapeHtml(row.subcategoria)}" selected>${escapeHtml(row.subcategoria)}</option>` : '');
+  const categoriaPlaceholderSelected = row?.categoria ? '' : ' selected';
+  const subcategoriaPlaceholderSelected = row?.subcategoria ? '' : ' selected';
+  return `<label class="form-field" for="field-categoria">Categoría
+    <select id="field-categoria" name="categoria" aria-describedby="error-categoria">
+      <option value=""${categoriaPlaceholderSelected}>Sin categoría</option>
+      ${options}
+    </select>
+    <span class="field-error" id="error-categoria"></span></label>
+    <label class="form-field" for="field-subcategoria">Subcategoría
+    <select id="field-subcategoria" name="subcategoria" aria-describedby="error-subcategoria">
+      <option value=""${subcategoriaPlaceholderSelected}>Sin subcategoría</option>
+      ${subOptions}
+    </select>
+    <span class="field-error" id="error-subcategoria"></span></label>`;
+}
+
+// Texto libre + datalist para el formulario de fijo SIN catálogo (brief
+// t_38a7253f F1b, hallazgo A). Desde F1b-fix2 (hallazgo 1 del revisor),
+// `openForm()` ya NO toma este camino en producción: sin catálogo válido
+// bloquea el form entero (ver `renderFixedCatalogBlocked`) en vez de caer a
+// texto libre. `formMarkup` conserva esta rama como función pura para quien
+// la invoque directamente sin catálogo (ver su propia cobertura de tests,
+// brief F1 #5) -- las sugerencias del datalist vienen de los fijos ya
+// cargados, ya que no hay otro origen posible sin el catálogo.
+function formFixedCategoryText(row = null) {
+  const categories = [...new Set(DATA.fijos.map((item) => item.categoria).filter(Boolean))].sort();
+  const subcategories = [...new Set(DATA.fijos.map((item) => item.subcategoria).filter(Boolean))].sort();
+  return `${formField('categoria', 'Categoría', row?.categoria || '', 'text', 'list="fixed-categorias"')}
+    <datalist id="fixed-categorias">${categories.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
+    ${formField('subcategoria', 'Subcategoría', row?.subcategoria || '', 'text', 'list="fixed-subcategorias"')}
+    <datalist id="fixed-subcategorias">${subcategories.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>`;
+}
+
 // Repuebla #field-subcategoria con las subcategorías de la categoría elegida,
 // solo esas (nunca las de otra categoría). Sin selección, o sin subcategorías
 // para esa categoría, queda únicamente la opción "Sin subcategoría".
@@ -1089,10 +1156,9 @@ function formMarkup(kind, row, categoriesCatalog) {
     ${formSelect('categoria', 'Categoría', ['Salario', 'Extra', 'Freelance', 'Otro'], row?.categoria || 'Salario')}
     ${formField('descripcion_original', 'Descripción', row?.descripcion_original || '')}`;
   const fixedSplit = row?.responsable === 'Común' && row.tipo_proporcion === 'custom' ? 'custom' : 'dinamica';
-  const fixedCategories = [...new Set(DATA.fijos.map((item) => item.categoria).filter(Boolean))].sort();
+  const fixedCategoryFields = categoriesCatalog ? formFixedCategorySelects(categoriesCatalog, row) : formFixedCategoryText(row);
   return `${formField('nombre', 'Descripción', row?.nombre || '', 'text', 'required')}
-    ${formField('categoria', 'Categoría', row?.categoria || '', 'text', 'list="fixed-categorias"')}
-    <datalist id="fixed-categorias">${fixedCategories.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
+    ${fixedCategoryFields}
     ${formField('monto_estimado', 'Monto bruto (ARS)', row?.monto_estimado ?? '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
     ${formSelect('periodicidad', 'Periodicidad', ['mensual', 'bimestral'], row?.periodicidad || 'mensual')}
     ${formSelect('responsable', 'Responsable', ['Común', 'JD', 'Pinki'], row?.responsable || 'Común')}
@@ -1145,9 +1211,11 @@ async function openForm(kind, id = null) {
   document.getElementById('form-back').hidden = true;
   document.getElementById('form-back').disabled = false;
   document.getElementById('form-close').disabled = false;
+  document.getElementById('form-submit').hidden = false;
+  document.getElementById('form-submit').disabled = false;
   let catalog = null;
   let catalogWarning = '';
-  if (kind === 'expense' || kind === 'expense-edit') {
+  if (kind === 'expense' || kind === 'expense-edit' || kind === 'fixed' || kind === 'fixed-edit') {
     // Mostrar el modal YA, en estado de carga: así Escape/Cancelar operan sobre el
     // listener del modal mientras el catálogo todavía no resolvió, en vez de dejar
     // el foco afuera en el disparador durante el fetch.
@@ -1168,6 +1236,16 @@ async function openForm(kind, id = null) {
     // porque dos aperturas de 'expense' en carrera comparten el mismo kind.
     if (activeForm !== form) return;
     activeExpenseCatalog = catalog;
+    // Fail-closed para fijos (brief t_38a7253f F1b-fix2, hallazgo 1 del revisor):
+    // a diferencia de gasto, sin catálogo válido no hay texto libre de
+    // respaldo -- se bloquea el formulario entero (ni nombre ni monto quedan
+    // editables) hasta reintentar con éxito. Gasto conserva el fallback a
+    // texto libre: ya tenía categoría obligatoria y no fue objeto de este hallazgo.
+    if (!catalog && kind.startsWith('fixed')) {
+      form.catalogBlocked = true;
+      renderFixedCatalogBlocked();
+      return;
+    }
   }
   document.getElementById('form-fields').innerHTML = catalogWarning + formMarkup(kind, row, catalog);
   document.getElementById('form-fields').hidden = false;
@@ -1187,6 +1265,7 @@ function closeForm() {
   document.getElementById('form-back').hidden = true;
   document.getElementById('form-back').disabled = false;
   document.getElementById('form-submit').textContent = 'Revisar';
+  document.getElementById('form-submit').hidden = false;
   document.getElementById('form-submit').disabled = false;
   document.getElementById('form-close').disabled = false;
   document.getElementById('form-errors').textContent = '';
@@ -1195,6 +1274,49 @@ function closeForm() {
   activeForm = null;
   if (focus?.isConnected) focus.focus();
   else document.getElementById('tab-' + currentView)?.focus();
+}
+
+// Pinta el bloqueo fail-closed del form de fijo sin catálogo (ver openForm):
+// solo el aviso y "Reintentar" -- ni nombre, monto ni ningún otro campo del
+// fijo quedan expuestos mientras no haya categorías confiables.
+function renderFixedCatalogBlocked() {
+  document.getElementById('form-fields').innerHTML =
+    '<p class="form-warning" role="alert">No se pudo cargar el catálogo de categorías. No es posible crear ni editar fijos sin él.</p>' +
+    '<button type="button" id="fixed-catalog-retry" onclick="retryFixedCatalog()">Reintentar</button>';
+  document.getElementById('form-fields').hidden = false;
+  document.getElementById('form-submit').hidden = true;
+  document.getElementById('form-submit').disabled = true;
+  document.getElementById('form-modal').hidden = false;
+  document.getElementById('form-modal').querySelector('input, select, button').focus();
+}
+
+// Vuelve a pedir el catálogo desde el botón "Reintentar" del bloqueo
+// fail-closed. Si vuelve a fallar, se mantiene bloqueado; si llega, recién
+// ahí se pinta el form real (categoría/subcategoría + el resto de los campos).
+async function retryFixedCatalog() {
+  if (!activeForm?.catalogBlocked) return;
+  const form = activeForm;
+  document.getElementById('form-fields').innerHTML = '<p class="form-loading" role="status" aria-live="polite">Cargando categorías…</p>';
+  let catalog = null;
+  try {
+    catalog = await loadCategoriasGasto();
+  } catch {
+    catalog = null;
+  }
+  if (activeForm !== form) return;
+  activeExpenseCatalog = catalog;
+  if (!catalog) {
+    renderFixedCatalogBlocked();
+    return;
+  }
+  form.catalogBlocked = false;
+  document.getElementById('form-submit').hidden = false;
+  document.getElementById('form-fields').innerHTML = formMarkup(form.kind, form.row, catalog);
+  document.getElementById('form-fields').hidden = false;
+  document.getElementById('form-submit').textContent = 'Revisar';
+  document.getElementById('form-submit').disabled = false;
+  document.getElementById('form-modal').querySelector('input, select, button').focus();
+  syncCustomProportion();
 }
 
 function syncCustomProportion() {
@@ -1399,11 +1521,34 @@ function collectForm(kind, row, values) {
   if (!['Común', 'JD', 'Pinki'].includes(values.responsable)) errors.responsable = 'Elegí un responsable.';
   const payload = { nombre: values.nombre.trim(), monto_estimado: Number(values.monto_estimado),
     periodicidad: values.periodicidad, responsable: values.responsable, vigente_desde: values.vigente_desde };
-  // Vacío = sin cambio: edición hereda la categoría de la versión vigente
-  // (ver db.crear_version_fijo); no hay forma de "limpiar" una categoría ya
-  // asignada desde este formulario (no se pidió, y evita inventar un estado
-  // "sin categoría" para un fijo que ya la tenía).
-  if (values.categoria?.trim()) payload.categoria = values.categoria.trim();
+  // Semántica explícita omitido/null (brief t_38a7253f F1b-fix2, hallazgo 2
+  // del revisor; espejo de `db.resolve_fixed_categoria`): en edición, elegir
+  // "Sin categoría/subcategoría" cuando antes había un valor envía `null`
+  // EXPLÍCITO (vacía); si no cambió respecto a la versión vigente, se omite
+  // el campo (hereda). En alta no hay versión anterior: un valor vacío
+  // simplemente se omite, igual que siempre.
+  const isEditFixed = kind === 'fixed-edit';
+  const nuevaCategoria = values.categoria?.trim() || '';
+  const categoriaAnterior = row?.categoria || '';
+  if (nuevaCategoria) {
+    if (!isEditFixed || nuevaCategoria !== categoriaAnterior) payload.categoria = nuevaCategoria;
+  } else if (isEditFixed && categoriaAnterior) {
+    payload.categoria = null;
+  }
+  const nuevaSubcategoria = values.subcategoria?.trim() || '';
+  const subcategoriaAnterior = row?.subcategoria || '';
+  if (nuevaSubcategoria) {
+    if (!isEditFixed || nuevaSubcategoria !== subcategoriaAnterior) payload.subcategoria = nuevaSubcategoria;
+  } else if (isEditFixed && subcategoriaAnterior) {
+    payload.subcategoria = null;
+  }
+  // Regla de dominio (válida tanto en alta como en edición, espejo del
+  // backend): no puede quedar subcategoría sin categoría. El <select>
+  // dependiente (onExpenseCategoriaChange) ya lo evita en el uso normal --
+  // esto es la segunda capa de defensa en el propio formulario.
+  if (nuevaSubcategoria && !nuevaCategoria) {
+    errors.subcategoria = 'No podés elegir una subcategoría sin categoría.';
+  }
   if (values.responsable === 'Común') {
     const split = values.fixed_tipo_proporcion;
     if (!['dinamica', 'custom'].includes(split)) errors.fixed_tipo_proporcion = 'Elegí un reparto válido.';
@@ -1442,7 +1587,13 @@ function describeForm(kind, row, payload) {
     ? payload.tipo_proporcion === 'custom' ? `${payload.proporcion_jd}% JD / ${100 - payload.proporcion_jd}% Pinki`
       : payload.tipo_proporcion === 'dinamica' ? 'dinámico según salarios' : fijosRepartoLabel(row)
     : '100% personal';
-  return `${kind === 'fixed-edit' ? 'Nueva versión de' : 'Nuevo fijo'} ${payload.nombre}${payload.categoria ? ` (${payload.categoria})` : ''}: ${fmtARSExact(payload.monto_estimado)} ${payload.periodicidad}, responsable ${payload.responsable}, reparto ${fixedSplit}, desde ${payload.vigente_desde}. ${kind === 'fixed-edit' ? 'Se crea una nueva versión; la anterior queda en el historial.' : ''}`;
+  const fixedCategoria = Object.prototype.hasOwnProperty.call(payload, 'categoria') ? payload.categoria : row?.categoria;
+  const fixedSubcategoria = Object.prototype.hasOwnProperty.call(payload, 'subcategoria') ? payload.subcategoria
+    : fixedCategoria ? row?.subcategoria : null;
+  const fixedCategoryLabel = kind === 'fixed-edit'
+    ? ` (categoría: ${fixedCategoria || 'Sin categoría'}; subcategoría: ${fixedSubcategoria || 'Sin subcategoría'})`
+    : fixedCategoria ? ` (${fixedCategoria}${fixedSubcategoria ? ` / ${fixedSubcategoria}` : ''})` : '';
+  return `${kind === 'fixed-edit' ? 'Nueva versión de' : 'Nuevo fijo'} ${payload.nombre}${fixedCategoryLabel}: ${fmtARSExact(payload.monto_estimado)} ${payload.periodicidad}, responsable ${payload.responsable}, reparto ${fixedSplit}, desde ${payload.vigente_desde}. ${kind === 'fixed-edit' ? 'Se crea una nueva versión; la anterior queda en el historial.' : ''}`;
 }
 
 function routeForForm(kind, row) {
@@ -1560,6 +1711,9 @@ async function handleRetryReload() {
 async function handleFormSubmit(event) {
   event.preventDefault();
   if (!activeForm || !liveMode || writePending || reloadPending || reloadFailed) return;
+  // Defensa en profundidad del fail-closed de fijos (ver renderFixedCatalogBlocked):
+  // sin esto, un bug que reactivara #form-submit igual no alcanzaría a armar un payload.
+  if (activeForm.catalogBlocked) return;
   const { kind, row } = activeForm;
   if (kind.startsWith('inventory') && !inventoryAvailable) return;
   const errorBox = document.getElementById('form-errors');
@@ -2035,11 +2189,18 @@ function renderGastosTable() {
   const key = TABLE_KEY_MAP[sortState.key] || sortState.key;
   const sorted = [...data].sort((a, b) => {
     const va = a[key], vb = b[key];
-    const cmp = key === 'monto'
+    const cmp = key === 'monto_propio'
       ? (parseFloat(va) || 0) - (parseFloat(vb) || 0)
       : String(va || '').localeCompare(String(vb || ''));
     return sortState.dir === 'asc' ? cmp : -cmp;
   });
+
+  // Con filtro de persona activo resaltamos la columna de esa persona, pero la
+  // columna "Monto" siempre muestra el TOTAL del gasto (monto_propio) -- "$ JD"
+  // y "$ Pinki" ya muestran la parte de cada uno; mostrar ahí también el monto
+  // recortado por el filtro duplicaba la confusión (brief F1b, hallazgo B).
+  const jdHighlight = personaFiltro === 'jd' || personaFiltro === 'jd_comun';
+  const pinkiHighlight = personaFiltro === 'pinki' || personaFiltro === 'pinki_comun';
 
   document.getElementById('tabla-body').innerHTML = sorted.map((g) => {
     const { pct1, pct2 } = getRowPct(g);
@@ -2051,10 +2212,10 @@ function renderGastosTable() {
       <td data-label="Fecha" class="td-muted">${escapeHtml(g.fecha || '—')}</td>
       <td data-label="Categoría"><span class="pill">${iconFor(g.categoria)} ${escapeHtml(g.categoria)}</span></td>
       <td data-label="Descripción">${escapeHtml(g.descripcion_original)}</td>
-      <td data-label="Monto" class="td-amount td-accent">${fmtARS(g.monto)}</td>
+      <td data-label="Monto" class="td-amount td-accent">${fmtARS(montoPropio)}</td>
       <td data-label="Proporción" class="td-muted">${pct1}% ${P1} / ${pct2}% ${P2}</td>
-      <td data-label="$ JD" class="td-amount">${fmtARS(montoP1)}</td>
-      <td data-label="$ Pinki" class="td-amount">${fmtARS(montoP2)}</td>
+      <td data-label="$ JD" class="td-amount${jdHighlight ? ' td-persona-jd' : ''}">${fmtARS(montoP1)}</td>
+      <td data-label="$ Pinki" class="td-amount${pinkiHighlight ? ' td-persona-pinki' : ''}">${fmtARS(montoP2)}</td>
       <td data-label="Medio de pago" class="td-muted">${escapeHtml(g.medio_pago)}</td>
       <td data-label="Pagó"><span class="pill ${pillClassFor(g.pagado_por)}">${escapeHtml(g.pagado_por)}</span></td>
       <td data-label="Cuota" class="td-muted">${cuotaLabel(g)}</td>

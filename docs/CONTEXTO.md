@@ -439,3 +439,113 @@ Loop de auditoria por fases (Claude spec -> Codex impl -> Claude review). Todos 
   corra `pytest`/`node --test` y confirme el resultado antes de integrar.
 - Detalle completo en `docs/BITACORA.md` (entrada `[2026-10-27]`) y en
   `report.md`.
+
+## F1b: correcciones del QA manual de Juan sobre F1 (candidato aislado `f1b-qa-juan`, t_38a7253f) (2026-10-27)
+
+> Trabajo en `candidates/f1b-qa-juan` (copia aislada de F1 ya integrada,
+> en `f98e2d0`), **NO** en `lab/reinvencion` real ni en `main`. No toca
+> tarjeta/banco (F2) ni gráficos/filtros (F3).
+
+- **Alcance del hito:** 2 hallazgos del QA manual de Juan por Telegram
+  sobre F1 (categorías sugeridas en fijos, y tabla de detalle de gastos
+  confusa con filtro de persona activo), dentro de `lab/db.py`,
+  `lab/validaciones.py`, `lab/api.py`, `src/lab-dashboard/app.js` y
+  `src/lab-dashboard/style.css`.
+- **Hallazgo A — fijos sin categorías sugeridas:** el formulario de alta/
+  edición de fijo usaba un `<input>` de texto con un `datalist` armado
+  desde los fijos YA cargados (categoría vacía en todos), así que nunca
+  sugería nada, sin ningún aviso. Ahora usa el mismo catálogo de
+  `/api/categories?tipo=Gasto` que el formulario de gasto, con `<select>`
+  Categoría + `<select>` Subcategoría dependiente (`formFixedCategorySelects`,
+  reutiliza `onExpenseCategoriaChange()`). A diferencia del form de gasto:
+  ambos selects son OPCIONALES (igual que valida el dominio), y un valor
+  guardado que ya no está en el catálogo se conserva como opción extra en
+  vez de perderse. Si el catálogo falla, se muestra el mismo aviso que
+  gasto y se cae a texto libre + datalist armado desde los fijos cargados
+  (`formFixedCategoryText`) — nunca un input libre silencioso.
+  - Backend: `gastos_fijos.subcategoria` (columna ya existente) ahora se
+    valida, se acepta en alta/edición y se versiona con herencia igual que
+    `categoria` (`db.crear_version_fijo` ya no la hardcodea a la versión
+    anterior).
+- **Hallazgo B — tabla de detalle de gastos confusa:** con un filtro de
+  persona activo, la columna "Monto" mostraba solo la porción de esa
+  persona (igual que "$ JD"/"$ Pinki", que SÍ parten del total), haciendo
+  parecer un error donde cada número ya era correcto por separado. Ahora
+  "Monto" siempre muestra el TOTAL del gasto (`monto_propio`); con un
+  filtro de persona activo, se resalta con una clase CSS la columna de esa
+  persona (`.td-persona-jd` / `.td-persona-pinki`). El ordenamiento por
+  "Monto" pasó a ordenar por ese total, no por la porción filtrada. Los
+  cards/totales y el resumen imprimible no se tocaron (no dependen de la
+  tabla de detalle).
+- **Verificación:** sin acceso a shell/ejecución en esta sesión — todo se
+  verificó por lectura y trazado manual del código contra tests nuevos y
+  existentes (`lab/tests/test_fijos.py`, `lab/tests/test_api.py`,
+  `src/lab-dashboard/tests/forms.test.mjs`), incluido el riesgo de romper
+  harnesses `vm.runInNewContext` con slices parciales de `app.js` al
+  extender la carga de catálogo a los formularios de fijo. Pendiente que
+  el coordinador corra `pytest`/`node --test` y confirme antes de integrar.
+- No se encontró `captura-qa.jpg` en la raíz del workdir — se trabajó con
+  la descripción textual del hallazgo B, suficiente para identificar la
+  causa exacta.
+- Detalle completo en `docs/BITACORA.md` (entrada `[2026-10-27] F1b`) y en
+  `report.md`.
+
+## F1b-fix2: hallazgos del revisor (NO APTO) sobre F1b + QA (candidato aislado `f1b-qa-juan`, t_38a7253f) (2026-10-27)
+
+> Mismo candidato aislado `candidates/f1b-qa-juan`, **NO** en
+> `lab/reinvencion` real ni en `main`.
+
+- **Alcance del hito:** 2 hallazgos del revisor independiente sobre la
+  sesión F1b anterior (dictamen NO APTO) + 2 ítems de cobertura pedidos por
+  QA, dentro de `lab/db.py`, `lab/validaciones.py`, `lab/api.py`,
+  `src/lab-dashboard/app.js` y sus tests.
+- **Hallazgo 1 — fail-closed real sin catálogo en el form de fijo:** F1b
+  dejaba que `openForm()` cayera a `formFixedCategoryText` (texto libre) si
+  el catálogo de categorías fallaba o venía vacío, con "Revisar" habilitado
+  igual. Ahora el form queda bloqueado por completo (ni nombre ni monto
+  editables), con un aviso y un botón "Reintentar" (`retryFixedCatalog`,
+  vuelve a pedir el catálogo); `#form-submit` queda oculto/deshabilitado
+  mientras no haya catálogo válido, con el mismo chequeo repetido en
+  `handleFormSubmit` como defensa en profundidad. Gasto no cambió (no fue
+  objeto de este hallazgo).
+- **Hallazgo 2 — "Sin categoría/subcategoría" en edición no vaciaba el
+  valor:** el campo vacío se omitía y `crear_version_fijo` heredaba de la
+  versión vigente, así que no había forma de vaciar una categoría/
+  subcategoría ya asignada. Ahora hay semántica explícita: campo AUSENTE =
+  heredar; `null` EXPLÍCITO = vaciar. `db.resolve_fixed_categoria` (mismo
+  patrón de centinela `_FIXED_UNSET` que ya usaba `resolve_fixed_split`
+  para el reparto) resuelve categoría/subcategoría de la nueva versión;
+  vaciar `categoria` sin tocar `subcategoria` vacía ambas en cascada. Regla
+  de dominio nueva (validada en `validaciones.validar_gasto_fijo`, en
+  `api.py` antes de escribir, y en el propio `collectForm` del dashboard):
+  no puede quedar `subcategoria` sin `categoria` — se rechaza con `400`.
+  `app.js` manda `null` explícito cuando el usuario elige "Sin…" sobre un
+  valor existente, y omite el campo si no cambió; cambiar la categoría
+  resetea el `<select>` de subcategoría (comportamiento ya existente de
+  `onExpenseCategoriaChange`), así que la vieja nunca viaja heredada junto
+  a una categoría nueva.
+- **Cobertura QA:** orden DESCENDENTE por "Monto" con filtro de persona
+  activo (ya existía el ascendente); combinación categoría-en-catálogo +
+  subcategoría-fuera-de-catálogo en el form de edición de fijo.
+- **Decisión documentada:** la regla cruzada "subcategoria sin categoria"
+  devuelve `400`, no `422` — en este contrato las validaciones de payload
+  nuevo de escritura devuelven `400`; `422` se usa para datos
+  almacenados/acumulados inválidos (ver `lab/README-api.md`), con la
+  excepción documentada de `GET /api/categories` (`tipo` ausente/inválido).
+  Si Juan prefiere `422` literal para esta regla puntual, es un cambio acotado.
+- **Verificación:** sin acceso a shell/ejecución en esta sesión — todo se
+  verificó por lectura y trazado manual contra tests nuevos y existentes,
+  incluido confirmar que las funciones nuevas de `app.js`
+  (`renderFixedCatalogBlocked`/`retryFixedCatalog`) caen dentro del slice
+  que usa `makeExpenseFormHarness` en `forms.test.mjs`. Pendiente que el
+  coordinador corra `pytest`/`node --test` y confirme antes de integrar.
+- Detalle completo en `docs/BITACORA.md` (entrada `[2026-10-27] F1b-fix2`)
+  y en `report.md`.
+
+## Estado del candidato F1b-fix6 (2026-10-27)
+
+- Candidato aislado `f1b-qa-juan` en `lab/reinvencion`, sin cambios en `main`, datos productivos, tarjeta ni despliegue.
+- El historial de gastos fijos muestra categoría y subcategoría por versión. Compara ambos campos y etiqueta las altas, modificaciones y limpiezas; las versiones legacy sin valores muestran «Sin categoría» y «Sin subcategoría».
+- El resumen «Revisar» de una edición de fijo combina el payload con la fila actual: omitido hereda, `null` vacía y un string reemplaza. Vaciar categoría sin enviar subcategoría también se refleja como subcategoría vacía, igual que en el backend.
+- `loadCategoriasGasto()` valida la estructura completa antes de cachear: `categories` debe ser un array no vacío; cada entrada debe tener nombre de categoría string no vacío y `subcategorias` array de strings no vacíos. Una respuesta malformada mantiene el formulario de fijo bloqueado con «Reintentar». El formulario de gasto conserva su fallback de texto libre.
+- Regresiones agregadas en `src/lab-dashboard/tests/fijos.test.mjs` y `src/lab-dashboard/tests/forms.test.mjs`. **Sin ejecución de tests en esta corrida por instrucción del wrapper**; cualquier conteo anterior no corresponde a fix6. Ver `report.md` y la entrada F1b-fix6 de `docs/BITACORA.md`.

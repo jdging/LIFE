@@ -90,11 +90,11 @@ INVENTORY_MONEY_OPTIONAL_FIELDS = (
 )
 ALLOWED_FIXED_CREATE_FIELDS = {
     "nombre", "monto_estimado", "periodicidad", "vigente_desde", "responsable",
-    "tipo_proporcion", "proporcion_jd", "categoria",
+    "tipo_proporcion", "proporcion_jd", "categoria", "subcategoria",
 }
 ALLOWED_FIXED_PATCH_FIELDS = {
     "nombre", "monto_estimado", "periodicidad", "responsable", "vigente_desde",
-    "tipo_proporcion", "proporcion_jd", "categoria",
+    "tipo_proporcion", "proporcion_jd", "categoria", "subcategoria",
 }
 CATEGORY_TIPOS = ("Gasto", "Ingreso", "Inversión")
 
@@ -1049,9 +1049,17 @@ class _App:
         if nombre is not None and (not isinstance(nombre, str) or not nombre.strip()):
             return self._error(start_response, 400, "nombre, si se especifica, no puede estar vacío.")
 
-        categoria = data.get("categoria")
-        if categoria is not None and (not isinstance(categoria, str) or not categoria.strip()):
+        # Centinela `db._FIXED_UNSET` (brief t_38a7253f F1b-fix2, hallazgo 2
+        # del revisor): distingue el campo AUSENTE (hereda) de `null`
+        # EXPLÍCITO (vacía) -- `data.get("categoria")` solo, sin default,
+        # confundía ambos casos en el mismo `None`.
+        categoria = data.get("categoria", db._FIXED_UNSET)
+        if categoria not in (db._FIXED_UNSET, None) and (not isinstance(categoria, str) or not categoria.strip()):
             return self._error(start_response, 400, "categoria, si se especifica, no puede estar vacía.")
+
+        subcategoria = data.get("subcategoria", db._FIXED_UNSET)
+        if subcategoria not in (db._FIXED_UNSET, None) and (not isinstance(subcategoria, str) or not subcategoria.strip()):
+            return self._error(start_response, 400, "subcategoria, si se especifica, no puede estar vacía.")
 
         monto_estimado = data.get("monto_estimado")
         if monto_estimado is not None:
@@ -1079,6 +1087,10 @@ class _App:
                 )
             except db.FixedSplitError:
                 return self._error(start_response, 400, "reparto de gasto fijo inválido.")
+            try:
+                db.resolve_fixed_categoria(categoria, subcategoria, anterior)
+            except db.FixedCategoriaError:
+                return self._error(start_response, 400, "subcategoria no puede quedar asignada sin categoria.")
 
         try:
             nuevo_id = db.crear_version_fijo(
@@ -1089,6 +1101,7 @@ class _App:
                 nombre=nombre,
                 periodicidad=periodicidad,
                 categoria=categoria,
+                subcategoria=subcategoria,
                 actor=SERVER_ACTOR,
                 **{key: data[key] for key in ("tipo_proporcion", "proporcion_jd") if key in data},
             )
@@ -1096,6 +1109,8 @@ class _App:
             return self._error(start_response, 400, "la edición no tiene cambios reales.")
         except db.FixedSplitError:
             return self._error(start_response, 400, "reparto de gasto fijo inválido.")
+        except db.FixedCategoriaError:
+            return self._error(start_response, 400, "subcategoria no puede quedar asignada sin categoria.")
         except OverflowError:
             return self._error(start_response, 400, "monto fuera de rango.")
         except ValueError:

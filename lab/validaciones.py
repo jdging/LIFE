@@ -246,6 +246,14 @@ def validar_gasto_fijo(payload: dict) -> list:
         inventársele una). Si SE especifica, debe ser un string no vacío;
         no hay catálogo cerrado de categorías para fijos (brief t_38a7253f,
         punto 5).
+      - `subcategoria`: igual regla que `categoria` (brief t_38a7253f F1b,
+        hallazgo A) — opcional, se conserva tal cual, string no vacío si se
+        especifica.
+      - Regla cruzada (brief t_38a7253f F1b-fix2, hallazgo 2 del revisor): no
+        puede quedar `subcategoria` asignada sin `categoria`. Se valida sobre
+        los valores YA RESUELTOS (tras heredar/vaciar en `crear_version_fijo`
+        o `insert_gasto_fijo`), así que aplica tanto al alta como a cada
+        versión nueva.
 
     Devuelve una lista de errores (vacía si el payload es válido). No muta
     `payload` ni toca la base de datos.
@@ -284,5 +292,12 @@ def validar_gasto_fijo(payload: dict) -> list:
     categoria = payload.get("categoria")
     if categoria is not None and (not isinstance(categoria, str) or not categoria.strip()):
         errores.append("categoria, si se especifica, no puede estar vacía.")
+
+    subcategoria = payload.get("subcategoria")
+    if subcategoria is not None and (not isinstance(subcategoria, str) or not subcategoria.strip()):
+        errores.append("subcategoria, si se especifica, no puede estar vacía.")
+
+    if subcategoria is not None and categoria is None:
+        errores.append("subcategoria no puede quedar asignada sin categoria.")
 
     return errores

@@ -562,6 +562,125 @@ class ApiTest(WsgiApiTestCase):
         self.assertEqual(status, 200)
         self.assertIsNone(baja["fixed"]["categoria"])
 
+    def test_fixed_subcategoria_optional_versioned_and_inherited(self):
+        # Mismo contrato que categoria (brief t_38a7253f F1b, hallazgo A).
+        legacy_id = self.request("POST", "/api/fixed", self.fixed(nombre="Legacy"))[1]["fixed"]["id"]
+        self.assertIsNone(self.request("GET", "/api/fixed?dateISO=2026-04-15")[1]["fixed"][0]["subcategoria"])
+
+        status, created, _ = self.request("POST", "/api/fixed", self.fixed(
+            nombre="Alquiler", categoria="Hogar", subcategoria="Alquiler",
+        ))
+        self.assertEqual(status, 201)
+        self.assertEqual(created["fixed"]["subcategoria"], "Alquiler")
+        fixed_id = created["fixed"]["id"]
+
+        for bad_subcategoria in ("", "   "):
+            self.assertEqual(self.request("POST", "/api/fixed", self.fixed(
+                nombre="Otro", subcategoria=bad_subcategoria,
+            ))[0], 400)
+
+        # Editar sin mandar subcategoria la hereda de la versión vigente.
+        status, renamed, _ = self.request("PATCH", f"/api/fixed/{fixed_id}", {
+            "vigente_desde": "2026-05-01", "nombre": "Alquiler nuevo",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(renamed["fixed"]["subcategoria"], "Alquiler")
+
+        # Editar con una subcategoria nueva la cambia en la nueva versión.
+        status, recategorizado, _ = self.request("PATCH", f"/api/fixed/{fixed_id}", {
+            "vigente_desde": "2026-06-01", "subcategoria": "Expensas",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(recategorizado["fixed"]["subcategoria"], "Expensas")
+        self.assertEqual(self.request("PATCH", f"/api/fixed/{fixed_id}", {
+            "vigente_desde": "2026-07-01", "subcategoria": "   ",
+        })[0], 400)
+
+        history = self.request("GET", f"/api/fixed/{fixed_id}/historial")[1]["historial"]
+        self.assertEqual([row["subcategoria"] for row in history], ["Alquiler", "Alquiler", "Expensas"])
+
+        # Dar de baja un fijo sin subcategoria no le inventa una.
+        status, baja, _ = self.request("DELETE", f"/api/fixed/{legacy_id}", {"fecha_baja": "2026-05-01"})
+        self.assertEqual(status, 200)
+        self.assertIsNone(baja["fixed"]["subcategoria"])
+
+    def test_fixed_categoria_subcategoria_null_explicito_vs_omitido(self):
+        """Semántica explícita (brief t_38a7253f F1b-fix2, hallazgo 2 del
+        revisor): campo AUSENTE del payload = heredar; `null` EXPLÍCITO =
+        vaciar. Cubre heredar, cambiar, vaciar categoria (vacía también
+        subcategoria), vaciar solo subcategoria, y la regla cruzada
+        subcategoria-sin-categoria."""
+        fixed_id = self.request("POST", "/api/fixed", self.fixed(
+            nombre="Alquiler", categoria="Hogar", subcategoria="Alquiler",
+        ))[1]["fixed"]["id"]
+
+        # Heredar: PATCH sin mandar categoria/subcategoria conserva ambas.
+        status, heredado, _ = self.request("PATCH", f"/api/fixed/{fixed_id}", {
+            "vigente_desde": "2026-05-01", "monto_estimado": 210000,
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(heredado["fixed"]["categoria"], "Hogar")
+        self.assertEqual(heredado["fixed"]["subcategoria"], "Alquiler")
+
+        # Cambiar: mandar un valor nuevo lo reemplaza.
+        status, cambiado, _ = self.request("PATCH", f"/api/fixed/{fixed_id}", {
+            "vigente_desde": "2026-06-01", "categoria": "Vivienda", "subcategoria": "Alquiler mensual",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(cambiado["fixed"]["categoria"], "Vivienda")
+        self.assertEqual(cambiado["fixed"]["subcategoria"], "Alquiler mensual")
+
+        # Vaciar categoria (null explícito, sin tocar subcategoria): vacía
+        # también la subcategoria en cascada.
+        status, vaciado, _ = self.request("PATCH", f"/api/fixed/{fixed_id}", {
+            "vigente_desde": "2026-07-01", "categoria": None,
+        })
+        self.assertEqual(status, 200)
+        self.assertIsNone(vaciado["fixed"]["categoria"])
+        self.assertIsNone(vaciado["fixed"]["subcategoria"])
+
+        # Reasignar categoria + subcategoria juntas a un fijo que quedó sin ninguna.
+        status, reasignado, _ = self.request("PATCH", f"/api/fixed/{fixed_id}", {
+            "vigente_desde": "2026-08-01", "categoria": "Hogar", "subcategoria": "Expensas",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(reasignado["fixed"]["categoria"], "Hogar")
+        self.assertEqual(reasignado["fixed"]["subcategoria"], "Expensas")
+
+        # Vaciar sólo subcategoria (null explícito): la categoria se hereda sin cambios.
+        status, solo_subcat_vacia, _ = self.request("PATCH", f"/api/fixed/{fixed_id}", {
+            "vigente_desde": "2026-09-01", "subcategoria": None,
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(solo_subcat_vacia["fixed"]["categoria"], "Hogar")
+        self.assertIsNone(solo_subcat_vacia["fixed"]["subcategoria"])
+
+        # subcategoria sin categoria -> 400, tanto si categoria queda ausente
+        # (hereda None desde el paso anterior) como si se manda en conflicto explícito.
+        status, _, _ = self.request("PATCH", f"/api/fixed/{fixed_id}", {
+            "vigente_desde": "2026-10-01", "categoria": None, "subcategoria": "Expensas",
+        })
+        self.assertEqual(status, 400)
+
+        otro_sin_categoria_id = self.request("POST", "/api/fixed", self.fixed(nombre="Legacy sin categoria"))[1]["fixed"]["id"]
+        status, _, _ = self.request("PATCH", f"/api/fixed/{otro_sin_categoria_id}", {
+            "vigente_desde": "2026-05-01", "subcategoria": "Expensas",
+        })
+        self.assertEqual(status, 400)
+
+        # La misma regla cruzada también se valida en el ALTA (POST), no solo en PATCH.
+        status, _, _ = self.request("POST", "/api/fixed", self.fixed(
+            nombre="Alta sin categoria", subcategoria="Expensas",
+        ))
+        self.assertEqual(status, 400)
+
+        history = self.request("GET", f"/api/fixed/{fixed_id}/historial")[1]["historial"]
+        self.assertEqual(
+            [(row["categoria"], row["subcategoria"]) for row in history],
+            [("Hogar", "Alquiler"), ("Hogar", "Alquiler"), ("Vivienda", "Alquiler mensual"),
+             (None, None), ("Hogar", "Expensas"), ("Hogar", None)],
+        )
+
     def test_fixed_common_split_is_versioned_and_preserved(self):
         for pct in (0, 100, 25):
             with self.subTest(proporcion_jd=pct):
