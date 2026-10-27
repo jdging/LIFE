@@ -130,6 +130,7 @@ const PROXY_ROUTES = [
   { pattern: /^\/api\/expenses$/, methods: ['GET', 'POST'], query: { GET: { month: 'month' } } },
   { pattern: /^\/api\/expenses\/[1-9]\d*$/, methods: ['PATCH', 'DELETE'], query: {} },
   { pattern: /^\/api\/expenses\/[1-9]\d*\/saldar$/, methods: ['POST'], query: {} },
+  { pattern: /^\/api\/expenses\/saldar-todas$/, methods: ['POST'], query: {} },
   { pattern: /^\/api\/income$/, methods: ['GET', 'POST'], query: {} },
   { pattern: /^\/api\/income\/[1-9]\d*$/, methods: ['PATCH', 'DELETE'], query: {} },
   { pattern: /^\/api\/inventory$/, methods: ['GET', 'POST'], query: {} },

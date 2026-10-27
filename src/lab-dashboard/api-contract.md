@@ -58,6 +58,7 @@ El dashboard (`app.js`) solo conoce la primera capa: llama a rutas relativas
 | `PATCH /api/expenses/:id` | Subconjunto no vacío de los campos del alta, **excepto `cuotas_total`** | `{"expense":{...}}`; `404` si no existe o está borrado |
 | `DELETE /api/expenses/:id` | Sin cuerpo | `{"deleted":true,"id":N}` |
 | `POST /api/expenses/:id/saldar` | Sin cuerpo | `{"expense":{...}}`; `404` si no existe, `409` si ya está borrado, ya saldado, o `pagado_por='Común'` |
+| `POST /api/expenses/saldar-todas` | Sin cuerpo | `{"expenses":[...],"count":N,"total":F}`; `409` si no había ninguna deuda pendiente. Salda EXACTAMENTE el mismo universo que la deuda neta (`getDebtRows()`/`debt_pending_through_month`): gastos activos pagados por `JD`/`Pinki`, no saldados, cuya CONTRAPARTE tenga proporción > 0 — un gasto pagado 100% por quien lo pagó no se toca. |
 | `GET /api/income` | Sin parámetros | `{"income":[...]}` |
 | `POST /api/income` | `fecha`, `monto`, `moneda`, `categoria`, `persona`, `descripcion_original` | `201 {"income":{...}}` |
 | `PATCH /api/income/:id` | Subconjunto no vacío de los campos del alta | `{"income":{...}}` |
@@ -65,8 +66,8 @@ El dashboard (`app.js`) solo conoce la primera capa: llama a rutas relativas
 | `GET /api/fixed/versions` | Sin parámetros | `{"versions":[...]}`; todas las versiones |
 | `GET /api/fixed/range?fromISO=...&toISO=...` | Dos fechas obligatorias | `{"range":[{"fijo_grupo_id":N,"tramos":[...]}]}` |
 | `GET /api/fixed/:id/historial` | `id` de cualquier versión | `{"historial":[...]}` |
-| `POST /api/fixed` | `nombre`, `monto_estimado`, `periodicidad`, `responsable`, `vigente_desde` obligatorios; `tipo_proporcion`/`proporcion_jd` según tabla de reparto | `201 {"fixed":{...}}` |
-| `PATCH /api/fixed/:id` | `vigente_desde` obligatorio + cambios | `{"fixed":{...}}` con id de la nueva versión |
+| `POST /api/fixed` | `nombre`, `monto_estimado`, `periodicidad`, `responsable`, `vigente_desde` obligatorios; `categoria` opcional (sin catálogo cerrado); `tipo_proporcion`/`proporcion_jd` según tabla de reparto | `201 {"fixed":{...}}` |
+| `PATCH /api/fixed/:id` | `vigente_desde` obligatorio + cambios (incluido `categoria`) | `{"fixed":{...}}` con id de la nueva versión |
 | `DELETE /api/fixed/:id` | `{"fecha_baja":"YYYY-MM-DD"}` | `{"fixed":{...}}` con versión inactiva nueva |
 | `GET /api/summary?month=YYYY-MM` | `month` opcional | Con mes: objeto resumen; sin mes: `{"months":[...]}` |
 

@@ -203,6 +203,83 @@ class ApiTest(WsgiApiTestCase):
         status, _, _ = self.request("POST", f"/api/expenses/{deleted_id}/saldar")
         self.assertEqual(status, 409)
 
+    def test_saldar_todas_expenses(self):
+        status, _, _ = self.request("POST", "/api/expenses/saldar-todas")
+        self.assertEqual(status, 409, "sin deudas pendientes, no hay nada para saldar.")
+
+        jd_id = self.request("POST", "/api/expenses", self.expense(monto=100, pagado_por="JD"))[1]["expenses"][0]["id"]
+        pinki_id = self.request("POST", "/api/expenses", self.expense(monto=40, pagado_por="Pinki"))[1]["expenses"][0]["id"]
+        self.request("POST", "/api/expenses", self.expense(monto=50, pagado_por="Común"))
+
+        status, body, _ = self.request("POST", "/api/expenses/saldar-todas")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["count"], 2)
+        self.assertAlmostEqual(body["total"], 140)
+        self.assertEqual({row["id"] for row in body["expenses"]}, {jd_id, pinki_id})
+        self.assertTrue(all(row["saldado"] is not None for row in body["expenses"]))
+
+        status, listed, _ = self.request("GET", "/api/expenses")
+        self.assertEqual(status, 200)
+        saldados = {row["id"]: row["saldado"] for row in listed["expenses"]}
+        self.assertIsNotNone(saldados[jd_id])
+        self.assertIsNotNone(saldados[pinki_id])
+
+        # Ya no queda ninguna deuda pendiente: la segunda llamada es un 409.
+        status, _, _ = self.request("POST", "/api/expenses/saldar-todas")
+        self.assertEqual(status, 409)
+
+        status, _, headers = self.request("GET", "/api/expenses/saldar-todas")
+        self.assertEqual(status, 405)
+        self.assertEqual(headers["Allow"], "POST")
+
+    def test_saldar_todas_expenses_excluye_gastos_100_por_ciento_propios(self):
+        """Brief t_38a7253f fix4, hallazgo 1 del revisor independiente: mismo
+        universo que `getDebtRows()` del dashboard -- un gasto pagado 100%
+        por quien lo pagó (contraparte en 0%) no genera deuda real."""
+        jd_100 = self.request("POST", "/api/expenses", self.expense(
+            monto=1000, pagado_por="JD", tipo_proporcion="custom",
+            proporcion_jd=100, proporcion_pinki=0,
+        ))[1]["expenses"][0]["id"]
+        pinki_100 = self.request("POST", "/api/expenses", self.expense(
+            monto=2000, pagado_por="Pinki", tipo_proporcion="custom",
+            proporcion_jd=0, proporcion_pinki=100,
+        ))[1]["expenses"][0]["id"]
+        compartido = self.request("POST", "/api/expenses", self.expense(
+            monto=3000, pagado_por="JD", tipo_proporcion="custom",
+            proporcion_jd=50, proporcion_pinki=50,
+        ))[1]["expenses"][0]["id"]
+
+        status, body, _ = self.request("POST", "/api/expenses/saldar-todas")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["count"], 1)
+        self.assertAlmostEqual(body["total"], 3000)
+        self.assertEqual({row["id"] for row in body["expenses"]}, {compartido})
+
+        status, listed, _ = self.request("GET", "/api/expenses")
+        saldados = {row["id"]: row["saldado"] for row in listed["expenses"]}
+        self.assertIsNone(saldados[jd_100], "100% JD no genera deuda; no debe quedar saldado.")
+        self.assertIsNone(saldados[pinki_100], "100% Pinki no genera deuda; no debe quedar saldado.")
+        self.assertIsNotNone(saldados[compartido])
+
+    def test_saldar_todas_expenses_monto_legacy_invalido_no_salda_nada(self):
+        """Brief t_38a7253f fix4, hallazgo 2 del revisor independiente: la
+        validación de montos corre ANTES del commit -- ningún gasto queda
+        saldado si un monto almacenado es inválido."""
+        status, body, _ = self.request("POST", "/api/expenses", self.expense(monto=100, pagado_por="JD"))
+        self.assertEqual(status, 201)
+        expense_id = body["expenses"][0]["id"]
+
+        conn = db.get_connection(self.db_path)
+        conn.execute("UPDATE gastos SET monto = 100.001 WHERE id = ?", (expense_id,))
+        conn.commit()
+
+        status, _, _ = self.request("POST", "/api/expenses/saldar-todas")
+        self.assertEqual(status, 409, "Un monto almacenado inválido debe fallar, nunca saldar en silencio.")
+
+        fila = conn.execute("SELECT saldado FROM gastos WHERE id = ?", (expense_id,)).fetchone()
+        self.assertIsNone(fila["saldado"], "El monto inválido no debe dejar ninguna fila saldada.")
+        conn.close()
+
     def test_update_expense_editable_fields_validation_and_not_found(self):
         status, body, _ = self.request("POST", "/api/expenses", self.expense(monto=100, pagado_por="JD"))
         self.assertEqual(status, 201)
@@ -442,6 +519,48 @@ class ApiTest(WsgiApiTestCase):
         self.assertEqual(self.request("GET", "/api/fixed?dateISO=2026-05-31")[1]["fixed"][0]["id"], second_id)
         self.assertEqual(self.request("GET", "/api/fixed?dateISO=2026-06-01")[1]["fixed"], [])
         self.assertEqual(self.request("DELETE", f"/api/fixed/{first_id}", {"fecha_baja": "2026-06-02"})[0], 409)
+
+    def test_fixed_categoria_optional_versioned_and_inherited(self):
+        # Sin categoria: queda None, como un fijo legacy sin categoría asignada.
+        legacy_id = self.request("POST", "/api/fixed", self.fixed(nombre="Legacy"))[1]["fixed"]["id"]
+        self.assertIsNone(self.request("GET", "/api/fixed?dateISO=2026-04-15")[1]["fixed"][0]["categoria"])
+
+        status, created, _ = self.request("POST", "/api/fixed", self.fixed(
+            nombre="Alquiler", categoria="Hogar",
+        ))
+        self.assertEqual(status, 201)
+        self.assertEqual(created["fixed"]["categoria"], "Hogar")
+        fixed_id = created["fixed"]["id"]
+
+        for bad_categoria in ("", "   "):
+            self.assertEqual(self.request("POST", "/api/fixed", self.fixed(
+                nombre="Otro", categoria=bad_categoria,
+            ))[0], 400)
+
+        # Editar sin mandar categoria la hereda de la versión vigente.
+        status, renamed, _ = self.request("PATCH", f"/api/fixed/{fixed_id}", {
+            "vigente_desde": "2026-05-01", "nombre": "Alquiler nuevo",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(renamed["fixed"]["categoria"], "Hogar")
+
+        # Editar con una categoria nueva la cambia en la nueva versión.
+        status, recategorizado, _ = self.request("PATCH", f"/api/fixed/{fixed_id}", {
+            "vigente_desde": "2026-06-01", "categoria": "Servicios",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(recategorizado["fixed"]["categoria"], "Servicios")
+        self.assertEqual(self.request("PATCH", f"/api/fixed/{fixed_id}", {
+            "vigente_desde": "2026-07-01", "categoria": "   ",
+        })[0], 400)
+
+        history = self.request("GET", f"/api/fixed/{fixed_id}/historial")[1]["historial"]
+        self.assertEqual([row["categoria"] for row in history], ["Hogar", "Hogar", "Servicios"])
+
+        # Dar de baja un fijo sin categoria no le inventa una.
+        status, baja, _ = self.request("DELETE", f"/api/fixed/{legacy_id}", {"fecha_baja": "2026-05-01"})
+        self.assertEqual(status, 200)
+        self.assertIsNone(baja["fixed"]["categoria"])
 
     def test_fixed_common_split_is_versioned_and_preserved(self):
         for pct in (0, 100, 25):

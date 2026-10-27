@@ -91,6 +91,7 @@ el límite técnico, responden `422` sin números inventados.
 | `PATCH /api/expenses/:id` | Subconjunto no vacío de los campos del alta, **excepto `cuotas_total`** (ver nota abajo) | `{"expense":{...}}`; rechaza con `404` si el gasto no existe o está borrado |
 | `DELETE /api/expenses/:id` | Sin cuerpo | `{"deleted":true,"id":N}`; borra lógicamente solo esa cuota |
 | `POST /api/expenses/:id/saldar` | Sin cuerpo | `{"expense":{...}}` con `saldado` en `YYYY-MM-DD`; `404` si no existe, `409` si ya está borrado, ya saldado, o `pagado_por='Común'` (un gasto común nunca genera deuda) |
+| `POST /api/expenses/saldar-todas` | Sin cuerpo | `{"expenses":[...],"count":N,"total":F}` con todos los gastos saldados en esta llamada; `409` si no había ninguna deuda pendiente |
 | `GET /api/income` | Sin parámetros | `{"income":[...]}`; excluye bajas lógicas |
 | `POST /api/income` | `fecha`, `monto`, `moneda`, `categoria`, `persona`, `descripcion_original` | `201 {"income":{...}}` |
 | `PATCH /api/income/:id` | Subconjunto no vacío de los campos del alta | `{"income":{...}}`; rechaza con `404` si el ingreso está borrado |
@@ -103,8 +104,8 @@ el límite técnico, responden `422` sin números inventados.
 | `GET /api/fixed/versions` | Sin parámetros | `{"versions":[...]}`; todas las versiones, incluidas las bajas, con `monto_mensual` |
 | `GET /api/fixed/range?fromISO=...&toISO=...` | Dos fechas obligatorias, rango inclusivo | `{"range":[{"fijo_grupo_id":N,"tramos":[...]}]}` |
 | `GET /api/fixed/:id/historial` | `id` de cualquier versión | `{"historial":[...]}` de toda la serie, con `vigente_hasta` y `monto_mensual` |
-| `POST /api/fixed` | `nombre`, `monto_estimado`, `periodicidad`, `responsable`, `vigente_desde` obligatorios; `tipo_proporcion` y `proporcion_jd` según la tabla siguiente | `201 {"fixed":{...}}` |
-| `PATCH /api/fixed/:id` | `vigente_desde` obligatorio y cambios en `nombre`, `monto_estimado`, `periodicidad`, `responsable`, `tipo_proporcion`, `proporcion_jd` | `{"fixed":{...}}` con id de la nueva versión |
+| `POST /api/fixed` | `nombre`, `monto_estimado`, `periodicidad`, `responsable`, `vigente_desde` obligatorios; `categoria` opcional; `tipo_proporcion` y `proporcion_jd` según la tabla siguiente | `201 {"fixed":{...}}` |
+| `PATCH /api/fixed/:id` | `vigente_desde` obligatorio y cambios en `nombre`, `categoria`, `monto_estimado`, `periodicidad`, `responsable`, `tipo_proporcion`, `proporcion_jd` | `{"fixed":{...}}` con id de la nueva versión |
 | `DELETE /api/fixed/:id` | `{"fecha_baja":"YYYY-MM-DD"}` | `{"fixed":{...}}` con versión inactiva nueva |
 | `GET /api/summary?month=YYYY-MM` | `month` opcional | Con mes: objeto resumen; sin mes: `{"months":[...]}` |
 | `GET /api/categories?tipo=Gasto\|Ingreso\|Inversión` | `tipo` obligatorio, uno de esos tres valores exactos | `{"categories":[{"categoria":"Hogar","subcategorias":["Alquiler","Expensas",...]},...]}` |
@@ -138,6 +139,41 @@ No recalcula `avisos_credito` (a diferencia del alta y la baja): si la
 edición cambia `monto` o `medio_pago` de un gasto en Crédito, los umbrales
 de aviso ya detectados para ese mes no se revisan de nuevo — limitación
 conocida, fuera del alcance de este brief.
+
+`POST /api/expenses/saldar-todas` (brief t_38a7253f, punto 2; corregido en
+fix4 por hallazgo 1 del revisor independiente, y en fix6 por hallazgos 1 y 2
+de la re-revisión) marca `saldado` en todos los gastos pendientes de una
+sola vez, en vez de que el cliente llame `POST /api/expenses/:id/saldar`
+gasto por gasto. "Pendiente" es el mismo universo que `getDebtRows()` del
+dashboard y que usa `GET /api/summary` para `debt_pending_through_month`:
+gastos activos con `pagado_por` en `('JD', 'Pinki')`, `saldado IS NULL`, sin
+filtro de fecha, **y cuya CONTRAPARTE tenga una proporción de reparto > 0**
+(`db._pct_contraparte`) — un gasto pagado 100% por quien lo pagó (contraparte
+en 0%) no genera deuda real y queda afuera, igual que el modal del dashboard
+nunca lo lista. Para `tipo_proporcion='custom'`, el % de la contraparte se
+deriva SIEMPRE de `proporcion_jd` (JD = `proporcion_jd`; Pinki =
+`100 - proporcion_jd`), exactamente la misma fórmula que `getRowPct` en
+app.js — `proporcion_pinki` nunca se lee para esta decisión, aunque el alta
+garantice que ambos campos sumen ~100.
+
+La operación es atómica (`db.saldar_todas_las_deudas`):
+`BEGIN IMMEDIATE` reserva el escritor ANTES del `SELECT` que arma ese
+universo (mismo patrón que `DELETE /api/expenses/:id`), así el snapshot de
+auditoría no puede quedar desalineado con lo que el `UPDATE` termina
+tocando. El monto de cada fila se valida (`db._validar_monto_saldable` exige
+finito, **mayor a 0** y hasta dos decimales, igual que `api._valid_money`
+con su default `positive=True`) y el total se calcula ANTES del
+`UPDATE`/commit — el handler de `api.py` ya no valida nada después de
+escribir, solo serializa la respuesta de `db.py`. Un único `UPDATE` (`WHERE
+id IN (...)`) marca todas las filas detectadas, con el mismo chequeo de
+`rowcount` que usa el saldado individual para detectar una modificación
+concurrente, y una fila de `auditoria` por gasto saldado; si falla cualquier
+paso (incluida la validación de montos o la propia auditoría), se hace
+`rollback()` completo y no queda ninguna fila saldada. Si no hay ninguna
+deuda pendiente (en ese universo), responde `409` sin modificar nada. La
+respuesta incluye `count` (cantidad de gastos saldados) y `total` (suma de
+`monto` de esos gastos — no es el saldo neto entre JD y Pinki, que puede ser
+menor si ambos tenían deuda cruzada).
 
 ### Reparto de gastos fijos
 
@@ -189,6 +225,17 @@ porcentaje juntos. Cada cambio real crea una versión y una auditoría, sin
 alterar versiones previas. Un `PATCH` sin cambio real devuelve `400` y no crea
 versión ni auditoría. También devuelven `400` las combinaciones inválidas de
 reparto, antes de escribir.
+
+**Categoría de un fijo (brief t_38a7253f, punto 5).** `categoria` es un string
+libre, opcional, sin catálogo cerrado (a diferencia de `categoria`/
+`subcategoria` de gastos, que sí tienen un catálogo en `GET
+/api/categories?tipo=Gasto`). `POST /api/fixed` la guarda si se envía; si se
+omite, queda `NULL` — igual que un fijo legacy migrado sin categoría, que
+sigue existiendo y editable, sin que la API le invente una. `PATCH
+/api/fixed/:id` la cambia si se envía un string no vacío; si se omite, la
+nueva versión hereda la categoría de la versión vigente en `vigente_desde`
+(mismo criterio que `nombre`/`periodicidad`). No hay forma de volver a
+`NULL` una categoría ya asignada desde esta ruta.
 
 Una baja repetida de un gasto o de un ingreso devuelve `404`: el recurso ya no
 existe como activo. Dos bajas concurrentes (mismo id, misma tabla) se

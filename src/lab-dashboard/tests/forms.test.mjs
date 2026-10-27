@@ -64,6 +64,7 @@ function switchView() { renderCount++; }
 function fmtARS(value) { return '$' + value; }
 function fmtARSExact(value) { return '$' + Number(value).toFixed(2); }
 function cuotaLabel(row) { return row.cuota_nro + '/' + row.cuotas_total; }
+function sum(rows, field) { return rows.reduce((acc, r) => acc + (parseFloat(r[field]) || 0), 0); }
 `;
 // computePeriod, monthsWithData, mesLabel y los filtros de período son las
 // funciones REALES de app.js (no copias): loadLive() las llama de verdad al
@@ -301,7 +302,7 @@ const markupApi = runInNewContext(`
 function todayLocalISO() { return '2026-10-17'; }
 const escapeHtml = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
 ${slice('function formField(', 'async function openForm(')}
-({ formMarkup })`, { DATA: { gastos: [] } });
+({ formMarkup })`, { DATA: { gastos: [], fijos: [{ categoria: 'Hogar' }, { categoria: 'Servicios' }, { categoria: null }] } });
 const fixedMarkup = markupApi.formMarkup('fixed-edit', customFixed);
 assert.match(fixedMarkup, /id="field-responsable"/);
 assert.match(fixedMarkup, /id="field-fixed_tipo_proporcion"/);
@@ -309,6 +310,16 @@ assert.match(fixedMarkup, /value="custom" selected/);
 assert.match(fixedMarkup, /id="field-proporcion_jd"[^>]*value="0"/);
 assert.match(fixedMarkup, /id="fixed-pinki-percent"/);
 assert.doesNotMatch(fixedMarkup, /API.*no.*reparto/i);
+
+// Categoría de fijo (brief F1 #5): campo libre con datalist de categorías ya
+// usadas (sin catálogo cerrado), y precarga con la categoría de la fila.
+assert.match(fixedMarkup, /id="field-categoria"/);
+assert.match(fixedMarkup, /<option value="Hogar"><\/option>/);
+assert.match(fixedMarkup, /<option value="Servicios"><\/option>/);
+const fixedWithCategoriaRow = { ...customFixed, categoria: 'Servicios' };
+assert.match(markupApi.formMarkup('fixed-edit', fixedWithCategoriaRow), /id="field-categoria"[^>]*value="Servicios"/);
+const fixedAltaMarkup = markupApi.formMarkup('fixed', null);
+assert.match(fixedAltaMarkup, /id="field-categoria"[^>]*value=""/, 'El alta no precarga ninguna categoría');
 
 // formMarkup('expense-edit', ...): mismo formulario de alta, precargado con la
 // fila, salvo cuotas_total (no editable por PATCH, ver GASTO_CAMPOS_EDITABLES).
@@ -330,8 +341,21 @@ assert.match(expenseEditMarkup, /<option value="JD" selected>/);
 assert.match(expenseEditMarkup, /<option value="custom" selected>/);
 assert.match(expenseEditMarkup, /id="field-proporcion_jd"[^>]*value="0"/);
 assert.match(expenseEditMarkup, /id="field-proporcion_pinki"[^>]*value="100"/);
+// Edición de un gasto guardado como 'custom' 50/50 (brief fix4 #6): debe
+// preseleccionar "Manual por porcentajes" con ambos campos en 50, igual
+// que cualquier otro 'custom' -- el backend nunca persiste '50/50' literal
+// (ver collectForm), así que no hay un valor "50/50" que reconstruir acá.
+const expenseMitadMarkup = expenseMarkupApi.formMarkup('expense-edit',
+  { ...expense, tipo_proporcion: 'custom', proporcion_jd: 50, proporcion_pinki: 50 });
+assert.match(expenseMitadMarkup, /<option value="custom" selected>/);
+assert.match(expenseMitadMarkup, /id="field-proporcion_jd"[^>]*value="50"/);
+assert.match(expenseMitadMarkup, /id="field-proporcion_pinki"[^>]*value="50"/);
 const expenseAltaMarkup = expenseMarkupApi.formMarkup('expense', null);
 assert.match(expenseAltaMarkup, /name="cuotas_total"/, 'El alta sigue permitiendo elegir la cantidad de cuotas');
+// Atajos de reparto "100% JD" / "100% Pinki" (brief F1 #6), junto a los
+// atajos existentes (dinámico, 50/50, manual).
+assert.match(expenseAltaMarkup, /<option value="jd_100"[^>]*>100% JD<\/option>/);
+assert.match(expenseAltaMarkup, /<option value="pinki_100"[^>]*>100% Pinki<\/option>/);
 // Con catálogo real (igual que en el alta, t_ce790609): el alta no debe
 // cambiar su markup exacto al agregar precarga de edición a la misma
 // función (sin selected, sin espacio extra antes de cerrar la etiqueta).
@@ -351,6 +375,8 @@ assert.match(expenseEditConCatalogo, /<option value="Hogar">Hogar<\/option>/, 'l
 const expenseTableApi = runInNewContext(`
 ${slice('const escapeHtml = ', 'const fmtARS = ')}
 ${slice('const MAX_SQLITE_ID = ', 'function adaptLiveMovement(')}
+const P1 = 'JD', P2 = 'Pinki';
+${slice('function getRowPct(', '// ── FILTROS DE DATOS')}
 const TABLE_KEY_MAP = { monto_total: 'monto', pago: 'pagado_por' };
 let tableFiltroCat = '', sortState = { key: 'fecha', dir: 'desc' };
 let gastosTableRows = [{ ...expenseRow, id: bigId, categoria: '<img src=x onerror=alert(1)>',
@@ -361,7 +387,7 @@ function fmtARS(value) { return '$' + value; }
 function pillClassFor() { return 'pill-jd'; }
 function cuotaLabel() { return '2/3'; }
 ${slice('function renderGastosTable()', "document.querySelectorAll('#tabla-gastos thead th[data-key]')")}
-({ renderGastosTable })`, { document, expenseRow: expense, bigId: largeId });
+({ renderGastosTable })`, { document, expenseRow: expense, bigId: largeId, DATA: { resumen: [] } });
 expenseTableApi.renderGastosTable();
 const expenseTableHtml = element('tabla-body').innerHTML;
 assert.match(expenseTableHtml, new RegExp(`data-id="${largeId}"`));
@@ -371,8 +397,48 @@ assert.doesNotMatch(expenseTableHtml, /<img/i);
 assert.match(expenseTableHtml, /&lt;img/);
 // Columna Descripción (BRIEF.md #4): visible, con data-label para la vista mobile, y escapada.
 assert.match(expenseTableHtml, /data-label="Descripción"/);
+// Columnas de reparto (brief F1 #4): proporción y monto que le corresponde a
+// cada persona, calculados con el % propio del gasto (tipo_proporcion=custom,
+// proporcion_jd=0 → 0% JD / 100% Pinki), no con el filtro de persona activo.
+assert.match(expenseTableHtml, /data-label="Proporción"[^>]*>0% JD \/ 100% Pinki</);
+assert.match(expenseTableHtml, /data-label="\$ JD"[^>]*>\$0</);
+assert.match(expenseTableHtml, /data-label="\$ Pinki"[^>]*>\$30</);
 assert.doesNotMatch(expenseTableHtml, /<svg/i, 'Un payload XSS en descripcion_original no debe crear un elemento');
 assert.match(expenseTableHtml, /&lt;svg onload=alert\(2\)&gt;/, 'La descripción maliciosa debe llegar escapada al innerHTML');
+
+// renderDeudaDetail (brief fix4 #4): tras quitar la columna "Mes" el thead
+// quedó en 8 columnas (Fecha, Descripción, Monto, %JD, %Pinki, $JD, $Pinki,
+// acción); el tfoot debe cubrir exactamente la misma cantidad -- antes usaba
+// colspan="6" + 3 celdas más (9 columnas), desalineando el total.
+const deudaDetailElements = new Map();
+const deudaDetailDocument = {
+  getElementById: (id) => {
+    if (!deudaDetailElements.has(id)) deudaDetailElements.set(id, { innerHTML: '' });
+    return deudaDetailElements.get(id);
+  },
+};
+const deudaDetailApi = runInNewContext(`
+${slice('const escapeHtml = ', 'const fmtARS = ')}
+${slice('const MAX_SQLITE_ID = ', 'function adaptLiveMovement(')}
+const P1 = 'JD', P2 = 'Pinki';
+let liveMode = true, writePending = false, reloadPending = false, reloadFailed = false;
+function fmtARS(value) { return '$' + value; }
+${slice('function getDebtRows(', '// ── ESTADO')}
+${slice('function getRowPct(', '// ── FILTROS DE DATOS')}
+${slice('function renderDeudaDetail(', 'function renderIngresosView(')}
+({ renderDeudaDetail })`, { document: deudaDetailDocument, DATA: { loadErrors: {}, gastos: [
+  { id: 11, fecha: '2026-09-01', monto: 1000, pagado_por: 'JD', categoria: 'Hogar',
+    tipo_proporcion: 'custom', proporcion_jd: 50, proporcion_pinki: 50, saldado: null },
+] } });
+deudaDetailApi.renderDeudaDetail();
+const deudaDetailHtml = deudaDetailElements.get('deuda-detail-inner').innerHTML;
+const theadCols = (deudaDetailHtml.match(/<thead>[\s\S]*?<\/thead>/)[0].match(/<th[\s>]/g) || []).length;
+const tfootBlock = deudaDetailHtml.match(/<tfoot>[\s\S]*?<\/tfoot>/)[0];
+const tfootColspan = Number(tfootBlock.match(/colspan="(\d+)"/)[1]);
+const tfootCellCount = (tfootBlock.match(/<td/g) || []).length;
+assert.equal(tfootColspan + (tfootCellCount - 1), theadCols,
+  'El tfoot de detalle de deuda debe cubrir la misma cantidad de columnas que el thead');
+
 const fixedControls = new Map([
   ['field-responsable', { value: 'Común' }],
   ['fixed-split-fields', { hidden: false }],
@@ -430,10 +496,78 @@ const oldTramoIndex = fijosHistoryHtml.indexOf('$100/mes');
 assert.ok(newTramoIndex >= 0 && oldTramoIndex >= 0 && newTramoIndex < oldTramoIndex,
   'renderFijosHistoryGroup debe listar la versión más nueva primero');
 
+// "Saldar todas las deudas" (brief F1 #2): sin fila propia (row=null), payload
+// null (nada que revisar), ruta fija y un resumen (cantidad + monto total) que
+// reusa el mismo universo que getDebtRows() -- pagado por JD o Pinki, nunca
+// Común, sin saldar todavía.
+const debtRowsBackup = api.DATA.gastos;
+api.DATA.gastos = [
+  { id: 201, fecha: '2026-09-01', monto: 1000, pagado_por: 'JD', tipo_proporcion: '50/50', saldado: null },
+  { id: 202, fecha: '2026-09-02', monto: 500, pagado_por: 'Pinki', tipo_proporcion: '50/50', saldado: null },
+  { id: 203, fecha: '2026-09-03', monto: 300, pagado_por: 'Común', tipo_proporcion: '50/50', saldado: null },
+];
+const saldarTodasCollected = api.collectForm('expense-saldar-todas', null, {});
+assert.equal(saldarTodasCollected.payload, null);
+assert.equal(Object.keys(saldarTodasCollected.errors).length, 0);
+assert.deepEqual(Array.from(api.routeForForm('expense-saldar-todas', null)), ['POST', '/api/expenses/saldar-todas']);
+assert.equal(api.describeForm('expense-saldar-todas', null, null),
+  'Saldar 2 gastos pendientes por un total de $1500.00. Deja la deuda neta entre JD y Pinki en $0.');
+api.DATA.gastos = debtRowsBackup;
+
+// Reparto de gasto: atajos "100% JD" / "100% Pinki" (brief F1 #6). El backend
+// solo admite tipo_proporcion 'dinamico'/'custom' (ver validaciones.py), así
+// que ambos atajos viajan como 'custom' con el 100/0 ya resuelto.
+const jd100 = api.collectForm('expense', null, { ...expenseValues, tipo_proporcion: 'jd_100' });
+assert.equal(Object.keys(jd100.errors).length, 0);
+assert.equal(jd100.payload.tipo_proporcion, 'custom');
+assert.equal(jd100.payload.proporcion_jd, 100);
+assert.equal(jd100.payload.proporcion_pinki, 0);
+const pinki100 = api.collectForm('expense', null, { ...expenseValues, tipo_proporcion: 'pinki_100' });
+assert.equal(pinki100.payload.tipo_proporcion, 'custom');
+assert.equal(pinki100.payload.proporcion_jd, 0);
+assert.equal(pinki100.payload.proporcion_pinki, 100);
+const pinki100Edit = api.collectForm('expense-edit', expense, { ...expenseEditValues, tipo_proporcion: 'pinki_100' });
+assert.equal(pinki100Edit.payload.tipo_proporcion, 'custom');
+assert.equal(pinki100Edit.payload.proporcion_jd, 0);
+assert.equal(pinki100Edit.payload.proporcion_pinki, 100);
+// Cobertura faltante (brief fix4 #5): atajo "100% JD" en edición, mismo
+// criterio que "100% Pinki" ya cubierto arriba.
+const jd100Edit = api.collectForm('expense-edit', expense, { ...expenseEditValues, tipo_proporcion: 'jd_100' });
+assert.equal(jd100Edit.payload.tipo_proporcion, 'custom');
+assert.equal(jd100Edit.payload.proporcion_jd, 100);
+assert.equal(jd100Edit.payload.proporcion_pinki, 0);
+
+// Bug previo (brief fix4 #6): "Mitad y mitad" enviaba tipo_proporcion='50/50'
+// tal cual, que el backend rechaza (validaciones.TIPO_PROPORCION_VALIDOS solo
+// admite 'dinamico'/'custom'). Debe traducirse a 'custom' + 50/50, igual
+// criterio que los atajos 100% JD/Pinki, tanto en alta como en edición.
+const mitad = api.collectForm('expense', null, { ...expenseValues, tipo_proporcion: '50/50' });
+assert.equal(Object.keys(mitad.errors).length, 0);
+assert.equal(mitad.payload.tipo_proporcion, 'custom');
+assert.equal(mitad.payload.proporcion_jd, 50);
+assert.equal(mitad.payload.proporcion_pinki, 50);
+const mitadEdit = api.collectForm('expense-edit', expense, { ...expenseEditValues, tipo_proporcion: '50/50' });
+assert.equal(mitadEdit.payload.tipo_proporcion, 'custom');
+assert.equal(mitadEdit.payload.proporcion_jd, 50);
+assert.equal(mitadEdit.payload.proporcion_pinki, 50);
+
+// Categoría de gasto fijo (brief F1 #5): se manda solo si el campo viene
+// completo; vacío no pisa la categoría heredada de la versión vigente.
+const fixedWithCategoriaValues = { ...fixedValues, categoria: 'Hogar' };
+const collectedFixedCategoria = api.collectForm('fixed', null, fixedWithCategoriaValues);
+assert.equal(collectedFixedCategoria.payload.categoria, 'Hogar');
+assert.match(api.describeForm('fixed', null, collectedFixedCategoria.payload), /Nuevo fijo Prueba sintética nueva \(Hogar\)/);
+assert.equal('categoria' in api.collectForm('fixed', null, fixedValues).payload, false,
+  'Sin categoria en el form, el campo no viaja en el payload');
+assert.equal('categoria' in api.collectForm('fixed-edit', fixed, fixedValues).payload, false,
+  'Editar sin categoria no la manda -- la nueva versión hereda la vigente');
+
 const writes = [
   ['expense', null, collectedExpense.payload, '/api/expenses', 201, { expenses: [expense] }],
   ['expense-edit', expense, collectedExpenseEdit.payload, '/api/expenses/21', 200, { expense }],
   ['expense-delete', expense, null, '/api/expenses/21', 200, { deleted: true, id: 21 }],
+  ['expense-saldar-todas', null, null, '/api/expenses/saldar-todas', 200,
+    { expenses: [{ ...expense, saldado: '2026-10-17' }], count: 1, total: 30 }],
   ['income', null, api.collectForm('income', null, incomeValues).payload, '/api/income', 201, { income }],
   ['income-edit', income, collectedIncome.payload, '/api/income/31', 200, { income }],
   ['fixed', null, api.collectForm('fixed', null, fixedValues).payload, '/api/fixed', 201, { fixed }],
@@ -935,6 +1069,48 @@ ingresosTableApi.renderIngresosView();
 const ingresosLiveHtml = ingresosTableElement('tabla-ingresos-body').innerHTML;
 assert.match(ingresosLiveHtml, /aria-label="Dar de baja ingreso 31 de JD" >Dar de baja<\/button>/,
   'En modo en vivo el botón de baja de ingreso debe estar habilitado');
+
+// Bug "Últimos 6 meses" (brief F1 #3): DATA.resumen puede incluir meses
+// FUTUROS (cuotas ya comprometidas, fijos proyectados) sin ingresos todavía
+// cargados. Sin recortar a "hoy" antes de tomar los últimos 6, ese ruido
+// futuro ganaba el slice(-6): barras de gasto idénticas (mismo monto fijo
+// repetido) y casi sin ingreso. Con "hoy" = 2026-10-16, los 6 meses reales
+// son mayo a octubre de 2026, con montos distintos entre sí.
+const gastosBarApi = runInNewContext(`
+let charts = {};
+let capturedConfig = null;
+function destroyChart(key) { delete charts[key]; }
+function renderChart(key, canvas, config) { capturedConfig = config; }
+const MESES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+${slice('const INK = ', 'const INVENTARIO_ESTADOS = ')}
+${slice('function thisMonth(', 'function todayLocalISO(')}
+${slice('function shortMonth(', 'function cuotaLabel(')}
+const DATA = { resumen: resumenFixture };
+${slice('// "Últimos 6 meses"', 'function drillDownToSubcat(')}
+({ renderGastosBar, getConfig() { return capturedConfig; } })`, {
+  document: { getElementById: () => ({}) },
+  Date: class extends Date { constructor(...args) { super(...(args.length ? args : ['2026-10-16T12:00:00Z'])); } },
+  resumenFixture: [
+    { mes: '2026-05', total_gastos: 500, total_ingresos: 4000 },
+    { mes: '2026-06', total_gastos: 600, total_ingresos: 4200 },
+    { mes: '2026-07', total_gastos: 550, total_ingresos: 4300 },
+    { mes: '2026-08', total_gastos: 300, total_ingresos: 4600 },
+    { mes: '2026-09', total_gastos: 300, total_ingresos: 4600 },
+    { mes: '2026-10', total_gastos: 300, total_ingresos: 0 },
+    { mes: '2026-11', total_gastos: 300, total_ingresos: 0 },
+    { mes: '2026-12', total_gastos: 300, total_ingresos: 0 },
+    { mes: '2027-01', total_gastos: 300, total_ingresos: 0 },
+    { mes: '2027-02', total_gastos: 300, total_ingresos: 0 },
+  ],
+});
+gastosBarApi.renderGastosBar();
+const gastosBarConfig = gastosBarApi.getConfig();
+assert.deepEqual(Array.from(gastosBarConfig.data.labels), ["may '26", "jun '26", "jul '26", "ago '26", "sep '26", "oct '26"],
+  'Las barras deben mostrar los últimos 6 meses hasta hoy, nunca meses futuros');
+assert.deepEqual(Array.from(gastosBarConfig.data.datasets[0].data), [500, 600, 550, 300, 300, 300],
+  'Los montos de gasto deben variar mes a mes, no quedar todos iguales por meses futuros duplicados');
+assert.deepEqual(Array.from(gastosBarConfig.data.datasets[1].data), [4000, 4200, 4300, 4600, 4600, 0],
+  'El ingreso debe verse en los meses que lo tienen cargado, no solo ceros');
 
 console.log('Formularios: rutas, payloads y lectura posterior verificados con fixture de API sintética');
 console.log('Modal: ciclo completo (guardar/cancelar/reabrir) y escape de XSS en detalle de fijos verificados');

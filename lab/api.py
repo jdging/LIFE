@@ -90,11 +90,11 @@ INVENTORY_MONEY_OPTIONAL_FIELDS = (
 )
 ALLOWED_FIXED_CREATE_FIELDS = {
     "nombre", "monto_estimado", "periodicidad", "vigente_desde", "responsable",
-    "tipo_proporcion", "proporcion_jd",
+    "tipo_proporcion", "proporcion_jd", "categoria",
 }
 ALLOWED_FIXED_PATCH_FIELDS = {
     "nombre", "monto_estimado", "periodicidad", "responsable", "vigente_desde",
-    "tipo_proporcion", "proporcion_jd",
+    "tipo_proporcion", "proporcion_jd", "categoria",
 }
 CATEGORY_TIPOS = ("Gasto", "Ingreso", "Inversión")
 
@@ -308,6 +308,7 @@ class _App:
         ("PATCH", re.compile(r"^/api/expenses/(?P<id>\d+)$"), "update_expense"),
         ("DELETE", re.compile(r"^/api/expenses/(?P<id>\d+)$"), "delete_expense"),
         ("POST", re.compile(r"^/api/expenses/(?P<id>\d+)/saldar$"), "saldar_expense"),
+        ("POST", re.compile(r"^/api/expenses/saldar-todas$"), "saldar_todas_expenses"),
         ("GET", re.compile(r"^/api/income$"), "list_income"),
         ("POST", re.compile(r"^/api/income$"), "create_income"),
         ("PATCH", re.compile(r"^/api/income/(?P<id>\d+)$"), "update_income"),
@@ -693,6 +694,25 @@ class _App:
         _stored_money(actualizada["monto"])
         return self._json(start_response, 200, {"expense": actualizada})
 
+    def saldar_todas_expenses(self, ctx, conn, start_response):
+        # Mismo patrón atómico que db.saldar_gasto: db.saldar_todas_las_deudas
+        # reserva el escritor (BEGIN IMMEDIATE) y hace su propio SELECT +
+        # validación de montos/total + UPDATE condicionado + rollback interno,
+        # así que no hace falta reservar nada ni validar nada desde el
+        # handler. La validación de montos y el cálculo del total ya
+        # ocurrieron ANTES del commit (brief t_38a7253f, hallazgo 2 del
+        # revisor): este handler solo serializa lo ya calculado, nunca valida
+        # después de que la escritura quedó confirmada.
+        try:
+            resultado = db.saldar_todas_las_deudas(conn, SERVER_ACTOR)
+        except ValueError as exc:
+            return self._error(start_response, 409, str(exc))
+        return self._json(start_response, 200, {
+            "expenses": resultado["expenses"],
+            "count": resultado["count"],
+            "total": resultado["total"],
+        })
+
     # --- income ----------------------------------------------------------
 
     def list_income(self, ctx, conn, start_response):
@@ -1029,6 +1049,10 @@ class _App:
         if nombre is not None and (not isinstance(nombre, str) or not nombre.strip()):
             return self._error(start_response, 400, "nombre, si se especifica, no puede estar vacío.")
 
+        categoria = data.get("categoria")
+        if categoria is not None and (not isinstance(categoria, str) or not categoria.strip()):
+            return self._error(start_response, 400, "categoria, si se especifica, no puede estar vacía.")
+
         monto_estimado = data.get("monto_estimado")
         if monto_estimado is not None:
             errores = validaciones.validar_fixed_update({"monto_estimado": monto_estimado})
@@ -1064,6 +1088,7 @@ class _App:
                 responsable=responsable,
                 nombre=nombre,
                 periodicidad=periodicidad,
+                categoria=categoria,
                 actor=SERVER_ACTOR,
                 **{key: data[key] for key in ("tipo_proporcion", "proporcion_jd") if key in data},
             )

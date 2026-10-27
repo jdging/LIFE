@@ -1131,6 +1131,168 @@ def saldar_gasto(conn: sqlite3.Connection, gasto_id: int, actor: str) -> dict:
     return actualizada
 
 
+# Mismo límite y criterio de "monto money-safe" que `api._valid_money`
+# (finito, hasta dos decimales, dentro de +-1e12). Duplicado acá a propósito
+# -- `api.py` importa `db.py`, nunca al revés, así que esta capa no puede
+# reusar esa función. Si cambia el límite en `api.py`, replicar el cambio acá.
+_MAX_MONTO_SALDABLE = Decimal("1000000000000")
+
+
+def _validar_monto_saldable(monto) -> Decimal:
+    """Valida que `monto` sea seguro para sumar/persistir como saldado:
+    finito, positivo (> 0), con hasta dos decimales y dentro de
+    `_MAX_MONTO_SALDABLE` -- mismo criterio que `api._valid_money` con su
+    default `positive=True`. Levanta `ValueError` si no.
+
+    Usada por `saldar_todas_las_deudas` para validar el total ANTES del
+    `UPDATE`/`commit` (brief t_38a7253f, hallazgo 2 del revisor independiente:
+    antes esta validación corría en el handler de `api.py` DESPUÉS del
+    commit, así que un monto legacy corrupto podía dejar filas saldadas y
+    recién fallar al responder — un 409/500 posterior a una escritura ya
+    confirmada).
+    """
+    if isinstance(monto, bool) or not isinstance(monto, (int, float)):
+        raise ValueError(f"monto almacenado inválido: {monto!r}")
+    if isinstance(monto, float) and not math.isfinite(monto):
+        raise ValueError(f"monto almacenado inválido: {monto!r}")
+    amount = Decimal(str(monto))
+    if amount <= 0 or abs(amount) > _MAX_MONTO_SALDABLE or amount * 100 != (amount * 100).to_integral_value():
+        raise ValueError(f"monto almacenado inválido: {monto!r}")
+    return amount
+
+
+def _pct_contraparte(conn: sqlite3.Connection, gasto: dict, cache: dict) -> float:
+    """% de reparto que le corresponde a la CONTRAPARTE de `gasto['pagado_por']`
+    (quien NO puso la plata) -- mismo criterio que usa el frontend
+    (`getRowPct`/`getDebtRows` en app.js) y el cálculo de
+    `calcular_deudas_pendientes`: `'dinamico'` usa `calcular_proporcion_mes`
+    del mes DEL GASTO, memoizada en `cache` (`{mes: {'JD':..,'Pinki':..}}`)
+    para no recalcular por fila dentro de un mismo loop.
+
+    `tipo_proporcion='custom'` deriva AMBOS porcentajes de `proporcion_jd`
+    exclusivamente (`pct_jd = proporcion_jd`, `pct_pinki = 100 - proporcion_jd`),
+    replicando exactamente `getRowPct` en app.js -- NUNCA se lee
+    `proporcion_pinki` de la fila, aunque la validación de alta
+    (`validaciones.validar_expense`) ya garantice que ambas columnas sumen
+    ~100: usar una sola fuente evita que `saldar_todas_las_deudas` y el
+    modal del dashboard diverjan si alguna fila legacy tiene las dos
+    columnas desalineadas (brief t_38a7253f, hallazgo 1 de la re-revisión).
+    Si `proporcion_jd` no es un número finito entre 0 y 100 (dato legacy
+    corrupto), ambos porcentajes caen a 0 -- igual que el fallback de
+    `getRowPct` -- y el gasto queda fuera del universo a saldar.
+
+    Un gasto pagado 100% por quien lo pagó (contraparte en 0%) no genera
+    deuda real -- `saldar_todas_las_deudas` usa este helper para excluirlo
+    del universo a saldar, igual que `getDebtRows()` lo excluye de la lista
+    que ve el usuario (brief t_38a7253f, hallazgo 1 del revisor).
+    """
+    if gasto["tipo_proporcion"] == "custom":
+        try:
+            candidato = float(gasto["proporcion_jd"])
+        except (TypeError, ValueError):
+            candidato = float("nan")
+        if math.isfinite(candidato) and 0 <= candidato <= 100:
+            pct_jd, pct_pinki = candidato, 100 - candidato
+        else:
+            pct_jd, pct_pinki = 0.0, 0.0
+    else:
+        mes_gasto = gasto["fecha"][:7]
+        if mes_gasto not in cache:
+            cache[mes_gasto] = calcular_proporcion_mes(conn, mes_gasto)
+        pct_jd = cache[mes_gasto]["JD"]
+        pct_pinki = cache[mes_gasto]["Pinki"]
+    return pct_pinki if gasto["pagado_por"] == "JD" else pct_jd
+
+
+def saldar_todas_las_deudas(conn: sqlite3.Connection, actor: str) -> dict:
+    """Salda de una sola vez TODA la deuda pendiente entre JD y Pinki.
+
+    Universo EXACTO que la deuda neta mostrada al usuario (brief t_38a7253f,
+    hallazgo 1 del revisor independiente): gastos activos (`deleted_at IS
+    NULL`) con `pagado_por` en ('JD', 'Pinki'), `saldado IS NULL`, sin
+    importar su fecha, Y cuya CONTRAPARTE tenga una proporción > 0 (ver
+    `_pct_contraparte`) -- un gasto pagado 100% por quien lo pagó no genera
+    deuda y no debe tocarse acá, igual que `getDebtRows()` del dashboard
+    nunca lo lista. Levanta `ValueError` si no hay ninguna fila en ese
+    universo, igual que `saldar_gasto` con un gasto ya saldado — nunca
+    aplica un `UPDATE` sin filas afectadas.
+
+    Atomicidad y consistencia (hallazgos 2 y 3 del revisor):
+      - `BEGIN IMMEDIATE` reserva el escritor ANTES del `SELECT` que arma el
+        universo a saldar (mismo patrón que `delete_expense` en api.py) --
+        evita que el snapshot de auditoría quede desalineado con lo que
+        termina actualizando el `UPDATE` si otra conexión escribe entre
+        ambos pasos.
+      - El monto de cada fila se valida (`_validar_monto_saldable`) y el
+        total se calcula ANTES del `UPDATE`/`commit`, no después: el handler
+        de `api.py` ya no valida nada, solo serializa lo que esta función
+        devuelve.
+      - Un único `UPDATE` (`WHERE id IN (...)`) marca todas las filas
+        detectadas; se verifica que `rowcount` coincida con la cantidad
+        detectada antes de auditar y confirmar. Se audita cada gasto por
+        separado (una fila de `auditoria` por id, acción `'saldar'`), igual
+        que un saldado individual. Si falla cualquier paso -- incluida la
+        validación de montos o la propia auditoría -- se hace `rollback()`
+        y no queda ninguna fila saldada.
+
+    Devuelve `{"expenses": [...], "count": N, "total": float}` con las filas
+    actualizadas (mismo formato que devuelve `saldar_gasto` por fila) y el
+    monto total saldado (suma de `monto`, no el saldo neto entre personas).
+    """
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        candidatas = conn.execute(
+            "SELECT * FROM gastos WHERE pagado_por IN ('JD', 'Pinki') "
+            "AND saldado IS NULL AND deleted_at IS NULL"
+        ).fetchall()
+        cache_proporciones: dict = {}
+        filas = [
+            row for row in candidatas
+            if _pct_contraparte(conn, dict(row), cache_proporciones) > 0
+        ]
+        if not filas:
+            raise ValueError("No hay deudas pendientes para saldar.")
+
+        total = Decimal(0)
+        for fila in filas:
+            total += _validar_monto_saldable(fila["monto"])
+        if abs(total) > _MAX_MONTO_SALDABLE:
+            raise ValueError("El total acumulado de deudas pendientes excede el límite permitido.")
+
+        snapshots = {row["id"]: json.dumps(dict(row), ensure_ascii=False) for row in filas}
+        ids = list(snapshots.keys())
+        hoy = date.today().isoformat()
+
+        placeholders = ",".join("?" * len(ids))
+        cursor = conn.execute(
+            f"UPDATE gastos SET saldado = ? WHERE id IN ({placeholders}) AND saldado IS NULL",
+            (hoy, *ids),
+        )
+        if cursor.rowcount != len(ids):
+            raise ValueError(
+                "Las deudas pendientes cambiaron por otra operación concurrente "
+                "(detectado al aplicar el saldado masivo)."
+            )
+        actualizadas = [
+            dict(conn.execute("SELECT * FROM gastos WHERE id = ?", (gasto_id,)).fetchone())
+            for gasto_id in ids
+        ]
+        for actualizada in actualizadas:
+            conn.execute(
+                """
+                INSERT INTO auditoria (tabla, fila_id, accion, actor, antes_json, despues_json, creado_en)
+                VALUES ('gastos', ?, 'saldar', ?, ?, ?, ?)
+                """,
+                (actualizada["id"], actor, snapshots[actualizada["id"]],
+                 json.dumps(actualizada, ensure_ascii=False), _now()),
+            )
+    except Exception:
+        conn.rollback()
+        raise
+    conn.commit()
+    return {"expenses": actualizadas, "count": len(actualizadas), "total": float(total)}
+
+
 def get_estado(
     conn: sqlite3.Connection, chat_id: str, usuario: Optional[str] = None
 ) -> Optional[dict]:
@@ -2007,6 +2169,7 @@ def insert_gasto_fijo(conn: sqlite3.Connection, gasto_fijo: dict, actor: Optiona
             "responsable": gasto_fijo.get("responsable"),
             "nombre": gasto_fijo.get("nombre"),
             "periodicidad": gasto_fijo.get("periodicidad"),
+            "categoria": gasto_fijo.get("categoria"),
         }
     )
     if errores:
@@ -2078,6 +2241,7 @@ def crear_version_fijo(
     actor: Optional[str] = None,
     tipo_proporcion=_FIXED_UNSET,
     proporcion_jd=_FIXED_UNSET,
+    categoria: Optional[str] = None,
 ) -> int:
     """Crea una versión NUEVA de un gasto fijo, vigente desde `vigente_desde`.
 
@@ -2113,6 +2277,13 @@ def crear_version_fijo(
     Valida el gasto y su reparto antes de insertar nada. Los dos argumentos
     de reparto se agregan al final para conservar la posición de `actor`;
     su centinela distingue omisión, NULL explícito y porcentaje cero.
+
+    `categoria` (brief t_38a7253f, punto 5): `None` (default) hereda la
+    categoría de la versión vigente, igual que `nombre`/`periodicidad`. Un
+    string no vacío la reemplaza en la nueva versión. No hay forma de
+    volver a `None` una categoría ya asignada desde esta función — no se
+    pidió, y evitaría inventarle un estado "sin categoría" a un fijo que ya
+    la tenía.
     """
     fila_referencia = conn.execute(
         "SELECT * FROM gastos_fijos WHERE id = ?", (gasto_fijo_id,)
@@ -2138,13 +2309,15 @@ def crear_version_fijo(
     nuevo_nombre = nombre if nombre is not None else anterior["nombre"]
     nueva_periodicidad = periodicidad if periodicidad is not None else anterior["periodicidad"]
     nuevo_monto = monto_nuevo if monto_nuevo is not None else anterior["monto_estimado"]
+    nueva_categoria = categoria if categoria is not None else anterior["categoria"]
     nuevo_tipo, nueva_proporcion = resolve_fixed_split(
         nuevo_responsable, tipo_proporcion, proporcion_jd, anterior
     )
     if (nuevo_nombre, nuevo_monto, nueva_periodicidad, nuevo_responsable,
-            nuevo_tipo, nueva_proporcion) == (
+            nuevo_tipo, nueva_proporcion, nueva_categoria) == (
             anterior["nombre"], anterior["monto_estimado"], anterior["periodicidad"],
-            anterior["responsable"], anterior["tipo_proporcion"], anterior["proporcion_jd"]):
+            anterior["responsable"], anterior["tipo_proporcion"], anterior["proporcion_jd"],
+            anterior["categoria"]):
         raise FixedNoChangeError("La nueva versión no tiene cambios reales.")
 
     errores = validar_gasto_fijo(
@@ -2154,6 +2327,7 @@ def crear_version_fijo(
             "responsable": nuevo_responsable,
             "nombre": nuevo_nombre,
             "periodicidad": nueva_periodicidad,
+            "categoria": nueva_categoria,
         }
     )
     if errores:
@@ -2167,7 +2341,7 @@ def crear_version_fijo(
                  tipo_proporcion, proporcion_jd, medio_pago, vigente_desde, fijo_grupo_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (nuevo_nombre, nuevo_monto, nueva_periodicidad, anterior["dia_vencimiento"],
-             anterior["categoria"], anterior["subcategoria"], anterior["activo"],
+             nueva_categoria, anterior["subcategoria"], anterior["activo"],
              _now(), nuevo_responsable, nuevo_tipo,
              nueva_proporcion, anterior["medio_pago"], vigente_desde,
              fijo_grupo_id),

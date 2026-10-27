@@ -1017,6 +1017,12 @@ function formMarkup(kind, row, categoriesCatalog) {
     const monto = Number(row.monto) || 0;
     return `<p>Se marcará como saldado: ${escapeHtml(row.descripcion_original || row.categoria)} · ${escapeHtml(row.fecha)} · ${fmtARSExact(monto)}, pagado por ${escapeHtml(row.pagado_por)} (reparto ${pct1}% ${P1} / ${pct2}% ${P2}). Deja de computar en la deuda neta; no se puede deshacer desde el dashboard.</p>`;
   }
+  if (kind === 'expense-saldar-todas') {
+    const rows = getDebtRows();
+    if (!rows.length) return '<p>No hay deudas pendientes para saldar.</p>';
+    const total = sum(rows, 'monto');
+    return `<p>Se van a marcar como saldados ${rows.length} gasto${rows.length === 1 ? '' : 's'} pendiente${rows.length === 1 ? '' : 's'}, por un total de ${fmtARSExact(total)}. Esto deja la deuda neta entre ${P1} y ${P2} en $0; no se puede deshacer desde el dashboard.</p>`;
+  }
   if (kind === 'income-delete') return `<p>Se dará de baja el ingreso de ${escapeHtml(row.persona)}: ${escapeHtml(row.descripcion_original || row.categoria)} · ${escapeHtml(row.fecha)} · ${fmtARSExact(row.monto)}.${row.categoria === 'Salario' ? ' Es un ingreso de Salario: esta baja puede cambiar la proporción del mes y las deudas.' : ''}</p>`;
   if (kind === 'fixed-delete') return `<p>La baja de ${escapeHtml(row.nombre)} crea una versión inactiva. El historial permanece.</p>${formField('fecha_baja', 'Fecha de baja', todayLocalISO(), 'date', 'required')}`;
   if (kind === 'inventory-delete') return `<p>Se dará de baja el bien "${escapeHtml(row.nombre)}"${row.categoria ? ` (${escapeHtml(row.categoria)})` : ''}, valor estimado ${fmtARSExact(row.valor_estimado)}.</p>`;
@@ -1068,6 +1074,8 @@ function formMarkup(kind, row, categoriesCatalog) {
       ${formSelect('tipo_proporcion', 'Reparto', [
         { value: 'dinamico', label: 'Dinámico según salarios del mes' },
         { value: '50/50', label: 'Mitad y mitad' },
+        { value: 'jd_100', label: '100% JD' },
+        { value: 'pinki_100', label: '100% Pinki' },
         { value: 'custom', label: 'Manual por porcentajes' },
       ], tipoProporcion)}
       <div id="custom-proportion" hidden>${formField('proporcion_jd', 'JD (%)', proporcionJd, 'number', 'min="0" max="100" step="0.01"')}
@@ -1081,7 +1089,10 @@ function formMarkup(kind, row, categoriesCatalog) {
     ${formSelect('categoria', 'Categoría', ['Salario', 'Extra', 'Freelance', 'Otro'], row?.categoria || 'Salario')}
     ${formField('descripcion_original', 'Descripción', row?.descripcion_original || '')}`;
   const fixedSplit = row?.responsable === 'Común' && row.tipo_proporcion === 'custom' ? 'custom' : 'dinamica';
+  const fixedCategories = [...new Set(DATA.fijos.map((item) => item.categoria).filter(Boolean))].sort();
   return `${formField('nombre', 'Descripción', row?.nombre || '', 'text', 'required')}
+    ${formField('categoria', 'Categoría', row?.categoria || '', 'text', 'list="fixed-categorias"')}
+    <datalist id="fixed-categorias">${fixedCategories.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
     ${formField('monto_estimado', 'Monto bruto (ARS)', row?.monto_estimado ?? '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
     ${formSelect('periodicidad', 'Periodicidad', ['mensual', 'bimestral'], row?.periodicidad || 'mensual')}
     ${formSelect('responsable', 'Responsable', ['Común', 'JD', 'Pinki'], row?.responsable || 'Común')}
@@ -1121,12 +1132,13 @@ async function openForm(kind, id = null) {
   const form = activeForm = { kind, row, returnFocus, confirmed: false, payload: null };
   const titles = {
     expense: 'Agregar gasto', 'expense-edit': 'Editar gasto', 'expense-delete': 'Dar de baja una cuota', 'expense-saldar': 'Saldar gasto',
+    'expense-saldar-todas': 'Saldar todas las deudas',
     income: 'Agregar ingreso', 'income-edit': 'Editar ingreso', 'income-delete': 'Dar de baja ingreso',
     inventory: 'Agregar bien', 'inventory-edit': 'Editar bien', 'inventory-delete': 'Dar de baja bien',
     fixed: 'Agregar fijo', 'fixed-edit': 'Crear versión de fijo', 'fixed-delete': 'Dar de baja fijo',
   };
   document.getElementById('form-title').textContent = titles[kind];
-  document.getElementById('form-intro').textContent = kind.includes('delete') || kind === 'expense-saldar'
+  document.getElementById('form-intro').textContent = kind.includes('delete') || kind === 'expense-saldar' || kind === 'expense-saldar-todas'
     ? 'Revisá qué cambio se aplicará.' : 'Completá los datos y revisá el resumen antes de guardar.';
   document.getElementById('form-errors').textContent = '';
   document.getElementById('form-confirm').hidden = true;
@@ -1272,7 +1284,7 @@ function validDate(raw) {
 
 function collectForm(kind, row, values) {
   const errors = {};
-  if (kind === 'expense-saldar') return { payload: null, errors };
+  if (kind === 'expense-saldar' || kind === 'expense-saldar-todas') return { payload: null, errors };
   // Inventario tiene su propia forma (campos y fecha opcional distintos de
   // gastos/ingresos/fijos): se resuelve aparte en vez de forzarla en la
   // lógica genérica de dateKey/moneyKey de abajo, pensada para esos tres.
@@ -1355,6 +1367,17 @@ function collectForm(kind, row, values) {
       }
       payload.proporcion_jd = jd;
       payload.proporcion_pinki = pinki;
+    } else if (values.tipo_proporcion === 'jd_100' || values.tipo_proporcion === 'pinki_100' || values.tipo_proporcion === '50/50') {
+      // Atajos de reparto (brief F1 #6, y fix4 hallazgo 6 del revisor para
+      // 'Mitad y mitad'): el backend solo conoce 'dinamico'/'custom' (ver
+      // validaciones.TIPO_PROPORCION_VALIDOS) -- enviar '50/50' tal cual lo
+      // rechaza. Los tres presets viajan como 'custom' con el porcentaje ya
+      // resuelto, sin pasar por los campos manuales (ocultos y deshabilitados
+      // para estas opciones, ver syncCustomProportion).
+      const jd = values.tipo_proporcion === 'jd_100' ? 100 : values.tipo_proporcion === 'pinki_100' ? 0 : 50;
+      payload.tipo_proporcion = 'custom';
+      payload.proporcion_jd = jd;
+      payload.proporcion_pinki = 100 - jd;
     } else if (isEdit) {
       // Al editar, cambiar de 'custom' a otro reparto debe limpiar explícitamente
       // los porcentajes guardados -- sin esto, validar_expense rechaza la edición
@@ -1376,6 +1399,11 @@ function collectForm(kind, row, values) {
   if (!['Común', 'JD', 'Pinki'].includes(values.responsable)) errors.responsable = 'Elegí un responsable.';
   const payload = { nombre: values.nombre.trim(), monto_estimado: Number(values.monto_estimado),
     periodicidad: values.periodicidad, responsable: values.responsable, vigente_desde: values.vigente_desde };
+  // Vacío = sin cambio: edición hereda la categoría de la versión vigente
+  // (ver db.crear_version_fijo); no hay forma de "limpiar" una categoría ya
+  // asignada desde este formulario (no se pidió, y evita inventar un estado
+  // "sin categoría" para un fijo que ya la tenía).
+  if (values.categoria?.trim()) payload.categoria = values.categoria.trim();
   if (values.responsable === 'Común') {
     const split = values.fixed_tipo_proporcion;
     if (!['dinamica', 'custom'].includes(split)) errors.fixed_tipo_proporcion = 'Elegí un reparto válido.';
@@ -1397,6 +1425,11 @@ function collectForm(kind, row, values) {
 
 function describeForm(kind, row, payload) {
   if (kind === 'expense-saldar') return `Saldar el gasto #${canonicalId(row.id)}, ${fmtARSExact(row.monto)} pagado por ${row.pagado_por}. Deja de computar en la deuda neta.`;
+  if (kind === 'expense-saldar-todas') {
+    const rows = getDebtRows();
+    const total = sum(rows, 'monto');
+    return `Saldar ${rows.length} gasto${rows.length === 1 ? '' : 's'} pendiente${rows.length === 1 ? '' : 's'} por un total de ${fmtARSExact(total)}. Deja la deuda neta entre ${P1} y ${P2} en $0.`;
+  }
   if (kind === 'expense-delete') return `Baja solo de la cuota ${cuotaLabel(row)} del gasto #${row.id}, ${fmtARSExact(row.monto)}. Otras cuotas no se borran.`;
   if (kind === 'fixed-delete') return `Baja de ${row.nombre} desde ${payload.fecha_baja}. Se crea una versión inactiva; el historial permanece.`;
   if (kind === 'expense') return `Gasto ${payload.categoria}${payload.subcategoria ? ` / ${payload.subcategoria}` : ''}: ${fmtARSExact(payload.monto)}, ${payload.fecha}, ${payload.cuotas_total} cuota(s). ${payload.descripcion_original || 'Sin descripción'}. Medio: ${payload.medio_pago}${payload.tarjeta_id ? `, tarjeta ${payload.tarjeta_id}` : ''}. Pagó ${payload.pagado_por}; reparto ${payload.tipo_proporcion}${payload.tipo_proporcion === 'custom' ? ` (${payload.proporcion_jd}% JD / ${payload.proporcion_pinki}% Pinki)` : ''}.`;
@@ -1409,7 +1442,7 @@ function describeForm(kind, row, payload) {
     ? payload.tipo_proporcion === 'custom' ? `${payload.proporcion_jd}% JD / ${100 - payload.proporcion_jd}% Pinki`
       : payload.tipo_proporcion === 'dinamica' ? 'dinámico según salarios' : fijosRepartoLabel(row)
     : '100% personal';
-  return `${kind === 'fixed-edit' ? 'Nueva versión de' : 'Nuevo fijo'} ${payload.nombre}: ${fmtARSExact(payload.monto_estimado)} ${payload.periodicidad}, responsable ${payload.responsable}, reparto ${fixedSplit}, desde ${payload.vigente_desde}. ${kind === 'fixed-edit' ? 'Se crea una nueva versión; la anterior queda en el historial.' : ''}`;
+  return `${kind === 'fixed-edit' ? 'Nueva versión de' : 'Nuevo fijo'} ${payload.nombre}${payload.categoria ? ` (${payload.categoria})` : ''}: ${fmtARSExact(payload.monto_estimado)} ${payload.periodicidad}, responsable ${payload.responsable}, reparto ${fixedSplit}, desde ${payload.vigente_desde}. ${kind === 'fixed-edit' ? 'Se crea una nueva versión; la anterior queda en el historial.' : ''}`;
 }
 
 function routeForForm(kind, row) {
@@ -1417,6 +1450,7 @@ function routeForForm(kind, row) {
   if (kind === 'expense-edit') return ['PATCH', `/api/expenses/${encodeURIComponent(canonicalId(row.id))}`];
   if (kind === 'expense-delete') return ['DELETE', `/api/expenses/${encodeURIComponent(canonicalId(row.id))}`];
   if (kind === 'expense-saldar') return ['POST', `/api/expenses/${encodeURIComponent(canonicalId(row.id))}/saldar`];
+  if (kind === 'expense-saldar-todas') return ['POST', '/api/expenses/saldar-todas'];
   if (kind === 'income') return ['POST', '/api/income'];
   if (kind === 'income-edit') return ['PATCH', `/api/income/${encodeURIComponent(canonicalId(row.id))}`];
   if (kind === 'income-delete') return ['DELETE', `/api/income/${encodeURIComponent(canonicalId(row.id))}`];
@@ -1438,6 +1472,9 @@ function verifiedWriteEnvelope(kind, row, result) {
       canonicalId(result.expense.id) === canonicalId(row.id);
     if (kind === 'expense-saldar') return !!canonicalId(result?.expense?.id) &&
       canonicalId(result.expense.id) === canonicalId(row.id) && result.expense.saldado != null;
+    if (kind === 'expense-saldar-todas') return Array.isArray(result?.expenses) &&
+      typeof result?.count === 'number' && result.count === result.expenses.length &&
+      result.expenses.every((expense) => !!canonicalId(expense?.id) && expense.saldado != null);
     if (kind.startsWith('income')) return !!canonicalId(result?.income?.id);
     if (kind.startsWith('inventory')) return !!canonicalId(result?.inventory?.id);
     canonicalId(result?.fixed?.id);
@@ -1647,7 +1684,12 @@ function renderGastosView() {
   renderGastosBar();
 
   setupTablaCategSelect(rows);
-  gastosTableRows = applyPersonaMonto(applyPersonaFiltro(rows));
+  // monto_propio conserva el monto ORIGINAL del gasto (antes de applyPersonaMonto
+  // recortarlo a la porción de la persona filtrada): la columna de reparto de la
+  // tabla siempre usa el % y el monto propios del gasto, nunca el filtro activo.
+  const personaFilteredRows = applyPersonaFiltro(rows);
+  gastosTableRows = applyPersonaMonto(personaFilteredRows)
+    .map((r, i) => ({ ...r, monto_propio: personaFilteredRows[i].monto }));
   renderGastosTable();
 
   if (!document.getElementById('fijos-detail').hidden) renderFijosDetail();
@@ -1881,9 +1923,15 @@ function toggleGastosCategType() {
   renderGastosPie(categPieCache);
 }
 
+// "Últimos 6 meses" son los 6 meses hasta HOY, nunca meses futuros: DATA.resumen
+// puede incluir meses posteriores (cuotas ya comprometidas, fijos proyectados)
+// sin ingresos todavía cargados. Sin este recorte, esos meses futuros ganaban
+// el slice(-6) y mostraban barras de gasto idénticas (el mismo monto fijo
+// repetido) sin ingreso alguno — el bug reportado.
 function renderGastosBar() {
   destroyChart('gastos-bar');
-  const sorted = [...DATA.resumen].sort((a, b) => a.mes.localeCompare(b.mes));
+  const currentMonth = thisMonth();
+  const sorted = [...DATA.resumen].filter((r) => r.mes <= currentMonth).sort((a, b) => a.mes.localeCompare(b.mes));
   const real = sorted.filter((r) => r.total_ingresos > 0 || r.total_gastos > 0);
   const last6 = (real.length ? real : sorted).slice(-6);
   renderChart('gastos-bar', document.getElementById('chart-gastos-bar'), {
@@ -1993,12 +2041,20 @@ function renderGastosTable() {
     return sortState.dir === 'asc' ? cmp : -cmp;
   });
 
-  document.getElementById('tabla-body').innerHTML = sorted.map((g) => `
+  document.getElementById('tabla-body').innerHTML = sorted.map((g) => {
+    const { pct1, pct2 } = getRowPct(g);
+    const montoPropio = parseFloat(g.monto_propio ?? g.monto) || 0;
+    const montoP1 = montoPropio * pct1 / 100;
+    const montoP2 = montoPropio * pct2 / 100;
+    return `
     <tr>
       <td data-label="Fecha" class="td-muted">${escapeHtml(g.fecha || '—')}</td>
       <td data-label="Categoría"><span class="pill">${iconFor(g.categoria)} ${escapeHtml(g.categoria)}</span></td>
       <td data-label="Descripción">${escapeHtml(g.descripcion_original)}</td>
       <td data-label="Monto" class="td-amount td-accent">${fmtARS(g.monto)}</td>
+      <td data-label="Proporción" class="td-muted">${pct1}% ${P1} / ${pct2}% ${P2}</td>
+      <td data-label="$ JD" class="td-amount">${fmtARS(montoP1)}</td>
+      <td data-label="$ Pinki" class="td-amount">${fmtARS(montoP2)}</td>
       <td data-label="Medio de pago" class="td-muted">${escapeHtml(g.medio_pago)}</td>
       <td data-label="Pagó"><span class="pill ${pillClassFor(g.pagado_por)}">${escapeHtml(g.pagado_por)}</span></td>
       <td data-label="Cuota" class="td-muted">${cuotaLabel(g)}</td>
@@ -2006,7 +2062,8 @@ function renderGastosTable() {
         <button type="button" class="fijos-secondary table-action" data-write-action data-id="${escapeHtml(canonicalId(g.id))}" onclick="openForm('expense-edit', this.dataset.id)" aria-label="Editar la cuota ${escapeHtml(cuotaLabel(g))} del gasto ${escapeHtml(canonicalId(g.id))}" ${!liveMode || writePending || reloadPending || reloadFailed ? 'disabled' : ''}>Editar</button>
         <button type="button" class="fijos-secondary table-action" data-write-action data-id="${escapeHtml(canonicalId(g.id))}" onclick="openForm('expense-delete', this.dataset.id)" aria-label="Dar de baja solo la cuota ${escapeHtml(cuotaLabel(g))} del gasto ${escapeHtml(canonicalId(g.id))}" ${!liveMode || writePending || reloadPending || reloadFailed ? 'disabled' : ''}>Dar de baja</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   document.getElementById('tabla-count').textContent = `${sorted.length} de ${gastosTableRows.length} gastos`;
 
@@ -2187,12 +2244,15 @@ function renderDeudaDetail() {
     : net > 0 ? `${P2} debe ${fmtARS(net)} a ${P1}` : `${P1} debe ${fmtARS(Math.abs(net))} a ${P2}`;
   const canWrite = !(!liveMode || writePending || reloadPending || reloadFailed);
   inner.innerHTML = `
+    <div class="fijos-actions">
+      <button type="button" class="fijos-secondary" data-write-action onclick="openForm('expense-saldar-todas')" ${canWrite ? '' : 'disabled'}>Saldar todas las deudas</button>
+    </div>
     <p class="td-muted" style="font-size:11px;margin:4px 0 10px">${rows.length} ítem${rows.length === 1 ? '' : 's'} sin saldar · neto ${saldoText}.
       Incluye todo gasto pagado por ${P1} o ${P2} (nunca "Común"), sin importar el mes de origen — una deuda sigue vigente hasta que se salda explícitamente.
       ${canWrite ? '' : ' Saldar requiere conexión en vivo; en modo snapshot el detalle es de solo lectura.'}</p>
     <table>
       <thead><tr>
-        <th>Mes</th><th>Fecha</th><th>Descripción</th>
+        <th>Fecha</th><th>Descripción</th>
         <th style="text-align:right">Monto</th>
         <th style="text-align:right">% ${P1}</th><th style="text-align:right">% ${P2}</th>
         <th style="text-align:right">$ ${P1}</th><th style="text-align:right">$ ${P2}</th>
@@ -2200,7 +2260,6 @@ function renderDeudaDetail() {
       </tr></thead>
       <tbody>
         ${rowsData.map(({ r, monto, pct1, pct2, montoP1, montoP2 }) => `<tr>
-          <td class="td-muted">${escapeHtml((r.fecha || '').slice(0, 7) || '—')}</td>
           <td class="td-muted">${escapeHtml(r.fecha || '—')}</td>
           <td>${escapeHtml(r.descripcion_original || r.subcategoria || r.categoria)}
             <br><span class="td-muted" style="font-size:11px">pagó: ${escapeHtml(r.pagado_por)}</span>
@@ -2214,7 +2273,7 @@ function renderDeudaDetail() {
         </tr>`).join('')}
       </tbody>
       <tfoot><tr>
-        <td colspan="6" class="td-muted">Subtotales deuda activa</td>
+        <td colspan="5" class="td-muted">Subtotales deuda activa</td>
         <td class="td-amount td-accent">${fmtARS(debeP1)}</td>
         <td class="td-amount td-accent">${fmtARS(debeP2)}</td>
         <td></td>

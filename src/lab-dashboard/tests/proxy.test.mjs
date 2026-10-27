@@ -136,6 +136,7 @@ test('every contracted method forwards the exact path and query to the configure
     ['PATCH', '/api/expenses/1', '{}'],
     ['DELETE', '/api/expenses/1'],
     ['POST', '/api/expenses/1/saldar'],
+    ['POST', '/api/expenses/saldar-todas'],
     ['GET', '/api/income'],
     ['POST', '/api/income', '{}'],
     ['PATCH', '/api/income/2', '{}'],
@@ -184,6 +185,7 @@ test('known paths reject wrong methods with Allow; unknown paths stay 404', asyn
     ['/api/expenses', 'PATCH', 'GET, POST'],
     ['/api/expenses/1', 'GET', 'PATCH, DELETE'],
     ['/api/expenses/1/saldar', 'GET', 'POST'],
+    ['/api/expenses/saldar-todas', 'GET', 'POST'],
     ['/api/income', 'DELETE', 'GET, POST'],
     ['/api/income/1', 'GET', 'PATCH, DELETE'],
     ['/api/inventory', 'DELETE', 'GET, POST'],
@@ -198,7 +200,7 @@ test('known paths reject wrong methods with Allow; unknown paths stay 404', asyn
   ];
   const unknown = [
     '/api/gastos', '/api/ingresos', '/api/fijos', '/api/inventario', '/api/expenses/F-1',
-    '/api/expenses/0', '/api/expenses/1/saldar/x', '/api/income/-1', '/api/inventory/0', '/api/inventory/-1',
+    '/api/expenses/0', '/api/expenses/1/saldar/x', '/api/expenses/saldar-todas/x', '/api/income/-1', '/api/inventory/0', '/api/inventory/-1',
     '/api/fixed/0/historial', '/api/fixed/1/versions', '/api/fixed/1%2Fhistorial',
     '/api/unknown', '/api',
   ];
@@ -229,12 +231,13 @@ test('query whitelist validates names, multiplicity, dates, and method scope', a
     '/api/summary?month=%ZZ', '/api/summary?month=2026-00',
     '/api/expenses/1?month=2026-10', '/api/inventory?month=2026-10',
     '/api/categories?tag=x', '/api/categories?tipo=Gasto&tipo=Ingreso',
-    '/api/categories?tipo=Factura',
+    '/api/categories?tipo=Factura', '/api/expenses/saldar-todas?x=1',
   ];
   let calls = 0;
   await withHarness(async () => {
     for (const path of invalid) {
-      const method = path.startsWith('/api/expenses/1?') ? 'DELETE' : 'GET';
+      const method = path.startsWith('/api/expenses/1?') ? 'DELETE'
+        : path.startsWith('/api/expenses/saldar-todas?') ? 'POST' : 'GET';
       const response = await middleware(apiRequest(path, { method }));
       assert.equal(response.status, 400, path);
       assert.deepEqual(await response.json(), { error: 'invalid_query' });

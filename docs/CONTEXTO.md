@@ -393,3 +393,49 @@ Loop de auditoria por fases (Claude spec -> Codex impl -> Claude review). Todos 
   `pytest`/`node`. El coordinador debe correr los comandos listados en
   `INTEGRACION.md` y confirmar el resultado antes de dar la suite por
   cerrada.
+
+## F1 fix4: hallazgos del revisor independiente (NO APTO) + QA (candidato aislado `f1-correcciones`, t_38a7253f) (2026-10-27)
+
+> Trabajo en `candidates/f1-correcciones` (copia aislada de F1, que ya
+> incluía fix1-3), **NO** en `lab/reinvencion` real ni en `main`. No toca
+> tarjeta/banco (F2) ni gráficos/filtros (F3).
+
+- **Alcance del hito:** 6 correcciones puntuales sobre F1 (puntos
+  1,2,6,7,10,12 del plan por fases de Juan) a partir de un dictamen
+  **NO APTO** de un revisor independiente + QA, todas dentro de
+  `lab/db.py`, `lab/api.py` y `src/lab-dashboard/app.js`.
+- **Hallazgo 1 (ALTA) — `saldar_todas_las_deudas` saldaba de más:** el
+  endpoint `POST /api/expenses/saldar-todas` saldaba TODO gasto
+  `pagado_por` JD/Pinki sin saldar, incluidos los pagados 100% por quien
+  los pagó (sin deuda real) — el modal (`getDebtRows()` en `app.js`) ya
+  excluía esos casos desde antes. Nuevo helper `db._pct_contraparte`
+  replica el criterio del frontend; `saldar_todas_las_deudas` ahora salda
+  EXACTAMENTE el mismo universo que la deuda neta.
+- **Hallazgo 2 (ALTA) — validación después del commit:** el handler de
+  `api.py` validaba los montos (y podía fallar con 422/500) DESPUÉS de que
+  `db.py` ya había hecho el `UPDATE`/`commit`. Ahora `db._validar_monto_saldable`
+  valida cada monto y el total se calcula ANTES del `UPDATE`, dentro de la
+  misma transacción — el handler solo serializa.
+- **Hallazgo 3 (ALTA) — snapshot de auditoría sin reservar la transacción:**
+  `saldar_todas_las_deudas` ahora hace `BEGIN IMMEDIATE` antes del `SELECT`
+  (mismo patrón que `delete_expense`), para que el snapshot de auditoría no
+  quede desalineado con lo que el `UPDATE` termina tocando. Todo el flujo
+  (SELECT + validar + UPDATE + auditar) corre en una sola transacción con
+  rollback completo ante cualquier falla.
+- **Hallazgo 4 (MEDIA) — `renderDeudaDetail` colspan roto:** tras quitar la
+  columna "Mes" la tabla quedó en 8 columnas; el `tfoot` usaba
+  `colspan="6"` + 3 celdas (9 columnas). Corregido a `colspan="5"`.
+- **Punto 5 — cobertura:** test de edición de gasto con el atajo `jd_100`
+  (antes solo existía para `pinki_100`).
+- **Punto 6 — bug "Mitad y mitad":** el selector de Reparto enviaba
+  `tipo_proporcion:'50/50'` literal, que el backend rechaza
+  (`validaciones.TIPO_PROPORCION_VALIDOS` solo admite `'dinamico'`/
+  `'custom'`). `collectForm` ahora lo traduce a `'custom'` + `proporcion_jd:50`,
+  igual criterio que los atajos 100% JD/Pinki.
+- **Verificación:** sin acceso a shell/ejecución en esta sesión — todo se
+  verificó por lectura y trazado manual del código contra tests nuevos y
+  existentes (`lab/tests/test_finanzas.py`, `lab/tests/test_api.py`,
+  `src/lab-dashboard/tests/forms.test.mjs`). Pendiente que el coordinador
+  corra `pytest`/`node --test` y confirme el resultado antes de integrar.
+- Detalle completo en `docs/BITACORA.md` (entrada `[2026-10-27]`) y en
+  `report.md`.

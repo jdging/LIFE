@@ -2,7 +2,9 @@
 inversiones, cuotas, proporción dinámica y deudas.
 """
 
+import sqlite3
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -512,6 +514,275 @@ class TestCalcularDeudasMes(unittest.TestCase):
         self.assertEqual(deuda["deudor"], "Pinki")
         self.assertEqual(deuda["acreedor"], "JD")
         self.assertAlmostEqual(deuda["monto"], 30000.0)
+
+
+class TestSaldarTodasLasDeudas(unittest.TestCase):
+    """`db.saldar_todas_las_deudas` (brief t_38a7253f, punto 2)."""
+
+    def setUp(self):
+        self.conn = db.get_connection(":memory:")
+        db.init_db(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_salda_todas_las_pendientes_de_una_vez(self):
+        jd_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-10", "monto": 100000.0, "categoria": "Hogar",
+            "pagado_por": "JD", "confirmado": True,
+        })
+        pinki_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-02-05", "monto": 40000.0, "categoria": "Comida",
+            "pagado_por": "Pinki", "confirmado": True,
+        })
+        comun_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-02-10", "monto": 50000.0, "categoria": "Hogar",
+            "pagado_por": "Común", "confirmado": True,
+        })
+
+        resultado = db.saldar_todas_las_deudas(self.conn, "test")
+        self.assertEqual(resultado["count"], 2)
+        self.assertAlmostEqual(resultado["total"], 140000.0)
+        self.assertEqual({f["id"] for f in resultado["expenses"]}, {jd_id, pinki_id})
+        self.assertTrue(all(f["saldado"] is not None for f in resultado["expenses"]))
+
+        gastos = {row["id"]: row for row in db.get_gastos(self.conn)}
+        self.assertIsNotNone(gastos[jd_id]["saldado"])
+        self.assertIsNotNone(gastos[pinki_id]["saldado"])
+        self.assertIsNone(gastos[comun_id]["saldado"], "Un gasto Común nunca genera deuda; no se salda.")
+
+        auditoria = self.conn.execute(
+            "SELECT fila_id FROM auditoria WHERE tabla = 'gastos' AND accion = 'saldar'"
+        ).fetchall()
+        self.assertEqual({row["fila_id"] for row in auditoria}, {jd_id, pinki_id})
+
+    def test_sin_deudas_pendientes_levanta_value_error_sin_tocar_nada(self):
+        db.insert_gasto(self.conn, {
+            "fecha": "2026-01-10", "monto": 1000.0, "categoria": "Hogar",
+            "pagado_por": "Común", "confirmado": True,
+        })
+        with self.assertRaises(ValueError):
+            db.saldar_todas_las_deudas(self.conn, "test")
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM auditoria").fetchone()[0], 0,
+        )
+
+    def test_gasto_borrado_o_ya_saldado_queda_fuera(self):
+        activo_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-10", "monto": 1000.0, "categoria": "Hogar",
+            "pagado_por": "JD", "confirmado": True,
+        })
+        borrado_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-11", "monto": 2000.0, "categoria": "Hogar",
+            "pagado_por": "JD", "confirmado": True,
+        })
+        db.eliminar_gasto_logico(self.conn, borrado_id, "test")
+        ya_saldado_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-12", "monto": 3000.0, "categoria": "Hogar",
+            "pagado_por": "Pinki", "confirmado": True,
+        })
+        db.saldar_gasto(self.conn, ya_saldado_id, "test")
+
+        resultado = db.saldar_todas_las_deudas(self.conn, "test")
+        self.assertEqual(resultado["count"], 1)
+        self.assertEqual(resultado["expenses"][0]["id"], activo_id)
+
+    def test_gasto_100_por_ciento_propio_no_genera_deuda_y_no_se_salda(self):
+        """Brief t_38a7253f fix4, hallazgo 1 del revisor: mismo universo que
+        `getDebtRows()` del dashboard -- un gasto pagado 100% por quien lo
+        pagó (contraparte en 0%) no genera deuda real y no debe tocarse."""
+        jd_100_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-10", "monto": 1000.0, "categoria": "Hogar",
+            "pagado_por": "JD", "tipo_proporcion": "custom",
+            "proporcion_jd": 100, "proporcion_pinki": 0, "confirmado": True,
+        })
+        pinki_100_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-11", "monto": 2000.0, "categoria": "Hogar",
+            "pagado_por": "Pinki", "tipo_proporcion": "custom",
+            "proporcion_jd": 0, "proporcion_pinki": 100, "confirmado": True,
+        })
+        compartido_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-12", "monto": 3000.0, "categoria": "Hogar",
+            "pagado_por": "JD", "tipo_proporcion": "custom",
+            "proporcion_jd": 50, "proporcion_pinki": 50, "confirmado": True,
+        })
+        contraparte_100_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-13", "monto": 4000.0, "categoria": "Hogar",
+            "pagado_por": "JD", "tipo_proporcion": "custom",
+            "proporcion_jd": 0, "proporcion_pinki": 100, "confirmado": True,
+        })
+
+        resultado = db.saldar_todas_las_deudas(self.conn, "test")
+        self.assertEqual({f["id"] for f in resultado["expenses"]}, {compartido_id, contraparte_100_id})
+        self.assertAlmostEqual(resultado["total"], 7000.0)
+
+        gastos = {row["id"]: row for row in db.get_gastos(self.conn)}
+        self.assertIsNone(gastos[jd_100_id]["saldado"], "100% JD: Pinki no participa, no hay deuda que saldar.")
+        self.assertIsNone(gastos[pinki_100_id]["saldado"], "100% Pinki: JD no participa, no hay deuda que saldar.")
+        self.assertIsNotNone(gastos[compartido_id]["saldado"])
+        self.assertIsNotNone(gastos[contraparte_100_id]["saldado"])
+
+    def test_custom_contraparte_derivada_de_proporcion_jd_payer_jd(self):
+        """Brief t_38a7253f fix6, hallazgo 1: para `tipo_proporcion='custom'`
+        el % de la contraparte se deriva SIEMPRE de `proporcion_jd` (Pinki =
+        100 - proporcion_jd), igual que `getRowPct` en app.js -- nunca se lee
+        `proporcion_pinki` de la fila. `proporcion_jd=100` implica contraparte
+        Pinki = 0% exacto, aunque el dato legacy en `proporcion_pinki` diga
+        0.001 (ruido dentro de la tolerancia de `validar_expense`, ±0.01)."""
+        jd_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-10", "monto": 1000.0, "categoria": "Hogar",
+            "pagado_por": "JD", "tipo_proporcion": "custom",
+            "proporcion_jd": 100, "proporcion_pinki": 0.001, "confirmado": True,
+        })
+        comun_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-11", "monto": 500.0, "categoria": "Hogar",
+            "pagado_por": "JD", "tipo_proporcion": "custom",
+            "proporcion_jd": 50, "proporcion_pinki": 50, "confirmado": True,
+        })
+
+        resultado = db.saldar_todas_las_deudas(self.conn, "test")
+        self.assertEqual({f["id"] for f in resultado["expenses"]}, {comun_id})
+
+        gastos = {row["id"]: row for row in db.get_gastos(self.conn)}
+        self.assertIsNone(
+            gastos[jd_id]["saldado"],
+            "proporcion_jd=100 implica contraparte Pinki=0% exacto; "
+            "el ruido en proporcion_pinki (0.001) no debe generar deuda.",
+        )
+        self.assertIsNotNone(gastos[comun_id]["saldado"])
+
+    def test_custom_contraparte_derivada_de_proporcion_jd_payer_pinki(self):
+        """Caso simétrico: pagado por Pinki. La contraparte es JD y su % se
+        lee directo de `proporcion_jd` (no de una resta sobre
+        `proporcion_pinki`). `proporcion_jd=0` implica contraparte JD = 0%
+        exacto, aunque `proporcion_pinki` tenga ruido legacy (99.999 en vez
+        de 100, dentro de la tolerancia de `validar_expense`)."""
+        pinki_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-10", "monto": 1000.0, "categoria": "Hogar",
+            "pagado_por": "Pinki", "tipo_proporcion": "custom",
+            "proporcion_jd": 0, "proporcion_pinki": 99.999, "confirmado": True,
+        })
+        comun_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-11", "monto": 500.0, "categoria": "Hogar",
+            "pagado_por": "Pinki", "tipo_proporcion": "custom",
+            "proporcion_jd": 50, "proporcion_pinki": 50, "confirmado": True,
+        })
+
+        resultado = db.saldar_todas_las_deudas(self.conn, "test")
+        self.assertEqual({f["id"] for f in resultado["expenses"]}, {comun_id})
+
+        gastos = {row["id"]: row for row in db.get_gastos(self.conn)}
+        self.assertIsNone(
+            gastos[pinki_id]["saldado"],
+            "proporcion_jd=0 implica contraparte JD=0% exacto; "
+            "el ruido en proporcion_pinki (99.999) no debe generar deuda.",
+        )
+        self.assertIsNotNone(gastos[comun_id]["saldado"])
+
+    def test_monto_legacy_invalido_no_salda_ninguna_fila(self):
+        """Brief t_38a7253f fix4, hallazgo 2 del revisor: la validación de
+        montos corre ANTES del UPDATE/commit -- un monto corrupto no debe
+        dejar ninguna fila saldada."""
+        gasto_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-10", "monto": 1000.0, "categoria": "Hogar",
+            "pagado_por": "JD", "confirmado": True,
+        })
+        # Simula un monto legacy corrupto (más de dos decimales) que nunca
+        # podría insertarse vía `insert_gasto` -- se fuerza con SQL directo.
+        self.conn.execute("UPDATE gastos SET monto = 1000.001 WHERE id = ?", (gasto_id,))
+        self.conn.commit()
+
+        with self.assertRaises(ValueError):
+            db.saldar_todas_las_deudas(self.conn, "test")
+
+        fila = next(row for row in db.get_gastos(self.conn) if row["id"] == gasto_id)
+        self.assertIsNone(fila["saldado"], "Un monto inválido no debe dejar ninguna fila saldada.")
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM auditoria").fetchone()[0], 0,
+        )
+
+    def test_monto_legacy_cero_no_salda_ninguna_fila(self):
+        """Brief t_38a7253f fix6, hallazgo 2: `_validar_monto_saldable` exige
+        monto > 0, igual que `api._valid_money` (default `positive=True`)."""
+        gasto_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-10", "monto": 1000.0, "categoria": "Hogar",
+            "pagado_por": "JD", "confirmado": True,
+        })
+        self.conn.execute("UPDATE gastos SET monto = 0 WHERE id = ?", (gasto_id,))
+        self.conn.commit()
+
+        with self.assertRaises(ValueError):
+            db.saldar_todas_las_deudas(self.conn, "test")
+
+        fila = next(row for row in db.get_gastos(self.conn) if row["id"] == gasto_id)
+        self.assertIsNone(fila["saldado"], "Un monto legacy de 0 no debe dejar ninguna fila saldada.")
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM auditoria").fetchone()[0], 0,
+        )
+
+    def test_monto_legacy_negativo_no_salda_ninguna_fila(self):
+        """Mismo criterio que el test anterior, con un monto negativo."""
+        gasto_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-10", "monto": 1000.0, "categoria": "Hogar",
+            "pagado_por": "JD", "confirmado": True,
+        })
+        self.conn.execute("UPDATE gastos SET monto = -500 WHERE id = ?", (gasto_id,))
+        self.conn.commit()
+
+        with self.assertRaises(ValueError):
+            db.saldar_todas_las_deudas(self.conn, "test")
+
+        fila = next(row for row in db.get_gastos(self.conn) if row["id"] == gasto_id)
+        self.assertIsNone(fila["saldado"], "Un monto legacy negativo no debe dejar ninguna fila saldada.")
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM auditoria").fetchone()[0], 0,
+        )
+
+    def test_fallo_de_auditoria_fuerza_rollback_completo(self):
+        """Brief t_38a7253f fix4, hallazgo 3 del revisor: si falla el INSERT
+        de auditoría (o cualquier paso posterior al UPDATE), el UPDATE
+        también se revierte -- no debe quedar un saldado sin su rastro."""
+        gasto_id = db.insert_gasto(self.conn, {
+            "fecha": "2026-01-10", "monto": 1000.0, "categoria": "Hogar",
+            "pagado_por": "JD", "confirmado": True,
+        })
+        self.conn.execute("DROP TABLE auditoria")
+
+        with self.assertRaises(sqlite3.OperationalError):
+            db.saldar_todas_las_deudas(self.conn, "test")
+
+        fila = next(row for row in db.get_gastos(self.conn) if row["id"] == gasto_id)
+        self.assertIsNone(fila["saldado"], "Si falla la auditoría, el UPDATE de saldado también debe revertirse.")
+
+    def test_dos_conexiones_la_segunda_no_puede_escribir_mientras_la_primera_reserva(self):
+        """Brief t_38a7253f fix4, hallazgo 3 del revisor ('si podés, test con
+        dos conexiones'): `BEGIN IMMEDIATE` ANTES del SELECT (mismo patrón
+        que `delete_expense` en api.py) reserva el escritor para que ninguna
+        otra conexión pueda mutar las filas entre el SELECT (snapshot de
+        auditoría) y el UPDATE."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = str(Path(tmp_dir) / "dos_conexiones.sqlite")
+            conn1 = db.get_connection(db_path)
+            db.init_db(conn1)
+            gasto_id = db.insert_gasto(conn1, {
+                "fecha": "2026-01-10", "monto": 1000.0, "categoria": "Hogar",
+                "pagado_por": "JD", "confirmado": True,
+            })
+            conn2 = db.get_connection(db_path)
+            conn2.execute("PRAGMA busy_timeout = 0")
+            try:
+                # Mismo primer paso que `saldar_todas_las_deudas`: reservar el
+                # escritor antes de leer.
+                conn1.execute("BEGIN IMMEDIATE")
+                conn1.execute("SELECT * FROM gastos")
+                with self.assertRaises(sqlite3.OperationalError):
+                    conn2.execute(
+                        "UPDATE gastos SET saldado = '2026-01-01' WHERE id = ?", (gasto_id,),
+                    )
+            finally:
+                conn1.rollback()
+                conn2.close()
+                conn1.close()
 
 
 if __name__ == "__main__":

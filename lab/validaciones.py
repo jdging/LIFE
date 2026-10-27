@@ -241,6 +241,11 @@ def validar_gasto_fijo(payload: dict) -> list:
         especifica (no es `None`), debe ser un string no vacío en
         {"Común", "JD", "Pinki"}. La futura capa web sí exigirá
         `responsable` obligatorio (ver README); esta capa de dominio no.
+      - `categoria`: OPCIONAL (`None` se acepta y se conserva tal cual — un
+        fijo legacy sin categoría asignada no debe rechazarse ni
+        inventársele una). Si SE especifica, debe ser un string no vacío;
+        no hay catálogo cerrado de categorías para fijos (brief t_38a7253f,
+        punto 5).
 
     Devuelve una lista de errores (vacía si el payload es válido). No muta
     `payload` ni toca la base de datos.
@@ -275,5 +280,9 @@ def validar_gasto_fijo(payload: dict) -> list:
             errores.append(
                 f"responsable inválido: {responsable!r} (usar {PAGADO_POR_VALIDOS})."
             )
+
+    categoria = payload.get("categoria")
+    if categoria is not None and (not isinstance(categoria, str) or not categoria.strip()):
+        errores.append("categoria, si se especifica, no puede estar vacía.")
 
     return errores
