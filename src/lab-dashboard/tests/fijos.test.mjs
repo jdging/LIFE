@@ -177,7 +177,10 @@ api.setData([], [], custom, []);
 api.setPeriod(api.computePeriod('month', { month: '2026-01' }));
 assert.equal(api.fixedAllocation(custom[0], '2026-01').pct1, 0);
 assert.equal(api.fixedAllocation(custom[1], '2026-01').pct1, 100);
-assert.equal(api.computeFixedForPersona('comun'), 515);
+// El filtro Comunes preexistente incluye sólo importes con participación de
+// ambas personas. Los personales (0/100, 100/0 y responsable individual) y
+// los sin asignar quedan fuera; 200 + 45 = 245.
+assert.equal(api.computeFixedForPersona('comun'), 245);
 assert.equal(api.computeFixedForPersona('jd_comun'), 171.25);
 assert.equal(api.computeFixedForPersona('pinki_comun'), 273.75);
 assert.equal(api.computeFixedForPersona('jd'), 110);

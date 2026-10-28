@@ -4,6 +4,9 @@
 // hardcodean según docs/CONTEXTO.md (Config: persona1=JD, persona2=Pinki).
 const P1 = 'JD';
 const P2 = 'Pinki';
+const PERSONA_FILTRO_LABELS = {
+  comun: 'Comunes', jd_comun: `${P1}+Común`, jd: P1, pinki_comun: `${P2}+Común`, pinki: P2,
+};
 
 const CATEGORY_ICONS = {
   Comida: '🛒',
@@ -104,7 +107,7 @@ function groupBy(rows, field) {
 function getMonthProportion(month) {
   const sorted = [...DATA.resumen].sort((a, b) => a.mes.localeCompare(b.mes));
   const exact = sorted.find((r) => r.mes === month);
-  if (exact) return exact;
+  if (exact && Number(exact.total_ingresos) > 0) return exact;
   const previous = sorted.filter((r) => r.mes <= month && Number(r.total_ingresos) > 0);
   return previous.length ? previous[previous.length - 1] : undefined;
 }
@@ -143,6 +146,8 @@ const ALL_VIEWS = [...VISIBLE_VIEWS, 'inversiones', 'presupuesto'];
 let comprasLoaded = false;
 let recetasLoaded = false;
 let personaFiltro = 'comun';
+let fijosPersonaFiltro = 'comun';
+let incomePersonaFiltro = 'all';
 let categPieMode = 'doughnut';
 let subcatMode = 'doughnut';
 let activeCat = null;
@@ -598,14 +603,66 @@ function applyPersonaMonto(rows) {
   });
 }
 
+function allocationAmount(amount, pct1, pct2, filtro) {
+  if (filtro === 'comun') return pct1 > 0 && pct2 > 0 ? amount : null;
+  if (filtro === 'jd') return pct1 === 100 ? amount : null;
+  if (filtro === 'pinki') return pct2 === 100 ? amount : null;
+  if (filtro === 'jd_comun') return pct1 > 0 ? amount * pct1 / 100 : null;
+  if (filtro === 'pinki_comun') return pct2 > 0 ? amount * pct2 / 100 : null;
+  return null;
+}
+
+function expenseAmount(row, filtro = personaFiltro) {
+  const { pct1, pct2 } = getRowPct(row);
+  return allocationAmount(Number(row.monto) || 0, pct1, pct2, filtro);
+}
+
+function amountWithReference(amount, reference) {
+  return `${fmtARS(amount)} de ${fmtARS(reference)}`;
+}
+
+function expenseAmountLabel(row, filtro = personaFiltro) {
+  return amountWithReference(expenseAmount(row, filtro), Number(row.monto) || 0);
+}
+
+function fixedAmount(row, month, filtro = fijosPersonaFiltro) {
+  const { pct1, pct2 } = fixedAllocation(row, month);
+  return allocationAmount(Number(row.monto_mensual) || 0, pct1, pct2, filtro);
+}
+
+function fixedAmountLabel(row, month, filtro = fijosPersonaFiltro) {
+  return amountWithReference(fixedAmount(row, month, filtro), Number(row.monto_mensual) || 0);
+}
+
 function setPersonaFiltro(filtro) {
+  if (!Object.hasOwn(PERSONA_FILTRO_LABELS, filtro)) return;
   personaFiltro = filtro;
-  document.querySelectorAll('#persona-filter-top .persona-btn').forEach((b) => {
+  document.querySelectorAll('.gastos-persona-filter .persona-btn').forEach((b) => {
     const active = b.dataset.filter === filtro;
     b.classList.toggle('active', active);
     b.setAttribute('aria-pressed', String(active));
   });
+  document.querySelectorAll('.gastos-persona-select').forEach((select) => { select.value = filtro; });
   if (currentView === 'gastos') renderGastosView();
+}
+
+function setFijosPersonaFiltro(filtro) {
+  if (!Object.hasOwn(PERSONA_FILTRO_LABELS, filtro)) return;
+  fijosPersonaFiltro = filtro;
+  if (fijosSelectedGroup !== null) closeFijosDetail();
+  document.querySelectorAll('#fijos-persona-filter .persona-btn').forEach((button) => {
+    const active = button.dataset.filter === filtro;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  renderFijosView();
+}
+
+function setIncomePersonaFiltro(filtro) {
+  if (!['all', 'jd', 'pinki'].includes(filtro)) return;
+  incomePersonaFiltro = filtro;
+  document.querySelectorAll('.income-persona-select').forEach((select) => { select.value = filtro; });
+  if (currentView === 'ingresos') renderIngresosView();
 }
 
 // ── FILTROS DE DATOS ─────────────────────────────────────────────────────
@@ -727,6 +784,13 @@ function fixedMonthCutoff(month) {
   return period.to && period.to < lastDay ? period.to : lastDay;
 }
 
+function creditFixedItems() {
+  if (DATA.loadErrors.fijos) return [];
+  return fixedMonths().flatMap((month) => fijosVigentes(DATA.fijos, fixedMonthCutoff(month))
+    .filter((row) => row.medio_pago === 'Crédito' && fixedAmount(row, month, personaFiltro) !== null)
+    .map((row) => ({ row, month })));
+}
+
 function fixedAllocation(row, month) {
   if (row.responsable === 'JD') return { pct1: 100, pct2: 0 };
   if (row.responsable === 'Pinki') return { pct1: 0, pct2: 100 };
@@ -750,14 +814,7 @@ function computeFixedForPersona(filtro) {
   return fixedMonths().reduce((total, month) => {
     const monthRows = fijosVigentes(DATA.fijos, fixedMonthCutoff(month));
     return total + monthRows.reduce((subtotal, row) => {
-      const amount = Number(row.monto_mensual || 0);
-      if (filtro === 'comun') return subtotal + amount;
-      const { pct1, pct2 } = fixedAllocation(row, month);
-      if (filtro === 'jd') return subtotal + (pct1 === 100 ? amount : 0);
-      if (filtro === 'pinki') return subtotal + (pct2 === 100 ? amount : 0);
-      if (filtro === 'jd_comun') return subtotal + amount * pct1 / 100;
-      if (filtro === 'pinki_comun') return subtotal + amount * pct2 / 100;
-      return subtotal;
+      return subtotal + (fixedAmount(row, month, filtro) ?? 0);
     }, 0);
   }, 0);
 }
@@ -826,16 +883,18 @@ function renderFijosView() {
 
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const currentRows = fijosVigentes(DATA.fijos, todayIso).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const currentRows = fijosVigentes(DATA.fijos, todayIso)
+    .filter((row) => fixedAmount(row, todayIso.slice(0, 7)) !== null)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   const split = { 'Común': 0, JD: 0, Pinki: 0, 'Sin asignar': 0 };
-  currentRows.forEach((row) => { split[fijosResponsable(row)] += Number(row.monto_mensual || 0); });
+  currentRows.forEach((row) => { split[fijosResponsable(row)] += fixedAmount(row, todayIso.slice(0, 7)); });
   const total = Object.values(split).reduce((value, amount) => value + amount, 0);
   document.getElementById('fijos-totals').innerHTML = `
-    <div class="fijos-total-main"><span>Total mensual vigente · ${fijosDateLabel(todayIso)}</span><strong>${fmtARS(total)}</strong></div>
+    <div class="fijos-total-main"><span>${escapeHtml(PERSONA_FILTRO_LABELS[fijosPersonaFiltro])} · ${fijosDateLabel(todayIso)}</span><strong>${fmtARS(total)}</strong></div>
     <div class="fijos-total-split">${Object.entries(split).map(([name, amount]) => `<span><span class="pill ${pillClassFor(name)}">${name}</span> ${fmtARS(amount)}</span>`).join('')}</div>`;
   current.innerHTML = currentRows.length ? currentRows.map((row) => `
     <article class="fijos-item">
-      <div class="fijos-item-head"><h3>${escapeHtml(row.nombre)}</h3><strong>${fmtARS(row.monto_mensual)} <small>/ mes</small></strong></div>
+      <div class="fijos-item-head"><h3>${escapeHtml(row.nombre)}</h3><strong>${fixedAmountLabel(row, todayIso.slice(0, 7))} <small>/ mes</small></strong></div>
       <p>${capitalize(escapeHtml(row.periodicidad))}${row.periodicidad === 'bimestral' ? ` · bruto ${fmtARS(row.monto_estimado)} cada 2 meses` : ''}</p>
       <p><span class="pill ${pillClassFor(row.responsable)}">${escapeHtml(fijosResponsable(row))}</span> <span class="td-muted">desde ${fijosDateLabel(row.vigente_desde)}</span></p>
       <div class="fijos-actions">
@@ -855,13 +914,15 @@ function renderFijosView() {
   errorEl.textContent = invalid ? 'El mes inicial debe ser anterior o igual al mes final.' : '';
   if (invalid) history.innerHTML = '';
   else {
-    const tramos = fijosTramos(DATA.fijos, `${startInput.value}-01`, fijosLastDay(endInput.value));
-    const ids = [...new Set(tramos.map((row) => row.fijo_grupo_id))];
-    history.innerHTML = ids.length ? ids.map((id) => {
-      const group = tramos.filter((row) => fixedGroupId(row) === id);
-      const latest = fijosHistorial(DATA.fijos, id).at(-1);
-      return renderFijosHistoryGroup(id, group, latest);
-    }).join('') : '<div class="empty-state-panel">No hay tramos de fijos en este período.</div>';
+    const months = getMonthsInPeriod(`${startInput.value}-01`, fijosLastDay(endInput.value));
+    const monthly = months.flatMap((month) => fijosVigentes(DATA.fijos, fijosLastDay(month))
+      .filter((row) => fixedAmount(row, month) !== null)
+      .map((row) => ({ month, row })));
+    history.innerHTML = monthly.length ? `<div class="panel table-scroll"><table><thead><tr><th>Mes</th><th>Fijo</th><th>Responsable</th><th>Importe filtrado de total</th><th>Historial</th></tr></thead><tbody>${monthly.map(({ month, row }) => `<tr>
+      <td>${escapeHtml(month)}</td><td>${escapeHtml(row.nombre)}</td><td>${escapeHtml(fijosResponsable(row))}</td>
+      <td class="td-amount">${fixedAmountLabel(row, month)}</td>
+      <td><button type="button" class="fijos-secondary" data-id="${escapeHtml(fixedGroupId(row))}" onclick="openFijosDetail(this.dataset.id)">Ver versiones</button></td>
+    </tr>`).join('')}</tbody></table></div>` : '<div class="empty-state-panel">No hay fijos para este filtro y período.</div>';
   }
   if (fijosSelectedGroup !== null) renderFijosSeriesDetail(fijosSelectedGroup);
 }
@@ -916,23 +977,58 @@ function renderFijosSeriesDetail(groupId) {
         <td data-label="Cambios" class="fijos-changes">${changes.length ? changes.join(', ') : previous ? 'Sin cambio en los campos mostrados' : 'Alta inicial'}</td>
       </tr>`;
     }).join('')}</tbody></table></div>
-    <h3>Evolución del monto mensual</h3>
-    <div class="fijos-chart-wrap"><canvas id="fijos-evolution-chart" aria-label="Gráfico de evolución del monto mensual" role="img"></canvas></div>
+    <div class="panel-title-row"><h3>Evolución del importe mensual filtrado</h3>
+      <button type="button" class="btn-chart-toggle" id="fijos-evolution-show" aria-label="Mostrar gráfico de evolución de ${escapeHtml(latest.nombre)}" aria-expanded="false" aria-controls="fijos-evolution-body" onclick="toggleFijosEvolutionChart()">Mostrar gráfico</button></div>
+    <div id="fijos-evolution-body" hidden><div class="fijos-chart-wrap"><canvas id="fijos-evolution-chart" aria-label="Evolución del importe mensual filtrado de ${escapeHtml(latest.nombre)}" aria-describedby="fijos-evolution-chart-data" role="img"></canvas></div>
+      <details class="chart-data" id="fijos-evolution-chart-data"><summary>Ver datos mensuales de este fijo</summary></details></div>
     <p class="chart-error" id="fijos-chart-error" role="alert" hidden>No se pudo mostrar el gráfico. El historial sigue disponible arriba.</p>`;
+}
+
+function toggleFijosEvolutionChart() {
+  const body = document.getElementById('fijos-evolution-body');
+  const button = document.getElementById('fijos-evolution-show');
+  if (!body || !button || fijosSelectedGroup === null) return;
+  const opening = body.hidden;
+  body.hidden = !opening;
+  button.setAttribute('aria-expanded', String(opening));
+  button.textContent = opening ? 'Ocultar gráfico' : 'Mostrar gráfico';
+  button.setAttribute('aria-label', `${opening ? 'Ocultar' : 'Mostrar'} gráfico de evolución de ${fijosHistorial(DATA.fijos, fijosSelectedGroup).at(-1).nombre}`);
+  if (!opening) {
+    if (fijosChart) { fijosChart.destroy(); fijosChart = null; }
+    return;
+  }
   try {
-    if (typeof Chart === 'undefined') throw new Error('Chart.js no disponible');
-    const evolution = fijosEvolutionData(versions);
-    fijosChart = new Chart(document.getElementById('fijos-evolution-chart'), {
+    const versions = fijosHistorial(DATA.fijos, fijosSelectedGroup);
+    const months = getMonthsInPeriod(versions[0].vigente_desde, todayLocalISO());
+    const evolution = {
+      dates: months.map((month) => month + '-01'),
+      amounts: months.map((month) => {
+        const row = fijosVersionVigente(versions, fijosSelectedGroup, fijosLastDay(month));
+        return row && Number(row.activo) === 1 ? fixedAmount(row, month) ?? 0 : 0;
+      }),
+    };
+    const fixedCanvas = document.getElementById('fijos-evolution-chart');
+    renderChartData(fixedCanvas, `Evolución de ${versions.at(-1).nombre}`,
+      `Filtro: ${PERSONA_FILTRO_LABELS[fijosPersonaFiltro]}. Desde ${versions[0].vigente_desde} hasta ${todayLocalISO()}.`,
+      ['Mes', 'Importe mensual'], months.map((month, i) => [month, fmtARS(evolution.amounts[i])]));
+    if (typeof Chart === 'undefined') {
+      fixedCanvas.hidden = true;
+      document.getElementById('fijos-chart-error').hidden = false;
+      return;
+    }
+    fijosChart = new Chart(fixedCanvas, {
       type: 'line',
       data: { labels: evolution.dates.map(fijosDateLabel), datasets: [{
-        label: 'Monto mensual', data: evolution.amounts,
+        label: `Importe ${PERSONA_FILTRO_LABELS[fijosPersonaFiltro]}`, data: evolution.amounts,
         // Cada punto inicia una versión: el monto previo llega hasta esa fecha.
         stepped: 'after', borderColor: '#5f7d52', backgroundColor: '#7c9a6b', tension: 0, pointRadius: 4,
       }] },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
     });
+    fixedCanvas.hidden = false;
+    document.getElementById('fijos-chart-error').hidden = true;
   } catch (error) {
-    document.getElementById('fijos-evolution-chart').parentElement.hidden = true;
+    document.getElementById('fijos-evolution-chart').hidden = true;
     document.getElementById('fijos-chart-error').hidden = false;
   }
 }
@@ -1791,12 +1887,10 @@ document.getElementById('form-modal').addEventListener('keydown', (event) => {
 // ── VISTA GASTOS ─────────────────────────────────────────────────────────
 
 function renderGastosView() {
-  resetGastosDrilldown();
-
   const rows = filterGastosPeriod(period.from, period.to);
   const filteredRows = applyPersonaFiltro(rows);
   const varRows = filteredRows.filter((r) => (parseInt(r.cuota_nro, 10) || 1) === 1);
-  const varTotal = sum(varRows, 'monto');
+  const varTotal = varRows.reduce((total, row) => total + (expenseAmount(row) ?? 0), 0);
   const fixTotal = computeFixedForPersona(personaFiltro);
   const cuotasRows = applyPersonaFiltro(filterCuotasComprometidas(period.from, period.to));
   const cuotasAdjusted = applyPersonaMonto(cuotasRows);
@@ -1811,7 +1905,7 @@ function renderGastosView() {
   } else renderTotalSub(varRows, fixTotal, cuotasRows);
 
   document.getElementById('g-fijos').textContent = DATA.loadErrors.fijos ? 'No disponible' : fmtARS(fixTotal);
-  const fijosCount = activeFijos().length;
+  const fijosCount = activeFijos().filter((row) => fixedAmount(row, fixedCutoffDate().slice(0, 7), personaFiltro) !== null).length;
   document.getElementById('g-fijos-count').textContent = DATA.loadErrors.fijos
     ? 'No se pudo cargar el listado'
     : `${fijosCount} ítem${fijosCount !== 1 ? 's' : ''} · ver detalle`;
@@ -1821,15 +1915,18 @@ function renderGastosView() {
     `${cuotasRows.length} cuota${cuotasRows.length !== 1 ? 's' : ''} activa${cuotasRows.length !== 1 ? 's' : ''} · ver detalle`;
 
   const creditoRows = filteredRows.filter((r) => r.medio_pago === 'Crédito');
-  const creditoTotal = sum(applyPersonaMonto(creditoRows), 'monto');
+  const creditoFijos = creditFixedItems();
+  const creditoTotal = creditoRows.reduce((total, row) => total + (expenseAmount(row) ?? 0), 0)
+    + creditoFijos.reduce((total, item) => total + fixedAmount(item.row, item.month, personaFiltro), 0);
   document.getElementById('g-credito').textContent = fmtARS(creditoTotal);
   document.getElementById('g-credito-sub').textContent =
-    `${creditoRows.length} ítem${creditoRows.length !== 1 ? 's' : ''} · ver detalle`;
+    `${creditoRows.length + creditoFijos.length} ítem${creditoRows.length + creditoFijos.length !== 1 ? 's' : ''} · ver detalle`;
 
   renderDeudaCard();
   renderComposicion(varTotal, fixTotal, cuotasTotal);
-  renderGastosPie(rows);
-  renderGastosBar();
+  if (!document.getElementById('gastos-pie-body').hidden) renderGastosPie(rows);
+  if (!document.getElementById('gastos-bar-body').hidden) renderGastosBar();
+  if (activeCat) renderSubcatChart(activeCat);
 
   setupTablaCategSelect(rows);
   // monto_propio conserva el monto ORIGINAL del gasto (antes de applyPersonaMonto
@@ -1862,6 +1959,7 @@ function renderTotalSub(varRows, fixTotal, cuotasRows) {
   let unassigned = 0;
   fixedMonths().forEach((month) => {
     fijosVigentes(DATA.fijos, fixedMonthCutoff(month)).forEach((row) => {
+      if (fixedAmount(row, month, 'comun') === null) return;
       const amount = Number(row.monto_mensual || 0);
       const { pct1, pct2 } = fixedAllocation(row, month);
       sub1 += amount * pct1 / 100;
@@ -1909,17 +2007,29 @@ function renderComposicion(varTotal, fixTotal, cuotasTotal) {
   if (DATA.loadErrors.fijos) {
     ['comp-seg-fijos', 'comp-seg-var', 'comp-seg-cuotas'].forEach((id) => { document.getElementById(id).style.width = '0%'; });
     document.getElementById('comp-labels-row').textContent = 'Composición no disponible: falta el archivo de fijos.';
+    document.getElementById('comp-total').textContent = 'Total no disponible';
+    document.querySelector('.composicion-bar').setAttribute('aria-label', 'Composición no disponible: faltan datos de fijos');
     document.getElementById('comp-legend').textContent = '';
     return;
   }
-  const total = varTotal + fixTotal + cuotasTotal || 1;
+  const actualTotal = varTotal + fixTotal + cuotasTotal;
+  const total = actualTotal || 1;
   const segs = [
     { name: 'Fijos', val: fixTotal, elId: 'comp-seg-fijos', color: 'var(--terracotta)' },
     { name: 'Variable', val: varTotal, elId: 'comp-seg-var', color: 'var(--mustard)' },
     { name: 'Cuotas', val: cuotasTotal, elId: 'comp-seg-cuotas', color: 'var(--plum)' },
   ].map((s) => ({ ...s, pct: s.val / total * 100 }));
+  const visibleWidths = segs.map((s) => s.val > 0 ? Math.max(s.pct, 1) : 0);
+  const largestIndex = segs.findIndex((s) => s.pct === Math.max(...segs.map((item) => item.pct)));
+  if (actualTotal > 0) visibleWidths[largestIndex] -= visibleWidths.reduce((sum, width) => sum + width, 0) - 100;
 
-  segs.forEach((s) => { document.getElementById(s.elId).style.width = s.pct + '%'; });
+  segs.forEach((s, index) => {
+    const el = document.getElementById(s.elId);
+    el.style.width = visibleWidths[index] + '%';
+    el.setAttribute('aria-label', `${s.name}: ${fmtARS(s.val)}, ${s.pct.toFixed(0)}% del total`);
+  });
+  document.getElementById('comp-total').textContent = `Total ${fmtARS(actualTotal)}`;
+  document.querySelector('.composicion-bar').setAttribute('aria-label', `Composición del gasto: ${segs.map((s) => `${s.name} ${fmtARS(s.val)}`).join(', ')}. Total ${fmtARS(actualTotal)}`);
 
   document.getElementById('comp-labels-row').innerHTML = segs
     .filter((s) => s.pct > 0)
@@ -1974,15 +2084,19 @@ function renderChart(key, canvas, config) {
 
 function renderGastosPie(rows) {
   categPieCache = rows;
-  const filtered = applyPersonaFiltro(rows);
+  const selected = applyPersonaFiltro(rows);
+  const filtered = applyPersonaMonto(selected);
   const grouped = groupBy(filtered, 'categoria');
   const keys = Object.keys(grouped).sort((a, b) => sum(grouped[b], 'monto') - sum(grouped[a], 'monto'));
   const data = keys.map((k) => sum(grouped[k], 'monto'));
 
-  renderPieSubtotals(filtered);
+  renderPieSubtotals(selected);
 
   destroyChart('gastos-pie');
   const canvas = document.getElementById('chart-gastos-pie');
+  renderChartData(canvas, 'Gastos por categoría',
+    `Período: ${period.from} a ${period.to}. Persona: ${PERSONA_FILTRO_LABELS[personaFiltro]}.`,
+    ['Categoría', 'Monto'], keys.map((key, i) => [key, fmtARS(data[i])]));
   if (!data.length) {
     document.getElementById('categ-chip-row').innerHTML = '';
     if (typeof Chart === 'undefined') showChartError('gastos-pie', canvas, 'Gráfico no disponible: Chart.js no cargó. Totales y tablas siguen disponibles.');
@@ -1991,6 +2105,7 @@ function renderGastosPie(rows) {
 
   const toggleBtn = document.getElementById('categ-pie-toggle');
   toggleBtn.textContent = categPieMode === 'doughnut' ? 'barras' : 'torta';
+  toggleBtn.setAttribute('aria-label', `Cambiar tipo de gráfico por categoría a ${toggleBtn.textContent}`);
 
   if (categPieMode === 'bar') {
     const labels = keys.map((k, i) => `${k}  ${fmtARSCompact(data[i])}`);
@@ -2071,17 +2186,56 @@ function toggleGastosCategType() {
   renderGastosPie(categPieCache);
 }
 
-// "Últimos 6 meses" son los 6 meses hasta HOY, nunca meses futuros: DATA.resumen
-// puede incluir meses posteriores (cuotas ya comprometidas, fijos proyectados)
-// sin ingresos todavía cargados. Sin este recorte, esos meses futuros ganaban
-// el slice(-6) y mostraban barras de gasto idénticas (el mismo monto fijo
-// repetido) sin ingreso alguno — el bug reportado.
+const CHART_PANELS = {
+  gastosPie: ['gastos-pie-body', 'gastos-pie-show', () => renderGastosPie(filterGastosPeriod(period.from, period.to)), 'gastos-pie', 'gastos por categoría'],
+  gastosBar: ['gastos-bar-body', 'gastos-bar-show', renderGastosBar, 'gastos-bar', 'gastos e ingresos mensuales'],
+  incLines: ['inc-lines-body', 'inc-lines-show', renderIncomeLines, 'inc-lines', 'evolución de ingresos'],
+};
+
+function toggleChartPanel(name) {
+  const config = CHART_PANELS[name];
+  if (!config) return;
+  const [bodyId, buttonId, render, chartKey, title] = config;
+  const body = document.getElementById(bodyId);
+  const button = document.getElementById(buttonId);
+  const opening = body.hidden;
+  body.hidden = !opening;
+  button.setAttribute('aria-expanded', String(opening));
+  button.textContent = opening ? 'Ocultar gráfico' : 'Mostrar gráfico';
+  button.setAttribute('aria-label', `${opening ? 'Ocultar' : 'Mostrar'} gráfico de ${title}`);
+  if (opening) render();
+  else destroyChart(chartKey);
+}
+
+// Las barras usan hasta seis meses del período elegido. Los meses futuros sólo
+// aparecen cuando el usuario los incluye explícitamente en Mes o Rango.
 function renderGastosBar() {
   destroyChart('gastos-bar');
-  const currentMonth = thisMonth();
-  const sorted = [...DATA.resumen].filter((r) => r.mes <= currentMonth).sort((a, b) => a.mes.localeCompare(b.mes));
-  const real = sorted.filter((r) => r.total_ingresos > 0 || r.total_gastos > 0);
-  const last6 = (real.length ? real : sorted).slice(-6);
+  if (DATA.loadErrors.fijos) {
+    const canvas = document.getElementById('chart-gastos-bar');
+    renderChartData(canvas, 'Gastos e ingresos mensuales',
+      `Período: ${period.from} a ${period.to}. Persona: ${PERSONA_FILTRO_LABELS[personaFiltro]}.`,
+      ['Mes', 'Gastos', 'Ingresos'], [], 'No se pueden calcular los gastos: faltan datos de fijos.');
+    showChartError('gastos-bar', canvas, 'Gráfico no disponible: faltan datos de fijos.');
+    return;
+  }
+  const months = getMonthsInPeriod(period.from, period.to).slice(-6);
+  const last6 = months.map((month) => {
+    const from = period.from > month + '-01' ? period.from : month + '-01';
+    const to = period.to < fijosLastDay(month) ? period.to : fijosLastDay(month);
+    const gastos = applyPersonaFiltro(filterGastosPeriod(from, to));
+    const variable = gastos.reduce((total, row) => total + (expenseAmount(row) ?? 0), 0);
+    const fixed = DATA.loadErrors.fijos ? 0 : fijosVigentes(DATA.fijos, to)
+      .reduce((total, row) => total + (fixedAmount(row, month, personaFiltro) ?? 0), 0);
+    const incomeRows = filterIngresosPeriod(from, to);
+    const selectedIncome = personaFiltro.startsWith('jd') ? incomeRows.filter((row) => row.persona === P1)
+      : personaFiltro.startsWith('pinki') ? incomeRows.filter((row) => row.persona === P2) : incomeRows;
+    return { mes: month, total_gastos: variable + fixed,
+      total_ingresos: sum(selectedIncome, 'monto') };
+  });
+  renderChartData(document.getElementById('chart-gastos-bar'), 'Gastos e ingresos mensuales',
+    `Período: ${period.from} a ${period.to}. Persona: ${PERSONA_FILTRO_LABELS[personaFiltro]}. Se muestran hasta los últimos seis meses.`,
+    ['Mes', 'Gastos', 'Ingresos'], last6.map((row) => [row.mes, fmtARS(row.total_gastos), fmtARS(row.total_ingresos)]));
   renderChart('gastos-bar', document.getElementById('chart-gastos-bar'), {
     type: 'bar',
     data: {
@@ -2101,6 +2255,20 @@ function renderGastosBar() {
   });
 }
 
+// La tabla usa los mismos valores ya calculados para Chart.js. Se conserva el
+// estado abierto del details cuando cambia el filtro o el período.
+function renderChartData(canvas, title, context, headings, rows, emptyMessage = 'Sin datos para este filtro y período.') {
+  if (!canvas?.id || typeof canvas.setAttribute !== 'function') return;
+  const details = document.getElementById(`${canvas.id}-data`);
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', `${title}. ${context} Datos en la tabla siguiente.`);
+  details.innerHTML = `<summary>Ver datos de ${escapeHtml(title)}</summary>
+    <p class="chart-data-context">${escapeHtml(context)}</p>
+    ${rows.length ? `<div class="table-scroll"><table><thead><tr>${headings.map((heading) => `<th scope="col">${escapeHtml(heading)}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map((row) => `<tr>${row.map((value, index) => `<${index === 0 ? 'th scope="row"' : 'td'}>${escapeHtml(value)}</${index === 0 ? 'th' : 'td'}>`).join('')}</tr>`).join('')}</tbody></table></div>`
+    : `<p>${escapeHtml(emptyMessage)}</p>`}`;
+}
+
 function drillDownToSubcat(cat) {
   activeCat = cat;
   document.getElementById('drilldown-cat-name').textContent = cat;
@@ -2112,7 +2280,7 @@ function drillDownToSubcat(cat) {
 
 function renderSubcatChart(cat) {
   destroyChart('gastos-subcat');
-  const rows = applyPersonaFiltro(filterGastosPeriod(period.from, period.to).filter((r) => r.categoria === cat));
+  const rows = applyPersonaMonto(applyPersonaFiltro(filterGastosPeriod(period.from, period.to).filter((r) => r.categoria === cat)));
   const grouped = groupBy(rows, 'subcategoria');
   const keys = Object.keys(grouped).filter(Boolean);
   const displayKeys = keys.length ? keys : [cat];
@@ -2121,8 +2289,12 @@ function renderSubcatChart(cat) {
 
   const btn = document.getElementById('subcat-toggle');
   btn.textContent = subcatMode === 'doughnut' ? 'barras' : 'torta';
+  btn.setAttribute('aria-label', `Cambiar tipo de gráfico por subcategoría a ${btn.textContent}`);
 
   const canvas = document.getElementById('chart-gastos-subcat');
+  renderChartData(canvas, `Gastos por subcategoría de ${cat}`,
+    `Período: ${period.from} a ${period.to}. Persona: ${PERSONA_FILTRO_LABELS[personaFiltro]}.`,
+    ['Subcategoría', 'Monto'], rows.length ? displayKeys.map((key, i) => [key, fmtARS(data[i])]) : []);
   if (subcatMode === 'bar') {
     const labels = displayKeys.map((k, i) => `${k}  ${fmtARSCompact(data[i])}`);
     renderChart('gastos-subcat', canvas, {
@@ -2207,6 +2379,7 @@ function renderGastosTable() {
       <td data-label="Categoría"><span class="pill">${iconFor(g.categoria)} ${escapeHtml(g.categoria)}</span></td>
       <td data-label="Descripción">${escapeHtml(g.descripcion_original)}</td>
       <td data-label="Monto" class="td-amount td-accent">${fmtARS(montoPropio)}</td>
+      <td data-label="Importe filtrado" class="td-amount">${amountWithReference(expenseAmount({ ...g, monto: montoPropio }), montoPropio)}</td>
       <td data-label="Proporción" class="td-muted">${pct1}% ${P1} / ${pct2}% ${P2}</td>
       <td data-label="$ JD" class="td-amount${jdHighlight ? ' td-persona-jd' : ''}">${fmtARS(montoP1)}</td>
       <td data-label="$ Pinki" class="td-amount${pinkiHighlight ? ' td-persona-pinki' : ''}">${fmtARS(montoP2)}</td>
@@ -2277,30 +2450,33 @@ function renderFijosDetail() {
     inner.innerHTML = '<div class="section-error" role="alert">No se pudo cargar data/gastos_fijos.json — no se puede confirmar el listado de fijos.</div>';
     return;
   }
-  const items = activeFijos();
+  const items = fixedMonths().flatMap((month) => fijosVigentes(DATA.fijos, fixedMonthCutoff(month))
+    .filter((row) => fixedAmount(row, month, personaFiltro) !== null)
+    .map((row) => ({ row, month })));
   if (!items.length) {
     inner.innerHTML = '<div class="empty-state">Sin gastos fijos activos.</div>';
     return;
   }
-  const sorted = [...items].sort((a, b) => Number(b.monto_mensual) - Number(a.monto_mensual));
-  const total = fixedMonths().reduce((amount, month) => amount + fijosTotalMes(DATA.fijos, month), 0);
+  const sorted = [...items].sort((a, b) => Number(b.row.monto_mensual) - Number(a.row.monto_mensual));
+  const total = sorted.reduce((amount, item) => amount + fixedAmount(item.row, item.month, personaFiltro), 0);
   inner.innerHTML = `
     <table>
-      <thead><tr><th>Nombre</th><th>Categoría</th><th>Periodicidad</th><th style="text-align:right">Mensual</th></tr></thead>
+      <thead><tr><th>Mes</th><th>Nombre</th><th>Categoría</th><th>Periodicidad</th><th style="text-align:right">Filtrado de total</th></tr></thead>
       <tbody>
-        ${sorted.map((f) => `<tr>
-          <td>${escapeHtml(f.nombre)}</td>
-          <td class="td-muted">${escapeHtml(f.categoria)}${f.subcategoria ? ' / ' + escapeHtml(f.subcategoria) : ''}</td>
-          <td class="td-muted">${capitalize(escapeHtml(f.periodicidad))}</td>
-          <td class="td-amount td-accent">${fmtARS(f.monto_mensual)}</td>
+        ${sorted.map(({ row, month }) => `<tr>
+          <td>${escapeHtml(month)}</td>
+          <td>${escapeHtml(row.nombre)}</td>
+          <td class="td-muted">${escapeHtml(row.categoria)}${row.subcategoria ? ' / ' + escapeHtml(row.subcategoria) : ''}</td>
+          <td class="td-muted">${capitalize(escapeHtml(row.periodicidad))}</td>
+          <td class="td-amount td-accent">${fixedAmountLabel(row, month, personaFiltro)}</td>
         </tr>`).join('')}
       </tbody>
       <tfoot><tr>
-        <td colspan="3" class="td-muted">Total del período (${fixedMonths().length} mes${fixedMonths().length === 1 ? '' : 'es'})</td>
+        <td colspan="4" class="td-muted">Total del período (${fixedMonths().length} mes${fixedMonths().length === 1 ? '' : 'es'})</td>
         <td class="td-amount td-accent">${fmtARS(total)}</td>
       </tr></tfoot>
     </table>
-    <p class="td-muted" style="font-size:11px;margin-top:8px">La tabla muestra el corte del ${fijosDateLabel(fixedCutoffDate())}; el total suma cada mes con su versión vigente.</p>`;
+    <p class="td-muted" style="font-size:11px;margin-top:8px">Cada mes usa su versión vigente y su reparto correspondiente.</p>`;
 }
 
 function renderCuotasDetail() {
@@ -2311,17 +2487,16 @@ function renderCuotasDetail() {
     inner.innerHTML = '<div class="empty-state">Sin cuotas comprometidas en este período.</div>';
     return;
   }
-  const adjusted = applyPersonaMonto(rows);
-  const total = sum(adjusted, 'monto');
+  const total = rows.reduce((value, row) => value + expenseAmount(row), 0);
   inner.innerHTML = `
     <table>
       <thead><tr><th>Fecha</th><th>Descripción</th><th>Cuota</th><th style="text-align:right">Monto</th></tr></thead>
       <tbody>
-        ${adjusted.map((r) => `<tr>
+        ${rows.map((r) => `<tr>
           <td class="td-muted">${r.fecha || '—'}</td>
           <td>${escapeHtml(r.descripcion_original)}</td>
           <td class="td-muted">${cuotaLabel(r)}</td>
-          <td class="td-amount td-accent">${fmtARS(r.monto)}</td>
+          <td class="td-amount td-accent">${expenseAmountLabel(r)}</td>
         </tr>`).join('')}
       </tbody>
       <tfoot><tr>
@@ -2334,12 +2509,14 @@ function renderCuotasDetail() {
 function renderCreditoDetail() {
   const inner = document.getElementById('credito-detail-inner');
   const rows = applyPersonaFiltro(filterGastosPeriod(period.from, period.to).filter((r) => r.medio_pago === 'Crédito'));
-  if (!rows.length) {
+  const fixedItems = creditFixedItems();
+  if (!rows.length && !fixedItems.length) {
     inner.innerHTML = '<div class="empty-state">Sin cargos en crédito en este período.</div>';
     return;
   }
-  const total = sum(applyPersonaMonto(rows), 'monto');
-  const items = applyPersonaMonto(rows).sort((a, b) => (b.monto || 0) - (a.monto || 0));
+  const total = rows.reduce((value, row) => value + expenseAmount(row), 0)
+    + fixedItems.reduce((value, item) => value + fixedAmount(item.row, item.month, personaFiltro), 0);
+  const items = [...rows].sort((a, b) => expenseAmount(b) - expenseAmount(a));
   inner.innerHTML = `
       <table>
         <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th style="text-align:right">Monto</th></tr></thead>
@@ -2348,7 +2525,13 @@ function renderCreditoDetail() {
             <td class="td-muted">${r.fecha || '—'}</td>
             <td>${escapeHtml(r.descripcion_original)}</td>
             <td class="td-muted">${escapeHtml(r.categoria)}</td>
-            <td class="td-amount td-accent">${fmtARS(r.monto)}</td>
+            <td class="td-amount td-accent">${expenseAmountLabel(r)}</td>
+          </tr>`).join('')}
+          ${fixedItems.map(({ row, month }) => `<tr>
+            <td class="td-muted">${escapeHtml(month)}</td>
+            <td>${escapeHtml(row.nombre)} · fijo</td>
+            <td class="td-muted">${escapeHtml(row.categoria)}</td>
+            <td class="td-amount td-accent">${fixedAmountLabel(row, month, personaFiltro)}</td>
           </tr>`).join('')}
         </tbody>
       </table><div class="credito-tarjeta-header">Total crédito · ${fmtARS(total)}</div>`;
@@ -2428,6 +2611,8 @@ function renderDeudaDetail() {
 
 function renderIngresosView() {
   const rows = filterIngresosPeriod(period.from, period.to);
+  const selectedRows = incomePersonaFiltro === 'all' ? rows
+    : rows.filter((row) => row.persona === (incomePersonaFiltro === 'jd' ? P1 : P2));
   const total = sum(rows, 'monto');
   const totalP1 = sum(rows.filter((r) => r.persona === P1), 'monto');
   const totalP2 = sum(rows.filter((r) => r.persona === P2), 'monto');
@@ -2448,7 +2633,7 @@ function renderIngresosView() {
 
   renderIncomeLines();
 
-  const sorted = [...rows].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+  const sorted = [...selectedRows].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
   document.getElementById('tabla-ingresos-body').innerHTML = sorted.length ? sorted.map((r) => `
     <tr>
       <td data-label="Fecha" class="td-muted">${escapeHtml(r.fecha || '—')}</td>
@@ -2465,11 +2650,19 @@ function renderIngresosView() {
 
 function renderIncomeLines() {
   destroyChart('inc-lines');
-  const sorted = [...DATA.resumen].sort((a, b) => a.mes.localeCompare(b.mes));
-  const real = sorted.filter((r) => r.total_ingresos > 0);
-  const months = (real.length ? real : sorted).slice(-6).map((r) => r.mes);
-  const dataP1 = months.map((m) => sum(DATA.ingresos.filter((r) => (r.fecha || '').slice(0, 7) === m && r.persona === P1), 'monto'));
-  const dataP2 = months.map((m) => sum(DATA.ingresos.filter((r) => (r.fecha || '').slice(0, 7) === m && r.persona === P2), 'monto'));
+  if (document.getElementById('inc-lines-body').hidden) return;
+  const months = getMonthsInPeriod(period.from, period.to);
+  const rows = filterIngresosPeriod(period.from, period.to);
+  const dataP1 = months.map((m) => sum(rows.filter((r) => (r.fecha || '').slice(0, 7) === m && r.persona === P1), 'monto'));
+  const dataP2 = months.map((m) => sum(rows.filter((r) => (r.fecha || '').slice(0, 7) === m && r.persona === P2), 'monto'));
+  document.getElementById('inc-lines-range-note').textContent = `${months.length} mes${months.length === 1 ? '' : 'es'} del período seleccionado`;
+
+  const showP1 = incomePersonaFiltro === 'all' || incomePersonaFiltro === 'jd';
+  const showP2 = incomePersonaFiltro === 'all' || incomePersonaFiltro === 'pinki';
+  renderChartData(document.getElementById('chart-inc-lines'), 'Evolución mensual de ingresos',
+    `Período: ${period.from} a ${period.to}. Persona: ${incomePersonaFiltro === 'all' ? 'Ambos' : incomePersonaFiltro === 'jd' ? P1 : P2}.`,
+    ['Mes', ...(showP1 ? [P1] : []), ...(showP2 ? [P2] : [])],
+    months.map((month, i) => [month, ...(showP1 ? [fmtARS(dataP1[i])] : []), ...(showP2 ? [fmtARS(dataP2[i])] : [])]));
 
   renderChart('inc-lines', document.getElementById('chart-inc-lines'), {
     type: 'line',
@@ -2478,7 +2671,7 @@ function renderIncomeLines() {
       datasets: [
         { label: P1, data: dataP1, borderColor: '#c97d55', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#c97d55' },
         { label: P2, data: dataP2, borderColor: '#d1a13f', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#d1a13f' },
-      ],
+      ].filter((dataset) => incomePersonaFiltro === 'all' || dataset.label === (incomePersonaFiltro === 'jd' ? P1 : P2)),
     },
     options: {
       scales: {
@@ -2882,14 +3075,14 @@ function renderPrintSummary() {
 
   let html = `
     <h1>LIFE — Resumen de gastos</h1>
-    <p>Período: <strong>${escapeHtml(periodLabel)}</strong> · generado el ${escapeHtml(generatedAt)}</p>`;
+    <p>Período: <strong>${escapeHtml(periodLabel)}</strong> · filtro: ${escapeHtml(PERSONA_FILTRO_LABELS[personaFiltro])} · generado el ${escapeHtml(generatedAt)}</p>`;
 
   if (DATA.loadErrors.gastos) {
     html += '<p class="print-missing">⚠ No se pudo cargar data/gastos.json: sin datos de gastos, cuotas ni desglose JD/Pinki para este resumen.</p>';
   } else {
-    const rows = filterGastosPeriod(period.from, period.to);
+    const rows = applyPersonaFiltro(filterGastosPeriod(period.from, period.to));
     const varRows = rows.filter((r) => (parseInt(r.cuota_nro, 10) || 1) === 1);
-    const varTotal = sum(varRows, 'monto');
+    const varTotal = varRows.reduce((total, row) => total + expenseAmount(row), 0);
     let sub1 = 0, sub2 = 0;
     varRows.forEach((r) => {
       const monto = parseFloat(r.monto) || 0;
@@ -2897,13 +3090,14 @@ function renderPrintSummary() {
       sub1 += monto * pct1 / 100;
       sub2 += monto * pct2 / 100;
     });
-    const cuotasRows = filterCuotasComprometidas(period.from, period.to)
+    const cuotasRows = applyPersonaFiltro(filterCuotasComprometidas(period.from, period.to))
       .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
-    const cuotasTotal = sum(cuotasRows, 'monto');
+    const cuotasTotal = cuotasRows.reduce((total, row) => total + expenseAmount(row), 0);
 
     const months = fixedMonths().length;
-    const fijos = DATA.loadErrors.fijos ? [] : activeFijos();
-    const fijosTotal = DATA.loadErrors.fijos ? null : computeFixedForPersona('comun');
+    const fijos = DATA.loadErrors.fijos ? [] : activeFijos()
+      .filter((row) => fixedAmount(row, fixedCutoffDate().slice(0, 7), personaFiltro) !== null);
+    const fijosTotal = DATA.loadErrors.fijos ? null : computeFixedForPersona(personaFiltro);
     const { total, partial } = gastosTotalState(varTotal, fijosTotal, cuotasTotal, fijosTotal !== null);
 
     html += `
@@ -2936,7 +3130,7 @@ function renderPrintSummary() {
                 <td>${escapeHtml(f.nombre)}</td>
                 <td>${f.responsable ? escapeHtml(f.responsable) : 'no especificado en los datos'}</td>
                 <td>${escapeHtml(f.periodicidad)}${f.periodicidad === 'bimestral' ? ' (prorrateado ÷2, evita duplicar el bimestre)' : ''}</td>
-                <td>${fmtARS(f.monto_mensual)}</td>
+                <td>${fixedAmountLabel(f, fixedCutoffDate().slice(0, 7), personaFiltro)}</td>
               </tr>`).join('')}
             </table>
             <p class="print-note">Listado al corte del ${fijosDateLabel(fixedCutoffDate())}. El total del período usa la versión vigente de cada mes.</p>`
@@ -2950,7 +3144,7 @@ function renderPrintSummary() {
               <td>${r.fecha || '—'}</td>
               <td>${escapeHtml(r.descripcion_original)}</td>
               <td>${cuotaLabel(r)}</td>
-              <td>${fmtARS(r.monto)}</td>
+              <td>${expenseAmountLabel(r)}</td>
             </tr>`).join('')}
           </table>`
         : '<p class="print-note">Sin cuotas comprometidas en este período.</p>'}`;

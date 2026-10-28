@@ -450,6 +450,51 @@ button.card:active {
   margin-bottom: 0;
 }
 
+.panel-title-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chart-panel-body[hidden] {
+  display: none;
+}
+
+.chart-data {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.chart-data summary {
+  width: fit-content;
+  color: var(--green-deep);
+  cursor: pointer;
+  padding: 8px 2px;
+}
+
+.chart-data summary:focus-visible {
+  outline: 2px solid var(--green-deep);
+  outline-offset: 2px;
+}
+
+.chart-data-context {
+  margin: 6px 0 10px;
+  color: var(--ink-soft);
+}
+
+.chart-data table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.chart-data th,
+.chart-data td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
 .btn-chart-toggle {
   font-family: 'Work Sans', sans-serif;
   font-size: 11.5px;
@@ -594,6 +639,37 @@ button.card:active {
   overflow: hidden;
   background: var(--paper-deep);
   margin-bottom: 14px;
+}
+
+.composicion-total {
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chart-filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.chart-filter-label select,
+.table-filters select {
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px;
+}
+
+.chart-filter-label select:focus-visible,
+.table-filters select:focus-visible {
+  outline: 2px solid var(--terracotta);
+  outline-offset: 2px;
 }
 
 .composicion-seg {

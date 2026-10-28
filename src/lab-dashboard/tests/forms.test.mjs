@@ -1096,18 +1096,23 @@ const fijosXssElement = (id) => {
 const fijosXssDocument = { getElementById: fijosXssElement };
 const fijosXssApi = runInNewContext(`
 function fmtARS(value) { return '$' + value; }
+let fijosPersonaFiltro = 'comun', personaFiltro = 'comun';
 ${slice('const capitalize = ', 'const fmtARS = ')}
 ${slice('const MAX_SQLITE_ID = ', 'function adaptLiveMovement(')}
+${slice('function allocationAmount(', 'function setPersonaFiltro(')}
+${slice('function fixedAllocation(', 'function computeFixedForPersona(')}
 ${slice('function getMonthsInPeriod(', 'function selectPeriodType(')}
 ${slice('function fijosLastDay(', 'function fijosEvolutionData(')}
 ${slice('function fixedCutoffDate(', 'function fixedMonthCutoff(')}
+${slice('function fixedMonthCutoff(', 'function creditFixedItems(')}
 ${slice('function fijosDateLabel(', 'function fijosResponsable(')}
 ${slice('function renderFijosDetail(', 'function renderCuotasDetail(')}
 ({ renderFijosDetail })`, {
   document: fijosXssDocument,
   DATA: { loadErrors: {}, fijos: [{ id: 1, fijo_grupo_id: 1, nombre: '<svg onload=alert(1)>', categoria: 'Hogar',
     subcategoria: '', vigente_desde: '2026-10-01', monto_mensual: 100, monto_estimado: 100,
-    periodicidad: '<img src=x onerror=alert(1)>', activo: 1 }] },
+    periodicidad: '<img src=x onerror=alert(1)>', responsable: 'Común',
+    tipo_proporcion: '50/50', activo: 1 }] },
   period: { from: '2026-10-01', to: '2026-10-31' },
   Date, Number, String, Math, Set });
 fijosXssApi.renderFijosDetail();
@@ -1218,6 +1223,7 @@ function renderIncomeLines() {}
 const P1 = 'JD', P2 = 'Pinki';
 const DATA = { ingresos: [incomeRow], resumen: [] };
 let period = { from: '2026-10-01', to: '2026-10-31', refMonth: '2026-10' };
+let incomePersonaFiltro = 'all';
 let liveMode = false, writePending = false, reloadPending = false, reloadFailed = false;
 ${slice('function filterGastosPeriod(', 'function fijosLastDay(')}
 ${slice('function renderIngresosView(', 'function renderIncomeLines(')}
@@ -1235,39 +1241,27 @@ const ingresosLiveHtml = ingresosTableElement('tabla-ingresos-body').innerHTML;
 assert.match(ingresosLiveHtml, /aria-label="Dar de baja ingreso 31 de JD" >Dar de baja<\/button>/,
   'En modo en vivo el botón de baja de ingreso debe estar habilitado');
 
-// Bug "Últimos 6 meses" (brief F1 #3): DATA.resumen puede incluir meses
-// FUTUROS (cuotas ya comprometidas, fijos proyectados) sin ingresos todavía
-// cargados. Sin recortar a "hoy" antes de tomar los últimos 6, ese ruido
-// futuro ganaba el slice(-6): barras de gasto idénticas (mismo monto fijo
-// repetido) y casi sin ingreso. Con "hoy" = 2026-10-16, los 6 meses reales
-// son mayo a octubre de 2026, con montos distintos entre sí.
+// Bug "Últimos 6 meses" (brief F1 #3): los períodos relativos terminan hoy
+// aunque existan cuotas futuras. F3 arma las barras desde movimientos y fijos
+// del período, así que el harness usa esas fuentes reales con filas sintéticas.
 const gastosBarApi = runInNewContext(`
-let charts = {};
 let capturedConfig = null;
 function destroyChart(key) { delete charts[key]; }
 function renderChart(key, canvas, config) { capturedConfig = config; }
-const MESES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-${slice('const INK = ', 'const INVENTARIO_ESTADOS = ')}
-${slice('function thisMonth(', 'function todayLocalISO(')}
-${slice('function shortMonth(', 'function cuotaLabel(')}
-const DATA = { resumen: resumenFixture };
-${slice('// "Últimos 6 meses"', 'function drillDownToSubcat(')}
-({ renderGastosBar, getConfig() { return capturedConfig; } })`, {
+${source.slice(0, source.indexOf('function fijosDateLabel('))}
+${slice('function renderGastosBar(', 'function drillDownToSubcat(')}
+({ DATA, computePeriod, renderGastosBar, setPeriod(value) { period = value; },
+   getConfig() { return capturedConfig; } })`, {
   document: { getElementById: () => ({}) },
   Date: class extends Date { constructor(...args) { super(...(args.length ? args : ['2026-10-16T12:00:00Z'])); } },
-  resumenFixture: [
-    { mes: '2026-05', total_gastos: 500, total_ingresos: 4000 },
-    { mes: '2026-06', total_gastos: 600, total_ingresos: 4200 },
-    { mes: '2026-07', total_gastos: 550, total_ingresos: 4300 },
-    { mes: '2026-08', total_gastos: 300, total_ingresos: 4600 },
-    { mes: '2026-09', total_gastos: 300, total_ingresos: 4600 },
-    { mes: '2026-10', total_gastos: 300, total_ingresos: 0 },
-    { mes: '2026-11', total_gastos: 300, total_ingresos: 0 },
-    { mes: '2026-12', total_gastos: 300, total_ingresos: 0 },
-    { mes: '2027-01', total_gastos: 300, total_ingresos: 0 },
-    { mes: '2027-02', total_gastos: 300, total_ingresos: 0 },
-  ],
 });
+gastosBarApi.DATA.gastos = [500, 600, 550, 300, 300, 300, 999, 999]
+  .map((monto, index) => ({ fecha: `2026-${String(index + 5).padStart(2, '0')}-10`,
+    monto, cuota_nro: index > 5 ? 2 : 1, tipo_proporcion: '50/50' }));
+gastosBarApi.DATA.ingresos = [4000, 4200, 4300, 4600, 4600, 0, 0, 0]
+  .map((monto, index) => ({ fecha: `2026-${String(index + 5).padStart(2, '0')}-10`,
+    monto, persona: 'JD' }));
+gastosBarApi.setPeriod(gastosBarApi.computePeriod('semester'));
 gastosBarApi.renderGastosBar();
 const gastosBarConfig = gastosBarApi.getConfig();
 assert.deepEqual(Array.from(gastosBarConfig.data.labels), ["may '26", "jun '26", "jul '26", "ago '26", "sep '26", "oct '26"],
@@ -1276,6 +1270,10 @@ assert.deepEqual(Array.from(gastosBarConfig.data.datasets[0].data), [500, 600, 5
   'Los montos de gasto deben variar mes a mes, no quedar todos iguales por meses futuros duplicados');
 assert.deepEqual(Array.from(gastosBarConfig.data.datasets[1].data), [4000, 4200, 4300, 4600, 4600, 0],
   'El ingreso debe verse en los meses que lo tienen cargado, no solo ceros');
+gastosBarApi.setPeriod(gastosBarApi.computePeriod('month', { month: '2026-11' }));
+gastosBarApi.renderGastosBar();
+assert.deepEqual(Array.from(gastosBarApi.getConfig().data.datasets[0].data), [999],
+  'Un mes futuro elegido explícitamente sí muestra la cuota comprometida');
 
 console.log('Formularios: rutas, payloads y lectura posterior verificados con fixture de API sintética');
 console.log('Modal: ciclo completo (guardar/cancelar/reabrir) y escape de XSS en detalle de fijos verificados');
