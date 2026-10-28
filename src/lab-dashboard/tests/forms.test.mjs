@@ -1241,21 +1241,22 @@ const ingresosLiveHtml = ingresosTableElement('tabla-ingresos-body').innerHTML;
 assert.match(ingresosLiveHtml, /aria-label="Dar de baja ingreso 31 de JD" >Dar de baja<\/button>/,
   'En modo en vivo el botón de baja de ingreso debe estar habilitado');
 
-// Bug "Últimos 6 meses" (brief F1 #3): los períodos relativos terminan hoy
-// aunque existan cuotas futuras. F3 arma las barras desde movimientos y fijos
-// del período, así que el harness usa esas fuentes reales con filas sintéticas.
+// Relative periods end today even when future installments exist. The bar chart
+// uses movements through the reference month, including months before the
+// selected period, so this harness supplies synthetic source rows.
 const gastosBarApi = runInNewContext(`
 let capturedConfig = null;
 function destroyChart(key) { delete charts[key]; }
 function renderChart(key, canvas, config) { capturedConfig = config; }
 ${source.slice(0, source.indexOf('function fijosDateLabel('))}
-${slice('function renderGastosBar(', 'function drillDownToSubcat(')}
+${slice('function gastosBarMonthCutoff(', 'function drillDownToSubcat(')}
 ({ DATA, computePeriod, renderGastosBar, setPeriod(value) { period = value; },
+   setFilter(value) { personaFiltro = value; },
    getConfig() { return capturedConfig; } })`, {
   document: { getElementById: () => ({}) },
   Date: class extends Date { constructor(...args) { super(...(args.length ? args : ['2026-10-16T12:00:00Z'])); } },
 });
-gastosBarApi.DATA.gastos = [500, 600, 550, 300, 300, 300, 999, 999]
+gastosBarApi.DATA.gastos = [500, 600, 550, 300, 300, 300, 999, 1234]
   .map((monto, index) => ({ fecha: `2026-${String(index + 5).padStart(2, '0')}-10`,
     monto, cuota_nro: index > 5 ? 2 : 1, tipo_proporcion: '50/50' }));
 gastosBarApi.DATA.ingresos = [4000, 4200, 4300, 4600, 4600, 0, 0, 0]
@@ -1272,8 +1273,40 @@ assert.deepEqual(Array.from(gastosBarConfig.data.datasets[1].data), [4000, 4200,
   'El ingreso debe verse en los meses que lo tienen cargado, no solo ceros');
 gastosBarApi.setPeriod(gastosBarApi.computePeriod('month', { month: '2026-11' }));
 gastosBarApi.renderGastosBar();
-assert.deepEqual(Array.from(gastosBarApi.getConfig().data.datasets[0].data), [999],
-  'Un mes futuro elegido explícitamente sí muestra la cuota comprometida');
+const futureMonthConfig = gastosBarApi.getConfig();
+assert.deepEqual(Array.from(futureMonthConfig.data.labels),
+  ["jun '26", "jul '26", "ago '26", "sep '26", "oct '26", "nov '26"],
+  'El mes futuro elegido es el extremo derecho de los seis meses, aunque el período global sea de un mes');
+assert.deepEqual(Array.from(futureMonthConfig.data.datasets[0].data), [600, 550, 300, 300, 300, 999],
+  'Los cinco meses previos conservan sus gastos y noviembre incluye la cuota comprometida');
+assert.deepEqual(Array.from(futureMonthConfig.data.datasets[1].data), [4200, 4300, 4600, 4600, 0, 0],
+  'Los ingresos históricos permanecen en su mes y los futuros sin ingreso quedan en cero');
+assert.equal(futureMonthConfig.data.labels.includes("dic '26"), false,
+  'La cuota distinta de diciembre no agrega un mes posterior al elegido');
+
+// A partial range clips only its final month. Earlier months remain complete,
+// including those before the start of the selected period.
+gastosBarApi.setPeriod(gastosBarApi.computePeriod('range', { from: '2026-10-16', to: '2026-11-09' }));
+gastosBarApi.renderGastosBar();
+assert.deepEqual(Array.from(gastosBarApi.getConfig().data.datasets[0].data), [600, 550, 300, 300, 300, 0],
+  'El corte del 9 de noviembre excluye la cuota del día 10 sin recortar octubre');
+assert.deepEqual(Array.from(gastosBarApi.getConfig().data.datasets[1].data), [4200, 4300, 4600, 4600, 0, 0]);
+gastosBarApi.setPeriod(gastosBarApi.computePeriod('range', { from: '2026-10-16', to: '2026-11-10' }));
+gastosBarApi.renderGastosBar();
+assert.deepEqual(Array.from(gastosBarApi.getConfig().data.datasets[0].data), [600, 550, 300, 300, 300, 999],
+  'El día final del rango es inclusivo');
+
+gastosBarApi.setFilter('jd_comun');
+gastosBarApi.renderGastosBar();
+assert.deepEqual(Array.from(gastosBarApi.getConfig().data.datasets[0].data), [300, 275, 150, 150, 150, 499.5],
+  'JD+Común aplica la proporción 50/50 a cada mes, incluida la cuota futura');
+assert.deepEqual(Array.from(gastosBarApi.getConfig().data.datasets[1].data), [4200, 4300, 4600, 4600, 0, 0],
+  'El filtro JD conserva solo sus ingresos');
+gastosBarApi.setFilter('pinki_comun');
+gastosBarApi.renderGastosBar();
+assert.deepEqual(Array.from(gastosBarApi.getConfig().data.datasets[0].data), [300, 275, 150, 150, 150, 499.5]);
+assert.deepEqual(Array.from(gastosBarApi.getConfig().data.datasets[1].data), [0, 0, 0, 0, 0, 0],
+  'El filtro Pinki excluye los ingresos de JD sin alterar los límites mensuales');
 
 console.log('Formularios: rutas, payloads y lectura posterior verificados con fixture de API sintética');
 console.log('Modal: ciclo completo (guardar/cancelar/reabrir) y escape de XSS en detalle de fijos verificados');

@@ -10,6 +10,9 @@ const source = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const pure = source.slice(0, source.indexOf('function fijosDateLabel('));
+class FixedDate extends Date {
+  constructor(...args) { super(...(args.length ? args : ['2026-10-15T12:00:00Z'])); }
+}
 const elements = new Map();
 function element(id) {
   if (!elements.has(id)) elements.set(id, {
@@ -43,7 +46,7 @@ ${source.slice(source.indexOf('function renderCuotasDetail('), source.indexOf('/
   renderChart(key, canvas, config) { element('chart-config-' + key).config = config; },
   destroyChart(key) { element('destroy-' + key).called = true; },
   fmtARS,
-  Date,
+  Date: FixedDate,
 });
 
 function fmtARS(value) { return '$' + Number(value).toFixed(2); }
@@ -189,9 +192,9 @@ assert.doesNotMatch(element('chart-inc-lines-data').innerHTML, /2026-09/);
 assert.match(element('chart-inc-lines-data').innerHTML, /\$\s*0/);
 api.setPeriod({ from: '2026-01-01', to: '2026-02-28' });
 api.renderGastosBar();
-assert.equal(element('chart-config-gastos-bar').config.data.labels.length, 2, 'Gráfico de gastos respeta el período');
-assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-01-01 a 2026-02-28.');
-assert.equal(element('chart-config-gastos-bar').config.data.datasets[0].data[0], 130.6, 'La barra suma variable, cuota y fijo una vez');
+assert.equal(element('chart-config-gastos-bar').config.data.labels.length, 6, 'El selector conserva seis meses con un período global más corto');
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2025-09-01 a 2026-02-28.');
+assert.equal(element('chart-config-gastos-bar').config.data.datasets[0].data[4], 130.6, 'La barra suma variable, cuota y fijo una vez');
 assert.match(element('chart-gastos-bar-data').innerHTML, /2026-01[\s\S]*\$\s*130,6/);
 assert.match(element('chart-gastos-bar-data').innerHTML, /2026-02/);
 element('gastos-bar-body').hidden = false;
@@ -215,29 +218,29 @@ assert.match(element('gastos-bar-months-status').textContent, /1 mes/);
 api.renderGastosBar();
 assert.equal(statusWrites.length, 1, 'Volver a renderizar el mismo rango no repite el anuncio');
 api.setPeriod({ from: '2026-01-15', to: '2026-09-20' });
-for (const [quantity, expected] of [[3, 3], [6, 6], [9, 9], [24, 9]]) {
+for (const quantity of [3, 6, 9, 24]) {
   monthsInput.value = String(quantity);
   api.handleGastosBarMonthsChange(monthsInput);
-  assert.equal(element('chart-config-gastos-bar').config.data.labels.length, expected);
+  assert.equal(element('chart-config-gastos-bar').config.data.labels.length, quantity);
   assert.equal(element('gastos-bar-title').textContent,
-    `Últimos ${quantity} meses${quantity === expected ? '' : ` (${expected} meses mostrados)`}`);
+    `Últimos ${quantity} meses`);
   assert.match(element('chart-gastos-bar-data').innerHTML,
-    new RegExp(`Se solicitaron ${quantity} meses y se muestran ${expected} meses`));
+    new RegExp(`Se solicitaron ${quantity} meses y se muestran ${quantity} meses`));
   assert.match(element('chart-gastos-bar').attributes['aria-label'], /2026-01-15 a 2026-09-20/);
 }
-assert.match(element('chart-gastos-bar').attributes['aria-label'], /Rango mostrado: 2026-01-15 a 2026-09-20/);
-assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-01-15 a 2026-09-20.');
+assert.match(element('chart-gastos-bar').attributes['aria-label'], /Rango mostrado: 2024-10-01 a 2026-09-20/);
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2024-10-01 a 2026-09-20.');
 monthsInput.value = '3';
 api.handleGastosBarMonthsChange(monthsInput);
 assert.doesNotMatch(element('chart-gastos-bar-data').innerHTML, /<th scope="row">2026-06<\/th>/, 'Tres meses recortan los anteriores');
 assert.match(element('chart-gastos-bar-data').innerHTML, /<th scope="row">2026-07<\/th>/);
 assert.match(element('chart-gastos-bar').attributes['aria-label'], /Rango mostrado: 2026-07-01 a 2026-09-20/);
 assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-07-01 a 2026-09-20.');
+api.setFilter('comun');
 monthsInput.value = '24';
 api.handleGastosBarMonthsChange(monthsInput);
-assert.doesNotMatch(element('chart-gastos-bar-data').innerHTML, /2026-01-10/, 'El corte de inicio excluye ingresos anteriores');
 assert.match(element('chart-gastos-bar-data').innerHTML, /<th scope="row">2026-01<\/th>/);
-assert.equal(element('chart-config-gastos-bar').config.data.datasets[1].data[0], 0, 'El inicio parcial excluye ingresos previos al día 15');
+assert.equal(element('chart-config-gastos-bar').config.data.datasets[1].data[15], 100, 'Los meses históricos anteriores al inicio global se incluyen completos');
 api.setPeriod({ from: '2026-01-15', to: '2026-09-05' });
 api.renderGastosBar();
 assert.equal(element('chart-config-gastos-bar').config.data.datasets[1].data.at(-1), 0, 'El fin parcial excluye ingresos posteriores al día 5');
@@ -258,15 +261,15 @@ api.setPeriod({ from: '2026-01-15', to: '2026-06-20' });
 api.renderGastosBar();
 assert.equal(element('chart-config-gastos-bar').config.data.labels.length, 6);
 assert.equal(element('gastos-bar-title').textContent, 'Últimos 6 meses');
-assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-01-15 a 2026-06-20.');
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-01-01 a 2026-06-20.');
 api.setPeriod({ from: '2026-04-10', to: '2026-09-05' });
 api.renderGastosBar();
 assert.equal(element('chart-config-gastos-bar').config.data.labels.length, 6, 'Dos períodos distintos muestran la misma cantidad de meses');
 assert.equal(element('gastos-bar-title').textContent, 'Últimos 6 meses');
-assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-04-10 a 2026-09-05.', 'El subtítulo distingue los períodos');
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-04-01 a 2026-09-05.', 'El subtítulo distingue los períodos');
 api.setFilter('pinki');
 api.renderGastosBar();
-assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-04-10 a 2026-09-05.', 'La selección de persona conserva el rango efectivo');
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-04-01 a 2026-09-05.', 'La selección de persona conserva el rango efectivo');
 api.setPeriod({ from: '2026-01-01', to: '2026-02-28' });
 api.renderGastosBar();
 api.setFilter('jd');
@@ -275,7 +278,7 @@ assert.match(element('chart-gastos-bar-data').innerHTML, /Persona: JD/);
 assert.doesNotMatch(element('chart-gastos-bar-data').innerHTML, /\$\s*130,6/);
 api.setPeriod({ from: '2026-02-01', to: '2026-02-28' });
 api.renderGastosBar();
-assert.doesNotMatch(element('chart-gastos-bar-data').innerHTML, /<th scope="row">2026-01<\/th>/);
+assert.match(element('chart-gastos-bar-data').innerHTML, /<th scope="row">2026-01<\/th>/);
 assert.match(element('chart-gastos-bar-data').innerHTML, /<th scope="row">2026-02<\/th>/);
 api.setPeriod({ from: '2026-01-01', to: '2026-01-31' });
 api.setFilter('comun');
@@ -340,13 +343,103 @@ element('gastos-bar-body').hidden = false;
 for (const quantity of [1, 6, 24]) {
   monthsInput.value = String(quantity);
   api.handleGastosBarMonthsChange(monthsInput);
-  assert.equal(element('chart-config-gastos-bar').config.data.labels.length, 1);
+  assert.equal(element('chart-config-gastos-bar').config.data.labels.length, quantity);
   assert.equal(element('gastos-bar-title').textContent,
-    quantity === 1 ? 'Último mes' : `Últimos ${quantity} meses (1 mes mostrado)`);
+    quantity === 1 ? 'Último mes' : `Últimos ${quantity} meses`);
   assert.match(element('chart-gastos-bar').attributes['aria-label'],
-    new RegExp(`Se ${quantity === 1 ? 'solicitó' : 'solicitaron'} ${quantity} ${quantity === 1 ? 'mes' : 'meses'} y se muestra 1 mes`));
-  assert.match(element('chart-gastos-bar').attributes['aria-label'], /Rango mostrado: 2026-02-01 a 2026-02-28/);
+    new RegExp(`Se ${quantity === 1 ? 'solicitó' : 'solicitaron'} ${quantity} ${quantity === 1 ? 'mes' : 'meses'} y se ${quantity === 1 ? 'muestra 1 mes' : `muestran ${quantity} meses`}`));
+  assert.match(element('chart-gastos-bar').attributes['aria-label'],
+    new RegExp(`Rango mostrado: ${quantity === 1 ? '2026-02-01' : quantity === 6 ? '2025-09-01' : '2024-03-01'} a 2026-02-28`));
 }
+
+// El mes de referencia define el extremo derecho, incluso con período global
+// de un mes. Gastos, cuota expandida y versión de fijo aportan una vez por mes.
+assert.match(source, /fetchJSON\('\/api\/expenses'\), fetchJSON\('\/api\/income'\)/,
+  'La carga en vivo pide movimientos históricos sin filtro mensual');
+assert.match(source, /fetchJSON\('\/api\/fixed\/versions'\), fetchJSON\('\/api\/summary'\)/,
+  'La carga en vivo pide versiones y porcentajes históricos');
+api.DATA.resumen = [
+  { mes: '2026-04', proporcion_jd: 60, proporcion_pinki: 40, total_ingresos: 100 },
+  { mes: '2026-05', proporcion_jd: 20, proporcion_pinki: 80, total_ingresos: 200 },
+  { mes: '2026-07', proporcion_jd: 70, proporcion_pinki: 30, total_ingresos: 100 },
+];
+api.DATA.gastos = [
+  shared('2026-04-05', 10),
+  shared('2026-05-05', 20, 2),
+  shared('2026-06-05', 30, 1, { tipo_proporcion: 'custom', proporcion_jd: 100 }),
+  shared('2026-10-05', 40),
+  shared('2026-11-05', 999),
+];
+api.DATA.fijos = [
+  { id: '1', fijo_grupo_id: '1', vigente_desde: '2026-04-01', activo: 1,
+    responsable: 'Común', tipo_proporcion: 'dinamico', monto_mensual: 100 },
+  { id: '2', fijo_grupo_id: '1', vigente_desde: '2026-07-01', activo: 1,
+    responsable: 'Común', tipo_proporcion: 'dinamico', monto_mensual: 200 },
+];
+api.DATA.ingresos = [
+  { fecha: '2026-04-10', persona: 'JD', monto: 100 },
+  { fecha: '2026-05-10', persona: 'Pinki', monto: 200 },
+  { fecha: '2026-10-10', persona: 'JD', monto: 300 },
+  { fecha: '2026-11-10', persona: 'JD', monto: 999 },
+];
+api.setPeriod(api.computePeriod('month', { month: '2026-10' }));
+monthsInput.value = '7';
+api.handleGastosBarMonthsChange(monthsInput);
+let config = element('chart-config-gastos-bar').config;
+assert.equal(config.data.labels.length, 7, 'Siete meses elegidos en octubre cubren abril a octubre');
+assert.deepEqual(Array.from(config.data.datasets[0].data), [110, 120, 100, 200, 200, 200, 240]);
+assert.deepEqual(Array.from(config.data.datasets[1].data), [100, 200, 0, 0, 0, 0, 300]);
+assert.equal(element('gastos-bar-title').textContent, 'Últimos 7 meses');
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-04-01 a 2026-10-15.');
+assert.doesNotMatch(element('chart-gastos-bar-data').innerHTML, /<th scope="row">2026-11<\/th>/);
+assert.equal(config.data.datasets[1].data[4], 0, 'Un mes sin ingresos conserva el cero');
+api.setFilter('jd_comun');
+api.renderGastosBar();
+config = element('chart-config-gastos-bar').config;
+assert.equal(config.data.datasets[0].data[0], 66, 'Abril usa su porcentaje en gasto y fijo');
+assert.equal(config.data.datasets[0].data[1], 24, 'Mayo usa su porcentaje en cuota y fijo');
+assert.equal(config.data.datasets[0].data[2], 50, 'Gasto personal y fijo se suman sin duplicar cuota');
+assert.deepEqual(Array.from(config.data.datasets[1].data), [100, 0, 0, 0, 0, 0, 300]);
+api.setFilter('pinki_comun');
+api.renderGastosBar();
+config = element('chart-config-gastos-bar').config;
+assert.equal(config.data.datasets[0].data[0], 44);
+assert.equal(config.data.datasets[0].data[1], 96);
+assert.equal(config.data.datasets[0].data[2], 80, 'El gasto 100% JD no entra en Pinki+Común');
+assert.deepEqual(Array.from(config.data.datasets[1].data), [0, 200, 0, 0, 0, 0, 0]);
+api.setFilter('jd');
+api.renderGastosBar();
+config = element('chart-config-gastos-bar').config;
+assert.deepEqual(Array.from(config.data.datasets[0].data), [0, 0, 30, 0, 0, 0, 0], 'JD puro solo incluye el gasto personal');
+api.setFilter('pinki');
+api.renderGastosBar();
+config = element('chart-config-gastos-bar').config;
+assert.ok(config.data.datasets[0].data.every((amount) => amount === 0), 'Pinki puro no incluye gastos compartidos');
+api.setFilter('comun');
+for (const [quantity, first, last] of [
+  [1, '2026-10', '2026-10'], [6, '2026-05', '2026-10'], [24, '2024-11', '2026-10'],
+]) {
+  monthsInput.value = String(quantity);
+  api.handleGastosBarMonthsChange(monthsInput);
+  config = element('chart-config-gastos-bar').config;
+  assert.equal(config.data.labels.length, quantity);
+  assert.match(element('chart-gastos-bar-data').innerHTML, new RegExp(`<th scope="row">${first}<\\/th>`));
+  assert.match(element('chart-gastos-bar-data').innerHTML, new RegExp(`<th scope="row">${last}<\\/th>`));
+  assert.doesNotMatch(element('chart-gastos-bar-data').innerHTML, /<th scope="row">2026-11<\/th>/);
+}
+api.setPeriod(api.computePeriod('month', { month: '2026-05' }));
+monthsInput.value = '6';
+api.handleGastosBarMonthsChange(monthsInput);
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2025-12-01 a 2026-05-31.');
+assert.equal(element('chart-config-gastos-bar').config.data.datasets[0].data.at(-1), 120);
+api.setPeriod({ from: '2025-12-15', to: '2026-01-12' });
+api.renderGastosBar();
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2025-08-01 a 2026-01-12.', 'El rango cruza el año sin recorte al inicio global');
+assert.ok(element('chart-config-gastos-bar').config.data.datasets.every((dataset) => dataset.data.every((amount) => amount === 0)));
+api.setPeriod({ from: '2026-04-20', to: '2026-05-04' });
+api.renderGastosBar();
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2025-12-01 a 2026-05-04.');
+assert.equal(element('chart-config-gastos-bar').config.data.datasets[0].data.at(-1), 100, 'El último mes respeta el día final del rango');
 
 const originalGastos = api.DATA.gastos;
 const originalFijos = api.DATA.fijos;
@@ -364,6 +457,71 @@ assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-04-0
 api.DATA.gastos = originalGastos;
 api.DATA.fijos = originalFijos;
 api.DATA.ingresos = originalIngresos;
+
+// Reloj fijo: el gráfico acota octubre al 15, también cuando octubre queda
+// dentro de una serie cuyo mes final futuro fue elegido explícitamente.
+api.DATA.gastos = [
+  shared('2025-12-31', 8, 1, { tipo_proporcion: '50/50' }),
+  shared('2026-01-01', 9, 1, { tipo_proporcion: '50/50' }),
+  shared('2026-09-30', 5, 1, { tipo_proporcion: '50/50' }),
+  shared('2026-10-14', 10, 1, { tipo_proporcion: '50/50' }),
+  shared('2026-10-14', 20, 2, { tipo_proporcion: '50/50' }),
+  shared('2026-10-16', 1000, 1, { tipo_proporcion: '50/50' }),
+  shared('2026-10-16', 2000, 3, { tipo_proporcion: '50/50' }),
+  shared('2026-11-20', 50, 1, { tipo_proporcion: '50/50' }),
+];
+api.DATA.ingresos = [
+  { fecha: '2026-09-30', persona: 'Pinki', monto: 7 },
+  { fecha: '2026-10-14', persona: 'JD', monto: 30 },
+  { fecha: '2026-10-16', persona: 'JD', monto: 3000 },
+  { fecha: '2026-11-20', persona: 'Pinki', monto: 60 },
+];
+api.DATA.fijos = [
+  { id: '11', fijo_grupo_id: '11', vigente_desde: '2026-10-01', activo: 1,
+    responsable: 'Común', tipo_proporcion: '50/50', monto_mensual: 40 },
+  { id: '12', fijo_grupo_id: '11', vigente_desde: '2026-10-16', activo: 1,
+    responsable: 'Común', tipo_proporcion: '50/50', monto_mensual: 4000 },
+];
+api.setFilter('comun');
+monthsInput.value = '2';
+api.setPeriod(api.computePeriod('month', { month: '2026-10' }));
+api.handleGastosBarMonthsChange(monthsInput);
+config = element('chart-config-gastos-bar').config;
+assert.equal(api.computePeriod('month', { month: '2026-10' }).to, '2026-10-31', 'El período global conserva su semántica');
+assert.deepEqual(Array.from(config.data.datasets[0].data), [5, 70], 'Movimiento, cuota y versión fija posteriores a hoy no entran');
+assert.deepEqual(Array.from(config.data.datasets[1].data), [7, 30], 'El ingreso posterior a hoy no entra');
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-09-01 a 2026-10-15.');
+assert.match(element('chart-gastos-bar-data').innerHTML, /2026-10[\s\S]*\$\s*70/);
+assert.match(element('chart-gastos-bar').attributes['aria-label'], /a 2026-10-15/);
+api.setFilter('jd_comun');
+api.renderGastosBar();
+config = element('chart-config-gastos-bar').config;
+assert.deepEqual(Array.from(config.data.datasets[0].data), [2.5, 35], 'Filtro JD+Común aplica sobre el mismo corte');
+assert.deepEqual(Array.from(config.data.datasets[1].data), [0, 30]);
+api.setFilter('pinki_comun');
+api.renderGastosBar();
+config = element('chart-config-gastos-bar').config;
+assert.deepEqual(Array.from(config.data.datasets[0].data), [2.5, 35]);
+assert.deepEqual(Array.from(config.data.datasets[1].data), [7, 0]);
+api.setFilter('comun');
+api.setPeriod(api.computePeriod('month', { month: '2026-09' }));
+api.renderGastosBar();
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-08-01 a 2026-09-30.');
+assert.equal(element('chart-config-gastos-bar').config.data.datasets[0].data.at(-1), 5, 'El mes pasado incluye su último día');
+api.setPeriod({ type: 'range', from: '2026-10-01', to: '2026-10-13' });
+api.renderGastosBar();
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-09-01 a 2026-10-13.');
+assert.equal(element('chart-config-gastos-bar').config.data.datasets[0].data.at(-1), 40, 'El fin explícito anterior a hoy se respeta');
+assert.equal(element('chart-config-gastos-bar').config.data.datasets[1].data.at(-1), 0);
+api.setPeriod(api.computePeriod('month', { month: '2026-11' }));
+api.renderGastosBar();
+config = element('chart-config-gastos-bar').config;
+assert.deepEqual(Array.from(config.data.datasets[0].data), [70, 4050], 'El mes actual intermedio corta hoy y el futuro conserva su fin');
+assert.deepEqual(Array.from(config.data.datasets[1].data), [30, 60]);
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-10-01 a 2026-11-30.');
+api.setPeriod(api.computePeriod('month', { month: '2026-01' }));
+api.renderGastosBar();
+assert.deepEqual(Array.from(element('chart-config-gastos-bar').config.data.datasets[0].data), [8, 9], 'El cruce de año incluye diciembre y enero completos');
 
 api.setPeriod({ from: null, to: null });
 for (const quantity of [1, 6, 24]) {

@@ -289,6 +289,10 @@ function adaptCurrentDebt(value) {
 
 async function loadLive() {
   const currentMonth = thisMonth();
+  // Las rutas sin `month` devuelven todos los movimientos; `fixed/versions`
+  // conserva la vigencia histórica y `summary` los porcentajes mensuales.
+  // La serie de 1–24 meses se calcula localmente con estas respuestas completas:
+  // consultar sólo el mes del período global ocultaría los meses anteriores.
   const [expenses, income, inventory, versions, summary, currentSummary] = await Promise.all([
     fetchJSON('/api/expenses'), fetchJSON('/api/income'),
     inventoryAvailable ? fetchJSON('/api/inventory') : Promise.resolve(null),
@@ -321,6 +325,9 @@ async function loadLive() {
 }
 
 async function loadSnapshot() {
+  // El modo snapshot sólo tiene historia si están presentes los JSON completos
+  // de `data/`. En este candidato no vienen incluidos: un fetch fallido marca
+  // loadErrors y la serie informa falta de datos, en vez de mostrar ceros falsos.
   const [g, i, f, r, d] = await Promise.allSettled([
     fetchJSON('data/gastos.json'),
     fetchJSON('data/ingresos.json'),
@@ -2216,25 +2223,32 @@ function handleGastosBarMonthsChange(input) {
   else renderGastosBar();
 }
 
-// Las barras usan la cantidad elegida de meses del período. Los meses futuros sólo
-// aparecen cuando el usuario los incluye explícitamente en Mes o Rango.
+// Las barras usan meses consecutivos hasta el mes final del período. Mes y Rango
+// pueden señalar meses futuros explícitamente; el mes actual termina hoy.
+function gastosBarMonthCutoff(month, rangeTo) {
+  const lastDay = fijosLastDay(month);
+  const periodCutoff = rangeTo && rangeTo < lastDay ? rangeTo : lastDay;
+  const today = todayLocalISO();
+  return month === today.slice(0, 7) && periodCutoff > today ? today : periodCutoff;
+}
+
 function renderGastosBar() {
   destroyChart('gastos-bar');
-  const { months, context } = updateGastosBarRange();
-  if (DATA.loadErrors.fijos) {
+  const { months, context, to: rangeTo } = updateGastosBarRange();
+  if (DATA.loadErrors.gastos || DATA.loadErrors.ingresos || DATA.loadErrors.fijos || DATA.loadErrors.resumen) {
     const canvas = document.getElementById('chart-gastos-bar');
     renderChartData(canvas, 'Gastos e ingresos mensuales',
       context,
-      ['Mes', 'Gastos', 'Ingresos'], [], 'No se pueden calcular los gastos: faltan datos de fijos.');
-    showChartError('gastos-bar', canvas, 'Gráfico no disponible: faltan datos de fijos.');
+      ['Mes', 'Gastos', 'Ingresos'], [], 'No se puede calcular la serie: faltan datos históricos.');
+    showChartError('gastos-bar', canvas, 'Gráfico no disponible: faltan datos históricos.');
     return;
   }
   const monthlyRows = months.map((month) => {
-    const from = period.from > month + '-01' ? period.from : month + '-01';
-    const to = period.to < fijosLastDay(month) ? period.to : fijosLastDay(month);
+    const from = month + '-01';
+    const to = gastosBarMonthCutoff(month, month === months.at(-1) ? rangeTo : null);
     const gastos = applyPersonaFiltro(filterGastosPeriod(from, to));
     const variable = gastos.reduce((total, row) => total + (expenseAmount(row) ?? 0), 0);
-    const fixed = DATA.loadErrors.fijos ? 0 : fijosVigentes(DATA.fijos, to)
+    const fixed = fijosVigentes(DATA.fijos, to)
       .reduce((total, row) => total + (fixedAmount(row, month, personaFiltro) ?? 0), 0);
     const incomeRows = filterIngresosPeriod(from, to);
     const selectedIncome = personaFiltro.startsWith('jd') ? incomeRows.filter((row) => row.persona === P1)
@@ -2265,7 +2279,21 @@ function renderGastosBar() {
 }
 
 function updateGastosBarRange() {
-  const months = getMonthsInPeriod(period?.from, period?.to).slice(-gastosBarMonths);
+  const end = period?.to;
+  const validPeriod = typeof period?.from === 'string' && typeof end === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(period.from) && /^\d{4}-\d{2}-\d{2}$/.test(end) &&
+    period.from <= end && Number(end.slice(5, 7)) >= 1 && Number(end.slice(5, 7)) <= 12;
+  const anchor = validPeriod ? end.slice(0, 7) : null;
+  const months = [];
+  if (anchor) {
+    const [year, month] = anchor.split('-').map(Number);
+    for (let offset = gastosBarMonths - 1; offset >= 0; offset--) {
+      const index = year * 12 + month - 1 - offset;
+      const targetYear = Math.floor(index / 12);
+      if (targetYear < 1) continue;
+      months.push(`${String(targetYear).padStart(4, '0')}-${String(index % 12 + 1).padStart(2, '0')}`);
+    }
+  }
   const shown = months.length;
   const shownCount = `${shown} ${shown === 1 ? 'mes' : 'meses'}`;
   const shownLabel = `${shown} ${shown === 1 ? 'mes mostrado' : 'meses mostrados'}`;
@@ -2273,9 +2301,8 @@ function updateGastosBarRange() {
   const title = shown === gastosBarMonths
     ? (shown === 1 ? 'Último mes' : `Últimos ${requestedLabel}`)
     : (gastosBarMonths === 1 ? `1 mes solicitado (${shownLabel})` : `Últimos ${requestedLabel} (${shownLabel})`);
-  const from = shown ? (period.from > months[0] + '-01' ? period.from : months[0] + '-01') : null;
-  const lastMonth = months.at(-1);
-  const to = shown ? (period.to < fijosLastDay(lastMonth) ? period.to : fijosLastDay(lastMonth)) : null;
+  const from = shown ? months[0] + '-01' : null;
+  const to = shown ? gastosBarMonthCutoff(months.at(-1), end) : null;
   const range = shown ? `Rango mostrado: ${from} a ${to}.` : 'No hay meses para mostrar en el período seleccionado.';
   const countDescription = `Se ${gastosBarMonths === 1 ? 'solicitó' : 'solicitaron'} ${requestedLabel} y se ${shown === 1 ? 'muestra' : 'muestran'} ${shownCount}. ${range}`;
   const context = `Período seleccionado: ${period?.from || 'sin inicio'} a ${period?.to || 'sin fin'}. Persona: ${PERSONA_FILTRO_LABELS[personaFiltro]}. ${countDescription}`;
@@ -2283,7 +2310,7 @@ function updateGastosBarRange() {
   document.getElementById('gastos-bar-range').textContent = range;
   const status = document.getElementById('gastos-bar-months-status');
   if (status.textContent !== countDescription) status.textContent = countDescription;
-  return { months, context };
+  return { months, context, from, to };
 }
 
 // La tabla usa los mismos valores ya calculados para Chart.js. Se conserva el

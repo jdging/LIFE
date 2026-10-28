@@ -158,7 +158,7 @@
             </div>
             <div class="panel-title-actions">
               <label class="chart-filter-label" for="gastos-bar-months">Meses a comparar <input type="number" id="gastos-bar-months" class="chart-months-input" min="1" max="24" step="1" value="6" aria-describedby="gastos-bar-months-help gastos-bar-months-status" onchange="handleGastosBarMonthsChange(this)"></label>
-              <span class="sr-only" id="gastos-bar-months-help">Elegí entre 1 y 24 meses del período seleccionado.</span>
+              <span class="sr-only" id="gastos-bar-months-help">Elegí entre 1 y 24 meses consecutivos hasta el mes final del período seleccionado, incluso si el período global abarca un solo mes.</span>
               <span class="sr-only" id="gastos-bar-months-status" role="status" aria-live="polite"></span>
               <label class="chart-filter-label">Persona <select class="gastos-persona-select" aria-label="Filtrar gráfico de gastos e ingresos por persona" onchange="setPersonaFiltro(this.value)"><option value="comun">Comunes</option><option value="jd_comun">JD+Común</option><option value="jd">JD</option><option value="pinki_comun">Pinki+Común</option><option value="pinki">Pinki</option></select></label>
               <button type="button" class="btn-chart-toggle" id="gastos-bar-show" aria-label="Mostrar gráfico de gastos e ingresos mensuales" aria-expanded="false" aria-controls="gastos-bar-body" onclick="toggleChartPanel('gastosBar')">Mostrar gráfico</button>
