@@ -195,9 +195,7 @@ el brief completo cortara por timeout sin terminarlo.
   `ultima_actualizacion` distinta, ambos `activo: 1` — ej. "Seguro departamento" aparece dos
   veces). Se deduplica por `nombre`, quedándose con el de `ultima_actualizacion` más
   reciente, para no contar el mismo gasto fijo dos veces en los totales.
-- **Tarjetas de crédito**: no existe `data/tarjetas.json`, así que el panel "Carga en
-  crédito" agrupa por `tarjeta_id` crudo (`TC1`, `TC2`, etc.) en vez de mostrar un nombre de
-  banco/tarjeta legible.
+- **Crédito (F2):** el panel suma cargos por `medio_pago='Crédito'` sin agrupar ni mostrar identificación de tarjeta o banco. Cuotas siguen visibles en su panel propio. `data/gastos.json` se publica sin `tarjeta_id` (clave removida de las 189 filas; la base no se modificó).
 - **Gráfico "Últimos 6 meses"** de la vista Gastos usa los totales ya agregados de
   `resumen_meses.json` (Gastos vs. Ingresos) en vez de recalcular por categoría/persona
   desde `gastos.json` fila por fila — es más simple y ya refleja datos reales, pero por eso

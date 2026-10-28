@@ -1123,7 +1123,6 @@ function formMarkup(kind, row, categoriesCatalog) {
   }
   if (kind === 'expense' || kind === 'expense-edit') {
     const isEdit = kind === 'expense-edit';
-    const cards = [...new Set(DATA.gastos.map((item) => item.tarjeta_id).filter(Boolean))].sort();
     const categoryFields = categoriesCatalog ? formExpenseCategorySelects(categoriesCatalog, row) : formExpenseCategoryText(row);
     const tipoProporcion = row?.tipo_proporcion || 'dinamico';
     const proporcionJd = tipoProporcion === 'custom' && row?.proporcion_jd != null ? row.proporcion_jd : '50';
@@ -1134,9 +1133,6 @@ function formMarkup(kind, row, categoriesCatalog) {
       ${categoryFields}
       ${formField('descripcion_original', 'Descripción', row?.descripcion_original || '')}
       ${formSelect('medio_pago', 'Medio de pago', ['Efectivo', 'Transferencia', 'Débito', 'Crédito'], row?.medio_pago || 'Efectivo')}
-      ${formField('tarjeta_id', 'ID de tarjeta (opcional; ingresalo si corresponde)', row?.tarjeta_id || '', 'text', 'list="expense-cards"')}
-      <datalist id="expense-cards">${cards.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
-      <p class="form-help">${cards.length ? 'Sugerencias tomadas de los gastos cargados. También podés ingresar un ID explícito.' : 'No hay un catálogo de tarjetas disponible. Ingresá el ID explícito si corresponde.'}</p>
       ${formSelect('pagado_por', 'Pagó', ['Común', 'JD', 'Pinki'], row?.pagado_por || 'Común')}
       ${formSelect('tipo_proporcion', 'Reparto', [
         { value: 'dinamico', label: 'Dinámico según salarios del mes' },
@@ -1477,8 +1473,6 @@ function collectForm(kind, row, values) {
           Math.round(Number(values.monto) * 100) < cuotas) errors.cuotas_total = 'Entre 1 y 120 cuotas, con al menos un centavo por cuota.';
       payload.cuotas_total = cuotas;
     }
-    if (values.tarjeta_id.trim()) payload.tarjeta_id = values.tarjeta_id.trim();
-    else if (isEdit) payload.tarjeta_id = null;
     if (values.tipo_proporcion === 'custom') {
       const jd = Number(values.proporcion_jd), pinki = Number(values.proporcion_pinki);
       if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(values.proporcion_jd) ||
@@ -1577,8 +1571,8 @@ function describeForm(kind, row, payload) {
   }
   if (kind === 'expense-delete') return `Baja solo de la cuota ${cuotaLabel(row)} del gasto #${row.id}, ${fmtARSExact(row.monto)}. Otras cuotas no se borran.`;
   if (kind === 'fixed-delete') return `Baja de ${row.nombre} desde ${payload.fecha_baja}. Se crea una versión inactiva; el historial permanece.`;
-  if (kind === 'expense') return `Gasto ${payload.categoria}${payload.subcategoria ? ` / ${payload.subcategoria}` : ''}: ${fmtARSExact(payload.monto)}, ${payload.fecha}, ${payload.cuotas_total} cuota(s). ${payload.descripcion_original || 'Sin descripción'}. Medio: ${payload.medio_pago}${payload.tarjeta_id ? `, tarjeta ${payload.tarjeta_id}` : ''}. Pagó ${payload.pagado_por}; reparto ${payload.tipo_proporcion}${payload.tipo_proporcion === 'custom' ? ` (${payload.proporcion_jd}% JD / ${payload.proporcion_pinki}% Pinki)` : ''}.`;
-  if (kind === 'expense-edit') return `Editar gasto #${canonicalId(row.id)} (cuota ${cuotaLabel(row)} de ${row.cuotas_total}): ${payload.categoria}${payload.subcategoria ? ` / ${payload.subcategoria}` : ''}, ${fmtARSExact(payload.monto)}, ${payload.fecha}. ${payload.descripcion_original || 'Sin descripción'}. Medio: ${payload.medio_pago}${payload.tarjeta_id ? `, tarjeta ${payload.tarjeta_id}` : ''}. Pagó ${payload.pagado_por}; reparto ${payload.tipo_proporcion}${payload.tipo_proporcion === 'custom' ? ` (${payload.proporcion_jd}% JD / ${payload.proporcion_pinki}% Pinki)` : ''}. Las demás cuotas de este gasto no cambian.`;
+  if (kind === 'expense') return `Gasto ${payload.categoria}${payload.subcategoria ? ` / ${payload.subcategoria}` : ''}: ${fmtARSExact(payload.monto)}, ${payload.fecha}, ${payload.cuotas_total} cuota(s). ${payload.descripcion_original || 'Sin descripción'}. Medio: ${payload.medio_pago}. Pagó ${payload.pagado_por}; reparto ${payload.tipo_proporcion}${payload.tipo_proporcion === 'custom' ? ` (${payload.proporcion_jd}% JD / ${payload.proporcion_pinki}% Pinki)` : ''}.`;
+  if (kind === 'expense-edit') return `Editar gasto #${canonicalId(row.id)} (cuota ${cuotaLabel(row)} de ${row.cuotas_total}): ${payload.categoria}${payload.subcategoria ? ` / ${payload.subcategoria}` : ''}, ${fmtARSExact(payload.monto)}, ${payload.fecha}. ${payload.descripcion_original || 'Sin descripción'}. Medio: ${payload.medio_pago}. Pagó ${payload.pagado_por}; reparto ${payload.tipo_proporcion}${payload.tipo_proporcion === 'custom' ? ` (${payload.proporcion_jd}% JD / ${payload.proporcion_pinki}% Pinki)` : ''}. Las demás cuotas de este gasto no cambian.`;
   if (kind === 'income-delete') return `Baja del ingreso de ${row.persona} del ${row.fecha}, ${fmtARSExact(row.monto)}.${row.categoria === 'Salario' ? ' Es un ingreso de Salario: puede cambiar la proporción del mes y las deudas.' : ''}`;
   if (kind.startsWith('income')) return `${kind === 'income-edit' ? 'Editar' : 'Agregar'} ingreso ${payload.categoria} de ${payload.persona}: ${fmtARSExact(payload.monto)} el ${payload.fecha}. ${payload.descripcion_original || 'Sin descripción'}.${row?.categoria === 'Salario' || payload.categoria === 'Salario' ? ' Este cambio salarial puede modificar las proporciones de los meses afectados y sus deudas.' : ''}`;
   if (kind === 'inventory-delete') return `Baja del bien "${row.nombre}"${row.categoria ? ` (${row.categoria})` : ''}, valor estimado ${fmtARSExact(row.valor_estimado)}, estado ${row.estado || 'Activo'}.`;
@@ -2321,18 +2315,17 @@ function renderCuotasDetail() {
   const total = sum(adjusted, 'monto');
   inner.innerHTML = `
     <table>
-      <thead><tr><th>Fecha</th><th>Descripción</th><th>Cuota</th><th>Tarjeta</th><th style="text-align:right">Monto</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>Descripción</th><th>Cuota</th><th style="text-align:right">Monto</th></tr></thead>
       <tbody>
         ${adjusted.map((r) => `<tr>
           <td class="td-muted">${r.fecha || '—'}</td>
           <td>${escapeHtml(r.descripcion_original)}</td>
           <td class="td-muted">${cuotaLabel(r)}</td>
-          <td class="td-muted">${escapeHtml(r.tarjeta_id)}</td>
           <td class="td-amount td-accent">${fmtARS(r.monto)}</td>
         </tr>`).join('')}
       </tbody>
       <tfoot><tr>
-        <td colspan="4" class="td-muted">Total cuotas</td>
+        <td colspan="3" class="td-muted">Total cuotas</td>
         <td class="td-amount td-accent">${fmtARS(total)}</td>
       </tr></tfoot>
     </table>`;
@@ -2345,19 +2338,9 @@ function renderCreditoDetail() {
     inner.innerHTML = '<div class="empty-state">Sin cargos en crédito en este período.</div>';
     return;
   }
-  const groups = {};
-  rows.forEach((r) => {
-    const key = r.tarjeta_id || 'Sin tarjeta';
-    (groups[key] = groups[key] || []).push(r);
-  });
   const total = sum(applyPersonaMonto(rows), 'monto');
-  const tarjetaKeys = Object.keys(groups).sort();
-
-  inner.innerHTML = tarjetaKeys.map((tid) => {
-    const items = applyPersonaMonto(groups[tid]).sort((a, b) => (b.monto || 0) - (a.monto || 0));
-    const subtotal = sum(items, 'monto');
-    return `
-      <div class="credito-tarjeta-header">${escapeHtml(tid)} · ${fmtARS(subtotal)}</div>
+  const items = applyPersonaMonto(rows).sort((a, b) => (b.monto || 0) - (a.monto || 0));
+  inner.innerHTML = `
       <table>
         <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th style="text-align:right">Monto</th></tr></thead>
         <tbody>
@@ -2368,8 +2351,7 @@ function renderCreditoDetail() {
             <td class="td-amount td-accent">${fmtARS(r.monto)}</td>
           </tr>`).join('')}
         </tbody>
-      </table>`;
-  }).join('') + `<div class="credito-tarjeta-header">Total crédito · ${fmtARS(total)}</div>`;
+      </table><div class="credito-tarjeta-header">Total crédito · ${fmtARS(total)}</div>`;
 }
 
 // Detalle de deuda: composición gasto a gasto del saldo pendiente actual

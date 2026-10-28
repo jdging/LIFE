@@ -970,7 +970,7 @@ def insert_gasto_con_cuotas(conn: sqlite3.Connection, gasto: dict, cuotas_total:
 # de contenido del gasto.
 GASTO_CAMPOS_EDITABLES = (
     "fecha", "monto", "moneda", "categoria", "subcategoria", "medio_pago",
-    "pagado_por", "descripcion_original", "tarjeta_id", "tipo_proporcion",
+    "pagado_por", "descripcion_original", "tipo_proporcion",
     "proporcion_jd", "proporcion_pinki",
 )
 

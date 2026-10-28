@@ -4,6 +4,8 @@ import { runInNewContext } from 'node:vm';
 
 // Todos los registros de este archivo son SINTÉTICOS. No se llama a una API real.
 const source = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+assert.doesNotMatch(source, /\.tarjeta_id\b|\['tarjeta_id'\]/,
+  'El dashboard no debe leer la identificación histórica de tarjeta');
 const cssSource = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const summaryFixture = JSON.parse(readFileSync(new URL('./fixtures/api-summary-synthetic.json', import.meta.url), 'utf8'));
 const categoriesGastoFixture = JSON.parse(readFileSync(new URL('./fixtures/categories-gasto.json', import.meta.url), 'utf8'));
@@ -263,7 +265,7 @@ assert.equal(Object.keys(collectedExpenseEdit.errors).length, 0);
 assert.equal('cuotas_total' in collectedExpenseEdit.payload, false);
 assert.equal('cuotas_total' in api.collectForm('expense-edit', expense,
   { ...expenseEditValues, cuotas_total: '5' }).payload, false, 'cuotas_total nunca viaja en el payload de edición, aunque el cliente lo mande');
-assert.equal(collectedExpenseEdit.payload.tarjeta_id, null);
+assert.equal('tarjeta_id' in collectedExpenseEdit.payload, false);
 assert.equal(collectedExpenseEdit.payload.proporcion_jd, null);
 assert.equal(collectedExpenseEdit.payload.proporcion_pinki, null);
 

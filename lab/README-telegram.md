@@ -105,7 +105,7 @@ Incluye `juan david guzman → JD` y `regina pinchetti → Pinki`. Lo usan
 `extraer-campos` y `normalizar` para
 proponer `pagado_por_sugerido` cuando `titular_origen` (extraído de un
 comprobante) matchea un titular mapeado -- con el mismo matching tolerante
-(`_slug`, sin acentos/mayúsculas) que categorías/tarjetas. Un titular SIN
+(`_slug`, sin acentos/mayúsculas) que categorías. Un titular SIN
 mapeo no sugiere nada: `pagado_por` simplemente queda en
 `campos_faltantes`, igual que si no hubiera comprobante. Ejemplo:
 
@@ -292,33 +292,20 @@ abajo; vive al nivel superior, NUNCA dentro de `borrador`, porque
 `borrador` viaja tal cual como payload de `guardar` hacia la API, que
 rechaza campos desconocidos). Nunca escribe nada.
 
-**Entrada esperada** (todos los campos son opcionales salvo que se indique
-lo contrario; `telegram` es un objeto opcional con `chat_id`/`user_id`/
-`message_id`):
+**Entrada esperada:** `monto`, `fecha`, `comercio` o `descripcion`, `categoria`,
+`subcategoria`; para gastos, `medio_pago`, `pagado_por`, `tipo_proporcion`,
+`proporcion_jd`, `cuotas_total` y `titular_origen`; para ingresos, `persona`.
+`telegram` puede aportar IDs de chat, usuario y mensaje. El medio de pago
+Crédito o Débito y las cuotas conservan su significado, sin identificar
+una tarjeta o banco. Las claves legacy de identificación se ignoran.
 
-- Comunes: `monto`, `fecha`, `comercio` o `descripcion`, `categoria`,
-  `subcategoria`.
-- Gasto: `medio_pago`, `tarjeta`, `pagado_por`, `tipo_proporcion`,
-  `proporcion_jd`, `cuotas_total`, `titular_origen` (de `extraer-campos` --
-  ver "Defaults" abajo, propone `pagado_por_sugerido`).
-- Ingreso: `persona`.
+**Salida `borrador`:** usa el contrato de `POST /api/expenses/telegram` o
+`POST /api/income/telegram`, con `descripcion_original` e IDs Telegram
+validados. Nunca incluye identificación de tarjeta o banco.
 
-**Salida `borrador`**: ya en la forma que acepta `POST /api/expenses/
-telegram` / `POST /api/income/telegram` (`tarjeta` resuelto a `tarjeta_id`,
-`comercio`/`descripcion` resuelto a `descripcion_original`, `chat_id`/
-`telegram_user_id`/`telegram_message_id` como strings validados).
-
-**Validación tolerante de catálogos (contra la API real, nunca inventada):**
-
-- `categoria`/`subcategoria` contra `GET /api/categories?tipo=`. Matching
-  sin acentos, sin mayúsculas/minúsculas (`_slug`), más una tabla chica de
-  alias simples (`ALIASES_SUBCATEGORIA`, ej. `"super"` -> `"supermercado"`).
-  Una categoría o subcategoría que no matchea ningún catálogo real es un
-  error explícito (lista las opciones válidas en el mensaje).
-- `tarjeta` contra `GET /api/tarjetas`, por `id`, `nombre` o `banco`, mismo
-  matching tolerante. Si un banco tiene varias tarjetas, queda como campo
-  faltante/ambiguo y se pide ID o nombre. Tarjeta desconocida: error
-  explícito con las opciones.
+**Validación tolerante:** categoría y subcategoría se resuelven contra
+`GET /api/categories?tipo=` con `_slug` y alias simples. Los valores
+no reconocidos generan error con opciones válidas.
 
 **Defaults (siempre en `defaults_aplicados`, nunca en silencio):**
 
@@ -405,66 +392,19 @@ la clave `"borrador"` si existe, si no trata todo el objeto como borrador).
 
 Campos obligatorios por tipo:
 
-- **Gasto:** `monto`, `fecha`, `categoria`, `medio_pago`, `pagado_por`; más
-  `tarjeta` (es decir, `tarjeta_id` en el borrador) si `medio_pago` es
-  `"Crédito"` o `"Débito"`.
+- **Gasto:** `monto`, `fecha`, `categoria`, `medio_pago`, `pagado_por`.
 - **Ingreso:** `monto`, `fecha`, `categoria`, `persona`.
+- Un reparto `custom` requiere `proporcion_jd`; las cuotas siguen siendo
+  independientes de la identificación de la tarjeta.
 
 ### `pregunta --tipo gasto|ingreso --json <salida-de-normalizar.json o -> [--con-comprobante]`
 
-`{"mensaje": "..."}`. Arma el texto de **una sola pregunta consolidada**, en
-español rioplatense breve (`CTO-DISENO.md` §1(c)):
-
-- **Sin `campos_faltantes`:** muestra lo entendido (monto, categoría >
-  subcategoría, descripción/comercio si la hay, medio de pago/tarjeta, quién
-  pagó, reparto, fecha) más cualquier advertencia, y cierra con `"¿Subo así o
-  cambio algo?"`. La descripción (`descripcion_original`, viene de
-  `comercio`/`descripcion` en la entrada) se agregó en t_b5c6e680 tras un
-  bug real: un gasto (id=856, "Panadería Distinción") se guardó sin
-  descripción porque el resumen de confirmación nunca la mostraba, así que
-  nadie lo notó al confirmar. Si no hay descripción, esa parte simplemente
-  no aparece (igual que `subcategoria`).
-- **Uno o varios campos faltantes:** siempre la misma lista numerada
-  (`"Me falta esto para subirlo, contestame junto:"` + `1) ...`, `2) ...`),
-  incluso con un solo campo -- no hay un formato especial sin número para
-  el caso de un solo faltante, con opciones reales (categorías/tarjetas de
-  la API) cuando corresponde.
-
-Vuelve a consultar `GET /api/categories`/`GET /api/tarjetas` para mostrar
-siempre nombres y opciones reales (nunca inventados ni cacheados del lado
-del cliente).
-
-**No existen preguntas en dos pasos.** Todo lo pendiente (incluida una
-tarjeta ambigua) sale en la MISMA llamada a `pregunta`, nunca en un segundo
-turno. En particular, una tarjeta ambigua (`tarjeta` en `campos_faltantes`
-con `tarjetas_candidatas` en la salida de `normalizar`, ver más abajo) es
-un campo faltante más: entra en la misma lista numerada junto con cualquier
-otro campo pendiente (categoría, medio de pago, quién pagó, etc.), con sus
-candidatas reales como opciones -- **nunca** se resuelve aparte, ni antes
-ni después del resto de la pregunta. QA real de Juan (2026-10-25,
-candidato s2s3-pregunta-unica): probar con 2+ tarjetas candidatas (mismo
-nombre en bancos distintos, o mismo banco con nombres distintos) más algún
-otro campo también faltante (ej. categoría) y confirmar que **una sola**
-llamada a `pregunta` trae todo junto -- ver
-`tests/test_telegram_ingesta.py::PreguntaTests::
-test_pregunta_tarjeta_ambigua_por_nombre_y_categoria_en_una_sola_llamada`
-y `test_pregunta_tarjeta_ambigua_por_banco_con_nombres_distintos_muestra_el_banco`.
-
-**Candidatas ambiguas, siempre con detalle completo:** a diferencia del
-catálogo completo (donde el nombre de la tarjeta alcanza si no hay otra
-igual), cada tarjeta candidata se etiqueta siempre con nombre + banco +
-últimos dígitos (si el catálogo los trae) -- sin condicionarlo a que el
-nombre esté repetido. Si la ambigüedad es por banco (dos tarjetas de
-nombres distintos, ej. "Visa"/"Mastercard", del mismo banco), el banco
-tiene que verse igual en las opciones: `"¿Con qué tarjeta? (opciones: Visa
-(BNA), Mastercard (BNA))"`.
-
-**`tipo_proporcion` en `campos_faltantes`:** igual que `categoria` o
-`tarjeta`, si `tipo_proporcion` aparece como campo faltante (típicamente
-porque el JSON de entrada lo trae así explícito, ya que `normalizar`
-siempre le aplica un default -- ver tabla de "Defaults" más arriba), la
-pregunta muestra sus opciones reales: `"¿Cómo repartimos este gasto?
-(opciones: dinámico / custom (indicá %))"`.
+Arma una sola lista numerada con **todos** los campos faltantes. Si no falta
+ninguno, muestra monto, categoría, descripción si existe, medio de pago,
+pagador, reparto, cuotas y fecha, y cierra con `¿Subo así o cambio algo?`.
+No consulta catálogos de tarjetas. Si recibe un borrador anterior con
+`tarjeta`, `tarjeta_id` o `banco`, los oculta de la pregunta. Categorías
+se consultan a la API para mostrar opciones reales.
 
 **`--con-comprobante`** (equivalente: campo `"con_comprobante": true` en el
 borrador o en el JSON de entrada -- brief, parte D, para un gasto cargado
@@ -567,77 +507,7 @@ identificado" de ese chat.
 
 ## Tests
 
-`tests/test_telegram_ingesta.py` cubre: `parse_monto_ar` (los cuatro
-formatos del brief, agrupación de miles válida/inválida, decimales con más
-de 2 dígitos, rechazo de cero/negativos/`NaN`/infinito/mayor al máximo
-tanto parseado de texto como passthrough numérico, y un entero
-extremadamente grande -- `10**400` -- que da `ValueError` limpio en vez de
-`OverflowError`), `formatear_monto_ar`, resolución tolerante de
-categoría/subcategoría/tarjeta (unidad), `calcular_campos_faltantes` por
-tipo, `armar_mensaje_aviso` (máximo con varios umbrales, ambas formas de
-entrada, rechazo de varios meses o lista vacía), `hash`, `extraer-pdf` (sin
-`pymupdf` instalado -- vía `sys.modules` parcheado, no requiere el paquete
-real --, con un PDF generado en el propio test con y sin texto, y los casos
-adversariales con PDFs generados en el test: archivo que supera el límite
-de tamaño, más de 20 páginas con texto -- verifica truncado y límite de
-caracteres --, una sola página con texto larguísimo -- verifica que el
-corte no necesita varias páginas --, un `MediaBox` enorme -- verifica que
-el zoom se reduce y el pixmap final no supera el límite de píxeles --,
-cifrado con contraseña y corrupto; salteados si falta `pymupdf` de
-verdad), `extraer_campos_comprobante`/`extraer-campos` (comprobante de
-transferencia de Mercado Pago -- fixture SINTÉTICA en texto y en un PDF
-generado en el propio test con `pymupdf`, motivo genérico vs. explícito,
-formato desconocido, comprobante incompleto, sugerencia de
-`pagado_por_sugerido` según `telegram_usuarios.json["titulares"]` con y sin
-mapeo, y por stdin), `normalizar` (categorías con/sin acento, tarjeta por
-nombre, `pagado_por` SIN default aunque `telegram.user_id` sea conocido
--- siempre en `campos_faltantes` salvo explícito --, sugerencia de
-`pagado_por_sugerido` por `titular_origen` mapeado/sin mapeo, default de
-`tipo_proporcion` (dinámico para cualquier pagador)/`cuotas_total`/`fecha`,
-usuario desconocido, `medio_pago` nunca inventado, advertencia de Salario,
-validación de `proporcion_jd` fuera de rango/`NaN`/string más el caso
-límite personal 100/0, `custom` sin `proporcion_jd` yendo a
-`campos_faltantes`, `dinamico` -- explícito o por default -- con
-`proporcion_jd` ignorándola con advertencia, y un monto entero enorme dando
-error de validación limpio), `pregunta` (snapshot exacto de texto para
-cero, uno y varios campos faltantes -- un solo faltante usa el mismo
-formato numerado que varios, sin texto especial --, reparto dinámico y
-reparto custom, `tipo_proporcion` en `campos_faltantes` mostrando sus
-opciones (dinámico/custom), tarjeta ambigua por nombre y por banco
-consolidada con categoría en la MISMA llamada a `pregunta` -- QA real de
-Juan, caso del candidato s2s3-pregunta-unica --, y que nunca formatea
-`None` aunque el JSON de entrada sea inconsistente),
-`pregunta --con-comprobante` (snapshot con resumen de lo leído + preguntas
-mínimas, sugerencia de `pagado_por_sugerido` mostrada para confirmar, cierre
-igual que la pregunta normal sin faltantes, y equivalencia con el campo
-`con_comprobante` del borrador), `guardar` (sin `--confirmado`, con campos
-faltantes, éxito, proporciones custom rechazadas/aceptadas por el backend
--- `guardar` no vuelve a correr `normalizar` --, el dedupe que bloquea un
-guardado + `--forzar-duplicado` que lo permite, y el dedupe por
-`nro_operacion` -- bloquea aunque cambien monto/fecha -- verificando en
-cada paso la cantidad real de filas en `gastos`), `dedupe --nro-operacion`
-como proxy directo, `avisos-pendientes`/`marcar-avisos`/`borrador`
-end-to-end, manejo de secreto inválido/ausente/symlink/con permisos
-abiertos sin filtrarlo, que el cliente no sigue redirecciones HTTP, la
-validación de `--api-base` (esquema y loopback), que `--secret` (en claro),
-un subcomando desconocido o un argumento requerido faltante dan siempre
-`{"error": "..."}` por stdout con `exit code 2`, y que `main()` convierte
-cualquier excepción no anticipada en `{"error": "error interno: ..."}` con
-`exit code 1` sin filtrar el mensaje original. Todo contra la app WSGI real
-(`api.create_app`) corriendo en un `wsgiref` real dentro de un thread --
-nunca con datos reales ni contra una base persistente.
-
-`tests/test_telegram_api.py::TelegramBorradorApiTest` cubre las rutas
-`GET`/`PUT`/`DELETE /api/telegram/borrador` a nivel HTTP (ver
-`lab/README-api.md`). El mismo archivo cubre, a nivel `db.py` y HTTP, la
-migración idempotente de `comprobantes_telegram.nro_operacion`, el índice
-único parcial (permite varios `NULL`, choca en el mismo número de
-operación) y el dedupe por `nro_operacion` con prioridad sobre la
-coincidencia aproximada (ver `lab/README-api.md`).
-
-Correr `python3 -m pytest -q tests` desde `lab/`. Para que corran también
-los dos tests de `extraer-pdf` que generan un PDF real (se saltan solos si
-falta `pymupdf`), usar
-`/home/ai-os/hermes/workspaces/lasso/tools/venv-ingesta/bin/python -m
-pytest -q tests/test_telegram_ingesta.py` (instalar `pytest`/`pymupdf` con
-`pip` únicamente en ese venv, nunca en el intérprete del sistema).
+La suite sintética en `lab/tests/test_telegram_ingesta.py` y
+`lab/tests/test_telegram_api.py` cubre normalización, lista consolidada de
+faltantes, confirmación explícita, crédito/débito sin identificación,
+cuotas y compatibilidad de históricos. En esta corrida no se ejecutó.

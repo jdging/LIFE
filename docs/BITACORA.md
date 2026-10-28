@@ -1,5 +1,11 @@
 # Bitácora del Proyecto
 
+### [2026-10-27] - F2 punto 8, candidato aislado `f2-tarjeta` (t_48075693)
+**Objetivo:** retirar identificación de tarjeta/banco del flujo LIFE laboratorio sin alterar datos históricos, medio de pago ni cuotas.
+**Cambios:** formulario y paneles web sin identificación; API de gastos sin entrada/salida `tarjeta_id` ni catálogo `/api/tarjetas`; Telegram sin búsqueda ni pregunta de tarjeta, con faltantes consolidados y confirmación explícita; exportador futuro sin el campo; documentación y pruebas sintéticas adaptadas. Se conserva el esquema SQLite histórico y sus valores.
+**Verificación:** inspección estática y revisión de diff; tests no ejecutados por restricción de esta corrida. Sin servicios reales, commit, push, merge ni deploy.
+**Estado posterior:** `src/lab-dashboard/data/gastos.json` (export estático, no la base) se regeneró sin la clave `tarjeta_id` (189 filas, resto de datos idéntico); suite sintética verde (pytest 642, node 21). El procedimiento Telegram real se actualizó (ver `lab/PROCEDIMIENTO-TELEGRAM-F2.md`).
+
 > Registro cronológico de cada sesión de trabajo. Cada entrada documenta qué se hizo, qué se decidió y qué queda pendiente.
 
 ---

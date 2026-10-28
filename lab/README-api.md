@@ -89,7 +89,7 @@ el límite técnico, responden `422` sin números inventados.
 | --- | --- | --- |
 | `GET /api/health` | Sin parámetros | `{"ok":true,"capabilities":["expenses","income","fixed","inventory"],"mode":"live"}` |
 | `GET /api/expenses?month=YYYY-MM` | `month` opcional | `{"expenses":[...]}`; excluye bajas lógicas |
-| `POST /api/expenses` | `fecha`, `monto`, `moneda`, `categoria`, `subcategoria`, `medio_pago`, `pagado_por`, `descripcion_original`, `tarjeta_id`, `tipo_proporcion`, `proporcion_jd`, `proporcion_pinki`, `cuotas_total` | `201 {"expenses":[...]}`; una fila por cuota |
+| `POST /api/expenses` | `fecha`, `monto`, `moneda`, `categoria`, `subcategoria`, `medio_pago`, `pagado_por`, `descripcion_original`, `tipo_proporcion`, `proporcion_jd`, `proporcion_pinki`, `cuotas_total` | `201 {"expenses":[...]}`; una fila por cuota |
 | `PATCH /api/expenses/:id` | Subconjunto no vacío de los campos del alta, **excepto `cuotas_total`** (ver nota abajo) | `{"expense":{...}}`; rechaza con `404` si el gasto no existe o está borrado |
 | `DELETE /api/expenses/:id` | Sin cuerpo | `{"deleted":true,"id":N}`; borra lógicamente solo esa cuota |
 | `POST /api/expenses/:id/saldar` | Sin cuerpo | `{"expense":{...}}` con `saldado` en `YYYY-MM-DD`; `404` si no existe, `409` si ya está borrado, ya saldado, o `pagado_por='Común'` (un gasto común nunca genera deuda) |
@@ -401,8 +401,7 @@ Telegram consume este contrato.
 
 | Método y ruta | Entrada | Respuesta exitosa |
 | --- | --- | --- |
-| `GET /api/tarjetas` | Sin parámetros | `{"tarjetas":[...]}`; catálogo completo, solo lectura |
-| `POST /api/expenses/telegram` | Campos de gasto más `confirmado:true`, `fecha`, `pagado_por`, `medio_pago` y `tarjeta_id` si Crédito/Débito; IDs Telegram y `comprobante` opcionales | `201 {"expenses":[...],"avisos_credito_nuevos":[...],"comprobante":{...}?}` |
+| `POST /api/expenses/telegram` | Campos de gasto más `confirmado:true`, `fecha`, `pagado_por`, `medio_pago`; IDs Telegram y `comprobante` opcionales | `201 {"expenses":[...],"avisos_credito_nuevos":[...],"comprobante":{...}?}` |
 | `POST /api/income/telegram` | Campos de ingreso más `confirmado:true` y `fecha`; IDs Telegram y `comprobante` opcionales | `201 {"income":{...},"comprobante":{...}?}` |
 | `GET /api/comprobantes/dedupe?hash=...&monto=&fecha=&comercio=&nro_operacion=` | `hash` obligatorio; `monto`, `fecha`, `comercio`, `nro_operacion` opcionales | `{"duplicado":bool,"gasto_id":N\|null,"ingreso_id":N\|null,"coincidencia":"hash"\|"operacion"\|"aproximada"\|null}` |
 | `GET /api/avisos-credito/pendientes` | Sin parámetros | `{"avisos_credito":[{"mes","umbral","total_al_detectar","detectado_en","enviado_en":null},...]}` |
@@ -575,7 +574,7 @@ borrado de uno sin tocar el otro) y el caso sin `usuario` explícito
 server-side, ids de Telegram devueltos, validación idéntica a la ruta sin
 `/telegram`, formato de `chat_id`/`telegram_user_id`/`telegram_message_id`,
 cuotas, comprobante insertado en la misma transacción, `409` por hash
-duplicado sin crear nada, `401` sin auth); `GET /api/tarjetas`; `GET
+duplicado sin crear nada, `401` sin auth); `GET
 /api/comprobantes/dedupe` (hash exacto, operación exacta por
 `nro_operacion` -- con prioridad sobre la aproximada aunque monto/fecha no
 coincidan --, aproximado por monto+fecha+comercio, sin coincidencia, `400`

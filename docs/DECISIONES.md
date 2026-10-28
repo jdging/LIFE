@@ -1,5 +1,11 @@
 # Registro de Decisiones
 
+### DEC-LAB-F2-008: identificación de tarjeta fuera del flujo nuevo
+- **Fecha:** 2026-10-27
+- **Contexto:** F2 punto 8 aprobado por Juan en laboratorio.
+- **Decisión:** conservar `medio_pago` y `cuotas_total` como conceptos financieros, retirar la identificación de tarjeta/banco de formularios, preguntas, payloads y respuestas. Preservar columnas y valores históricos sin migración destructiva. El catálogo `/api/tarjetas` deja de ser una ruta del flujo nuevo.
+- **Consecuencia:** el procedimiento Telegram externo debe actualizarse antes de usar el nuevo contrato. La copia estática histórica con identificadores requiere resolución separada antes de cualquier publicación.
+
 > Cada decisión técnica importante se documenta acá.
 
 ---

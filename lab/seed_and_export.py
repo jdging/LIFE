@@ -59,7 +59,8 @@ def seed(conn) -> None:
 
 
 def export(conn) -> None:
-    rows = db.get_gastos(conn)
+    rows = [{key: value for key, value in row.items() if key != "tarjeta_id"}
+            for row in db.get_gastos(conn)]
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(rows, f, ensure_ascii=False, indent=2)

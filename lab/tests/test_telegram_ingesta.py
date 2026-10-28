@@ -1,7 +1,7 @@
 """Tests del CLI determinista de ingesta por Telegram (brief S2/S3, T3).
 
 Cubre: parseo de montos AR, normalización (categorías con/sin acento,
-tarjeta por nombre, defaults por usuario), cálculo de campos faltantes,
+medio de pago sin identificación, defaults por usuario), cálculo de campos faltantes,
 armado de la pregunta consolidada (snapshot de texto), bloqueo de `guardar`
 sin confirmación o con campos faltantes, dedupe que bloquea un guardado
 (y `--forzar-duplicado` que lo permite), armado de mensaje de aviso de
@@ -66,7 +66,7 @@ class _ApiServerTestCase(unittest.TestCase):
     """Levanta `api.create_app` sobre un archivo SQLite efímero, servido por
     un `wsgiref` real en un thread (mismo patrón que
     `tests/test_api.py::test_local_http_roundtrip`), y siembra un catálogo
-    mínimo de categorías/tarjetas para que el CLI pueda normalizar contra
+    mínimo de categorías para que el CLI pueda normalizar contra
     datos reales de la API (nunca inventados del lado del cliente)."""
 
     def setUp(self):
@@ -209,7 +209,7 @@ class FormatearMontoArTests(unittest.TestCase):
         self.assertEqual(telegram_ingesta.formatear_monto_ar(212350.5), "$212.350,50")
 
 
-# --- Resolución tolerante de categoría/subcategoría/tarjeta (unidad) --------
+# --- Resolución tolerante de categoría/subcategoría (unidad) ---------------
 
 
 class ResolverHelpersTests(unittest.TestCase):
@@ -222,31 +222,18 @@ class ResolverHelpersTests(unittest.TestCase):
         categorias = [{"categoria": "Comida", "subcategorias": []}]
         self.assertIsNone(telegram_ingesta._resolver_categoria(categorias, "transporte", None))
 
-    def test_resolver_tarjeta_por_nombre_y_banco(self):
-        tarjetas = [{"id": "TC1", "nombre": "Visa", "banco": "BNA"}]
-        self.assertEqual(telegram_ingesta._resolver_tarjeta(tarjetas, "visa")["id"], "TC1")
-        self.assertEqual(telegram_ingesta._resolver_tarjeta(tarjetas, "bna")["id"], "TC1")
-        self.assertIsNone(telegram_ingesta._resolver_tarjeta(tarjetas, "santander"))
-
-    def test_banco_ambiguo_no_elige_la_primera_tarjeta(self):
-        tarjetas = [
-            {"id": "TC1", "nombre": "Visa", "banco": "BNA"},
-            {"id": "TC2", "nombre": "Mastercard", "banco": "BNA"},
-        ]
-        self.assertIsNone(telegram_ingesta._resolver_tarjeta(tarjetas, "BNA"))
-        self.assertEqual(telegram_ingesta._resolver_tarjeta(tarjetas, "TC2")["id"], "TC2")
 
 
 # --- campos obligatorios por tipo -------------------------------------------
 
 
 class CamposFaltantesTests(unittest.TestCase):
-    def test_gasto_tarjeta_obligatoria_con_credito(self):
+    def test_gasto_credito_no_requiere_identificacion(self):
         borrador = {
             "monto": 100.0, "fecha": "2026-04-10", "categoria": "Comida",
             "medio_pago": "Crédito", "pagado_por": "JD",
         }
-        self.assertEqual(telegram_ingesta.calcular_campos_faltantes("gasto", borrador), ["tarjeta"])
+        self.assertEqual(telegram_ingesta.calcular_campos_faltantes("gasto", borrador), [])
 
     def test_gasto_sin_tarjeta_obligatoria_con_efectivo(self):
         borrador = {
@@ -792,56 +779,20 @@ class NormalizarTests(_ApiServerTestCase):
         self.assertEqual(codigo, 0)
         self.assertEqual(salida["borrador"]["subcategoria"], "Verdulería")
 
-    def test_tarjeta_por_nombre_sin_acento_ni_mayusculas_y_default_tipo_proporcion(self):
+    def test_credito_ignora_identificacion_legacy_y_conserva_default(self):
         entrada = {
-            "monto": 1000, "fecha": "2026-04-10", "categoria": "Comida", "subcategoria": "Delivery",
-            "medio_pago": "Crédito", "tarjeta": "visa", "pagado_por": "Común",
+            "monto": 1000, "fecha": "2026-04-10", "categoria": "Comida",
+            "medio_pago": "Crédito", "tarjeta": "Visa", "banco": "Banco de prueba",
+            "pagado_por": "Común",
         }
         ruta = self._write_json(entrada)
         codigo, salida = self.run_cli(["normalizar", "--tipo", "gasto", "--json", ruta])
         self.assertEqual(codigo, 0)
-        self.assertEqual(salida["borrador"]["tarjeta_id"], "TC1")
+        self.assertEqual(salida["campos_faltantes"], [])
+        self.assertNotIn("tarjeta_id", salida["borrador"])
+        self.assertNotIn("tarjeta", salida["borrador"])
+        self.assertNotIn("banco", salida["borrador"])
         self.assertEqual(salida["borrador"]["tipo_proporcion"], "dinamico")
-        self.assertIn({"campo": "tipo_proporcion", "valor": "dinamico"}, salida["defaults_aplicados"])
-
-    def test_banco_con_dos_tarjetas_queda_ambiguo(self):
-        with db.get_connection(self.db_path) as conn:
-            db.insert_tarjeta(conn, {
-                "id": "TC2", "nombre": "Mastercard", "tipo": "Crédito", "banco": "BNA", "titular": "JD",
-            })
-        entrada = {"monto": 100, "fecha": "2026-04-10", "categoria": "Comida", "medio_pago": "Crédito", "tarjeta": "BNA", "pagado_por": "JD"}
-        path = self._write_json(entrada)
-        status, result = self.run_cli(["normalizar", "--tipo", "gasto", "--json", path])
-        self.assertEqual(status, 0)
-        self.assertIn("tarjeta", result["campos_faltantes"])
-        self.assertNotIn("tarjeta_id", result["borrador"])
-        self.assertTrue(any("ambigua" in warning for warning in result["advertencias"]))
-        self.assertEqual(
-            sorted(t["id"] for t in result["tarjetas_candidatas"]), ["TC1", "TC2"],
-        )
-
-    def test_nombre_repetido_entre_bancos_queda_ambiguo_con_candidatas(self):
-        # QA real de Juan (candidato s2s3-pregunta-unica): dos tarjetas
-        # "Visa" de bancos distintos -- la ambigüedad es por NOMBRE, no por
-        # banco, y antes de este fix `_resolver_tarjeta` elegía la primera
-        # en silencio.
-        with db.get_connection(self.db_path) as conn:
-            db.insert_tarjeta(conn, {
-                "id": "TC2", "nombre": "Visa", "tipo": "Crédito", "banco": "Galicia", "titular": "JD",
-            })
-        entrada = {
-            "monto": 100, "fecha": "2026-04-10", "categoria": "Comida",
-            "medio_pago": "Crédito", "tarjeta": "Visa", "pagado_por": "JD",
-        }
-        path = self._write_json(entrada)
-        status, result = self.run_cli(["normalizar", "--tipo", "gasto", "--json", path])
-        self.assertEqual(status, 0)
-        self.assertIn("tarjeta", result["campos_faltantes"])
-        self.assertNotIn("tarjeta_id", result["borrador"])
-        self.assertTrue(any("ambigua" in warning for warning in result["advertencias"]))
-        self.assertEqual(
-            sorted(t["id"] for t in result["tarjetas_candidatas"]), ["TC1", "TC2"],
-        )
 
     def test_default_tipo_proporcion_dinamico_tambien_para_jd_y_pinki(self):
         for pagado_por in ("JD", "Pinki"):
@@ -1059,7 +1010,7 @@ class PreguntaTests(_ApiServerTestCase):
         self.assertEqual(codigo, 0)
         esperado = (
             "Che, esto es lo que entendí — avisame si hay que corregir algo:\n"
-            "💰 $12.350 · Comida > Delivery · 💳 Visa (crédito) · Pagó: Común · "
+            "💰 $12.350 · Comida > Delivery · 💳 Crédito · Pagó: Común · "
             "Reparto: dinámico (según sueldos del mes) · Cuotas: 1 · 📅 09/10\n"
             "¿Subo así o cambio algo?"
         )
@@ -1087,107 +1038,32 @@ class PreguntaTests(_ApiServerTestCase):
         )
         self.assertEqual(salida["mensaje"], esperado)
 
-    def test_pregunta_un_solo_campo_faltante_usa_formato_numerado(self):
-        entrada = {
-            "monto": 500, "fecha": "2026-04-10", "categoria": "Comida",
-            "medio_pago": "Crédito", "pagado_por": "JD",
-        }
+    def test_pregunta_credito_sin_identificacion_pide_confirmacion(self):
+        entrada = {"monto": 500, "fecha": "2026-04-10", "categoria": "Comida",
+                   "medio_pago": "Crédito", "pagado_por": "JD"}
         ruta = self._write_json(entrada)
         codigo, normalizado = self.run_cli(["normalizar", "--tipo", "gasto", "--json", ruta])
         self.assertEqual(codigo, 0)
-        self.assertEqual(normalizado["campos_faltantes"], ["tarjeta"])
-
+        self.assertEqual(normalizado["campos_faltantes"], [])
         ruta_normalizado = self._write_json(normalizado, nombre="normalizado.json")
         codigo, salida = self.run_cli(["pregunta", "--tipo", "gasto", "--json", ruta_normalizado])
         self.assertEqual(codigo, 0)
-        esperado = (
-            "Me falta esto para subirlo, contestame junto:\n"
-            "1) ¿Con qué tarjeta? (opciones: Visa, Mastercard Débito)"
-        )
-        self.assertEqual(salida["mensaje"], esperado)
+        self.assertIn("💳 Crédito", salida["mensaje"])
+        self.assertIn("¿Subo así o cambio algo?", salida["mensaje"])
+        self.assertNotIn("tarjeta", salida["mensaje"].lower())
 
-    def test_pregunta_varios_campos_faltantes_consolidados(self):
-        entrada = {"monto": 500, "fecha": "2026-04-10", "medio_pago": "Crédito", "pagado_por": "JD"}
+    def test_pregunta_consolida_todos_los_faltantes_sin_identificacion(self):
+        entrada = {"monto": 500, "fecha": "2026-04-10", "medio_pago": "Crédito"}
         ruta = self._write_json(entrada)
         codigo, normalizado = self.run_cli(["normalizar", "--tipo", "gasto", "--json", ruta])
         self.assertEqual(codigo, 0)
-        self.assertEqual(normalizado["campos_faltantes"], ["categoria", "tarjeta"])
-
+        self.assertEqual(normalizado["campos_faltantes"], ["categoria", "pagado_por"])
         ruta_normalizado = self._write_json(normalizado, nombre="normalizado.json")
         codigo, salida = self.run_cli(["pregunta", "--tipo", "gasto", "--json", ruta_normalizado])
         self.assertEqual(codigo, 0)
-        esperado = (
-            "Me falta esto para subirlo, contestame junto:\n"
-            "1) ¿Categoría? (opciones: Hogar, Comida, Mascotas)\n"
-            "2) ¿Con qué tarjeta? (opciones: Visa, Mastercard Débito)"
-        )
-        self.assertEqual(salida["mensaje"], esperado)
-
-    def test_pregunta_tarjeta_ambigua_por_nombre_y_categoria_en_una_sola_llamada(self):
-        # QA real de Juan (candidato s2s3-pregunta-unica, publicado en
-        # lab/reinvencion@933ea75): al probar en el grupo, la tarjeta
-        # ambigua se preguntó en un mensaje APARTE, rompiendo la regla de
-        # "una sola pregunta con todo lo que falta". Repro: 2 Visa de bancos
-        # distintos, más categoría también faltante -- UNA sola llamada a
-        # `pregunta` (sobre la salida de UNA sola llamada a `normalizar`)
-        # tiene que traer ambos campos con sus opciones reales, sin una
-        # segunda llamada para resolver solo la tarjeta.
-        with db.get_connection(self.db_path) as conn:
-            db.insert_tarjeta(conn, {
-                "id": "TC2", "nombre": "Visa", "tipo": "Crédito", "banco": "Galicia", "titular": "JD",
-            })
-        entrada = {
-            "monto": 500, "fecha": "2026-04-10", "medio_pago": "Crédito",
-            "tarjeta": "Visa", "pagado_por": "JD",
-        }
-        ruta = self._write_json(entrada)
-        codigo, normalizado = self.run_cli(["normalizar", "--tipo", "gasto", "--json", ruta])
-        self.assertEqual(codigo, 0)
-        self.assertEqual(normalizado["campos_faltantes"], ["categoria", "tarjeta"])
-        self.assertEqual(
-            sorted(t["id"] for t in normalizado["tarjetas_candidatas"]), ["TC1", "TC2"],
-        )
-
-        ruta_normalizado = self._write_json(normalizado, nombre="normalizado.json")
-        codigo, salida = self.run_cli(["pregunta", "--tipo", "gasto", "--json", ruta_normalizado])
-        self.assertEqual(codigo, 0)
-        esperado = (
-            "Me falta esto para subirlo, contestame junto:\n"
-            "1) ¿Categoría? (opciones: Hogar, Comida, Mascotas)\n"
-            "2) ¿Con qué tarjeta? (opciones: Visa (BNA), Visa (Galicia))"
-        )
-        self.assertEqual(salida["mensaje"], esperado)
-
-    def test_pregunta_tarjeta_ambigua_por_banco_con_nombres_distintos_muestra_el_banco(self):
-        # Mismo bug, otra forma de la ambigüedad: dos tarjetas de nombres
-        # DISTINTOS ("Visa"/"Mastercard") del MISMO banco -- acá el nombre
-        # no colisiona, así que la etiqueta de catálogo normal (que solo
-        # desambigua si hay nombres repetidos) ocultaría justo el banco que
-        # causa la ambigüedad. Las candidatas siempre deben mostrar el
-        # banco (y últimos dígitos, si el catálogo algún día los trae --
-        # hoy `tarjetas` no tiene esa columna).
-        with db.get_connection(self.db_path) as conn:
-            db.insert_tarjeta(conn, {
-                "id": "TC2", "nombre": "Mastercard", "tipo": "Crédito", "banco": "BNA", "titular": "JD",
-            })
-        entrada = {
-            "monto": 500, "fecha": "2026-04-10", "medio_pago": "Crédito",
-            "tarjeta": "BNA", "pagado_por": "JD",
-        }
-        ruta = self._write_json(entrada)
-        codigo, normalizado = self.run_cli(["normalizar", "--tipo", "gasto", "--json", ruta])
-        self.assertEqual(codigo, 0)
-        self.assertEqual(normalizado["campos_faltantes"], ["categoria", "tarjeta"])
-
-        ruta_normalizado = self._write_json(normalizado, nombre="normalizado.json")
-        codigo, salida = self.run_cli(["pregunta", "--tipo", "gasto", "--json", ruta_normalizado])
-        self.assertEqual(codigo, 0)
-        esperado = (
-            "Me falta esto para subirlo, contestame junto:\n"
-            "1) ¿Categoría? (opciones: Hogar, Comida, Mascotas)\n"
-            "2) ¿Con qué tarjeta? (opciones: Visa (BNA), Mastercard (BNA))"
-        )
-        self.assertEqual(salida["mensaje"], esperado)
+        self.assertIn("1) ¿Categoría?", salida["mensaje"])
+        self.assertIn("2) ¿Quién pagó?", salida["mensaje"])
+        self.assertNotIn("tarjeta", salida["mensaje"].lower())
 
     def test_pregunta_tipo_proporcion_faltante_muestra_opciones_dinamico_custom(self):
         borrador = {
@@ -1459,7 +1335,7 @@ class AvisosYBorradorTests(_ApiServerTestCase):
     def test_avisos_pendientes_y_marcar_enviados(self):
         borrador = {
             "monto": 150000.0, "fecha": "2026-04-10", "categoria": "Comida",
-            "medio_pago": "Crédito", "tarjeta_id": "TC1", "pagado_por": "JD",
+            "medio_pago": "Crédito", "pagado_por": "JD",
         }
         ruta = self._write_json(borrador)
         codigo, salida = self.run_cli(["guardar", "--tipo", "gasto", "--json", ruta, "--confirmado"])

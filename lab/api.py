@@ -63,9 +63,29 @@ def _bounded_sum(values):
 
 ALLOWED_EXPENSE_FIELDS = {
     "fecha", "monto", "moneda", "categoria", "subcategoria", "medio_pago",
-    "pagado_por", "descripcion_original", "tarjeta_id", "tipo_proporcion",
+    "pagado_por", "descripcion_original", "tipo_proporcion",
     "proporcion_jd", "proporcion_pinki", "cuotas_total",
 }
+
+
+def _public_expense(row):
+    """Keep legacy database values intact while omitting card identity from HTTP."""
+    return {key: value for key, value in row.items() if key != "tarjeta_id"}
+
+
+def _public_telegram_draft(row):
+    if row is None:
+        return None
+    public = dict(row)
+    partial = public.get("payload_parcial")
+    if isinstance(partial, dict):
+        public["payload_parcial"] = {
+            key: value for key, value in partial.items()
+            if key not in ("tarjeta", "tarjeta_id", "banco")
+        }
+    if public.get("campo_pendiente") in ("tarjeta", "tarjeta_id", "banco"):
+        public["campo_pendiente"] = None
+    return public
 # PATCH /api/expenses/:id (t_b5c6e680, punto 3): mismo set que
 # `ALLOWED_EXPENSE_FIELDS` menos `cuotas_total` -- ver justificación en
 # `db.GASTO_CAMPOS_EDITABLES`. Debe seguir en sync con esa constante.
@@ -328,7 +348,6 @@ class _App:
         ("GET", re.compile(r"^/api/categories$"), "list_categories"),
         # --- Telegram (brief S2/S3, T2): rutas internas, no se agregan al
         # proxy de Vercel (middleware.js no se toca).
-        ("GET", re.compile(r"^/api/tarjetas$"), "list_tarjetas"),
         ("POST", re.compile(r"^/api/expenses/telegram$"), "create_expense_telegram"),
         ("POST", re.compile(r"^/api/income/telegram$"), "create_income_telegram"),
         ("GET", re.compile(r"^/api/comprobantes/dedupe$"), "comprobantes_dedupe"),
@@ -548,7 +567,7 @@ class _App:
             rows = [row for row in rows if (row.get("fecha") or "")[:7] == month]
         for row in rows:
             _stored_money(row["monto"])
-        return self._json(start_response, 200, {"expenses": rows})
+        return self._json(start_response, 200, {"expenses": [_public_expense(row) for row in rows]})
 
     def create_expense(self, ctx, conn, start_response):
         data, err = self._parse_json(ctx, start_response)
@@ -560,7 +579,7 @@ class _App:
         if "fecha" in data and not _is_iso_date(data["fecha"]):
             return self._error(start_response, 400, "fecha debe ser 'YYYY-MM-DD' válida.")
         if not _valid_optional_strings(data, {
-            "moneda", "subcategoria", "medio_pago", "descripcion_original", "tarjeta_id",
+            "moneda", "subcategoria", "medio_pago", "descripcion_original",
         }):
             return self._error(start_response, 400, "campos de texto inválidos.")
         errores = validaciones.validar_expense(data)
@@ -591,7 +610,7 @@ class _App:
         creados = [row for row in db.get_gastos(conn) if row["id"] in ids]
         avisos_nuevos = self._avisos_credito_por_alta_o_baja(conn, gasto.get("medio_pago"), creados)
         return self._json(start_response, 201, {
-            "expenses": creados, "avisos_credito_nuevos": avisos_nuevos,
+            "expenses": [_public_expense(row) for row in creados], "avisos_credito_nuevos": avisos_nuevos,
         })
 
     @staticmethod
@@ -624,7 +643,7 @@ class _App:
         if "fecha" in data and not _is_iso_date(data["fecha"]):
             return self._error(start_response, 400, "fecha debe ser 'YYYY-MM-DD' válida.")
         if not _valid_optional_strings(data, {
-            "moneda", "subcategoria", "medio_pago", "descripcion_original", "tarjeta_id",
+            "moneda", "subcategoria", "medio_pago", "descripcion_original",
         }):
             return self._error(start_response, 400, "campos de texto inválidos.")
 
@@ -648,7 +667,7 @@ class _App:
             return self._error(start_response, 409, "no se pudo editar el gasto.")
 
         actualizado = next(row for row in db.get_gastos(conn) if row["id"] == gasto_id)
-        return self._json(start_response, 200, {"expense": actualizado})
+        return self._json(start_response, 200, {"expense": _public_expense(actualizado)})
 
     def delete_expense(self, ctx, conn, start_response):
         gasto_id = int(ctx.path_params["id"])
@@ -692,7 +711,7 @@ class _App:
                 return self._error(start_response, 404, f"no existe gasto id={gasto_id}.")
             return self._error(start_response, 409, mensaje)
         _stored_money(actualizada["monto"])
-        return self._json(start_response, 200, {"expense": actualizada})
+        return self._json(start_response, 200, {"expense": _public_expense(actualizada)})
 
     def saldar_todas_expenses(self, ctx, conn, start_response):
         # Mismo patrón atómico que db.saldar_gasto: db.saldar_todas_las_deudas
@@ -708,7 +727,7 @@ class _App:
         except ValueError as exc:
             return self._error(start_response, 409, str(exc))
         return self._json(start_response, 200, {
-            "expenses": resultado["expenses"],
+            "expenses": [_public_expense(row) for row in resultado["expenses"]],
             "count": resultado["count"],
             "total": resultado["total"],
         })
@@ -1247,12 +1266,6 @@ class _App:
     # errores y las mismas validaciones de las rutas equivalentes sin
     # `/telegram`.
 
-    def list_tarjetas(self, ctx, conn, start_response):
-        unknown = self._unknown_fields(ctx.query.keys(), set())
-        if unknown:
-            return self._error(start_response, 400, "parámetros de query desconocidos.")
-        return self._json(start_response, 200, {"tarjetas": db.get_tarjetas(conn)})
-
     def create_expense_telegram(self, ctx, conn, start_response):
         data, err = self._parse_json(ctx, start_response)
         if err is not None:
@@ -1268,12 +1281,10 @@ class _App:
             return self._error(start_response, 400, "pagado_por es obligatorio.")
         if data.get("medio_pago") not in ("Crédito", "Débito", "Efectivo", "Transferencia"):
             return self._error(start_response, 400, "medio_pago es obligatorio o inválido.")
-        if data["medio_pago"] in ("Crédito", "Débito") and not data.get("tarjeta_id"):
-            return self._error(start_response, 400, "tarjeta_id es obligatorio para tarjeta.")
         if "fecha" in data and not _is_iso_date(data["fecha"]):
             return self._error(start_response, 400, "fecha debe ser 'YYYY-MM-DD' válida.")
         if not _valid_optional_strings(data, {
-            "moneda", "subcategoria", "medio_pago", "descripcion_original", "tarjeta_id",
+            "moneda", "subcategoria", "medio_pago", "descripcion_original",
         }):
             return self._error(start_response, 400, "campos de texto inválidos.")
         if not _valid_optional_telegram_ids(data, TELEGRAM_ID_FIELDS):
@@ -1313,7 +1324,7 @@ class _App:
         creados = [row for row in db.get_gastos(conn) if row["id"] in gasto_ids]
         avisos_nuevos = self._avisos_credito_por_alta_o_baja(conn, gasto.get("medio_pago"), creados)
 
-        respuesta = {"expenses": creados, "avisos_credito_nuevos": avisos_nuevos}
+        respuesta = {"expenses": [_public_expense(row) for row in creados], "avisos_credito_nuevos": avisos_nuevos}
         if resultado["comprobante_id"] is not None:
             respuesta["comprobante"] = self._comprobante_por_id(conn, resultado["comprobante_id"])
         return self._json(start_response, 201, respuesta)
@@ -1464,7 +1475,7 @@ class _App:
             return self._error(start_response, 400, "chat es obligatorio.")
         usuario = ctx.query_param("usuario") or None
         estado = db.get_estado(conn, chat, usuario=usuario)
-        return self._json(start_response, 200, {"borrador": estado})
+        return self._json(start_response, 200, {"borrador": _public_telegram_draft(estado)})
 
     def set_telegram_borrador(self, ctx, conn, start_response):
         chat = ctx.query_param("chat")
@@ -1489,6 +1500,10 @@ class _App:
         payload_parcial = data.get("payload_parcial")
         if payload_parcial is not None and not isinstance(payload_parcial, dict):
             return self._error(start_response, 400, "payload_parcial debe ser un objeto.")
+        if isinstance(payload_parcial, dict):
+            payload_parcial = _public_telegram_draft({"payload_parcial": payload_parcial})["payload_parcial"]
+        if campo_pendiente in ("tarjeta", "tarjeta_id", "banco"):
+            campo_pendiente = None
         mensaje_original = data.get("mensaje_original")
         if mensaje_original is not None and not isinstance(mensaje_original, str):
             return self._error(start_response, 400, "mensaje_original debe ser texto.")
@@ -1502,7 +1517,7 @@ class _App:
             usuario=usuario, intent_detectado=intent_detectado,
         )
         nuevo = db.get_estado(conn, chat, usuario=usuario)
-        return self._json(start_response, 200, {"borrador": nuevo})
+        return self._json(start_response, 200, {"borrador": _public_telegram_draft(nuevo)})
 
     def clear_telegram_borrador(self, ctx, conn, start_response):
         chat = ctx.query_param("chat")

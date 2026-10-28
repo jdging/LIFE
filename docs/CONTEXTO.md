@@ -1,5 +1,9 @@
 # Contexto Actual - LIFE
 
+## Estado candidato F2 punto 8 — 2026-10-27
+
+En `lab/reinvencion` candidato `f2-tarjeta`, el dashboard de laboratorio, la API local y `telegram_ingesta.py` dejan de solicitar o mostrar identificación de tarjeta/banco en los gastos. Se mantienen `medio_pago` Crédito/Débito y `cuotas_total`; Telegram conserva la pregunta consolidada de faltantes y la confirmación explícita. La tabla y columna históricas permanecen en SQLite, sin migración destructiva. Las respuestas de gastos de la API y los futuros exports omiten `tarjeta_id`; el catálogo `/api/tarjetas` se retira del contrato. El procedimiento candidato está en `lab/PROCEDIMIENTO-TELEGRAM-F2.md`, con pasos para actualizar el procedimiento externo. `src/lab-dashboard/data/gastos.json` se regeneró sin `tarjeta_id` (189 filas, sin otros cambios; la base SQLite no se tocó). Pruebas sintéticas verdes (pytest 642, node 21). Procedimiento externo actualizado. No hubo despliegue ni modificación de producción.
+
 > Ultima actualizacion: 2026-06-02 (Sesion 30)
 
 ## Que es LIFE

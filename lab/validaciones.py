@@ -154,10 +154,6 @@ def validar_telegram_expense(payload: dict) -> list:
     medio = payload.get("medio_pago")
     if medio not in MEDIOS_PAGO_VALIDOS:
         errores.append("medio_pago explícito es obligatorio para Telegram.")
-    if medio in ("Crédito", "Débito") and not isinstance(payload.get("tarjeta_id"), str):
-        errores.append("tarjeta_id es obligatoria para Crédito o Débito.")
-    elif medio in ("Crédito", "Débito") and not payload["tarjeta_id"].strip():
-        errores.append("tarjeta_id es obligatoria para Crédito o Débito.")
     return errores
 
 

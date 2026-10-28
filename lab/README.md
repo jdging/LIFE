@@ -41,6 +41,7 @@ pensada para que el sistema pueda crear categorías nuevas sobre la marcha si ap
 catalogado en una conversación real (pedido explícito de Juan).
 
 ### Tarjetas y reparto de gastos (JD/Pinki)
+> Estado F2 (candidato): el flujo nuevo de web/API/Telegram ya no pide ni expone identificación de tarjeta o banco. Esta sección describe el esquema histórico conservado por compatibilidad; ver `PROCEDIMIENTO-TELEGRAM-F2.md`.
 Tabla `tarjetas`: portada de la hoja `Tarjetas` real, con dos columnas nuevas:
 - `es_default_dinamico`: a lo sumo una tarjeta puede tenerlo en 1 — la tarjeta a usar por
   defecto cuando el reparto es dinámico y no se aclaró medio de pago.

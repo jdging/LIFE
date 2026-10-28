@@ -37,18 +37,18 @@ def test_resumen_borrador_incluye_descripcion_cuando_esta_presente():
         "medio_pago": "Efectivo", "pagado_por": "JD", "cuotas_total": 1,
         "descripcion_original": "Panadería Distinción",
     }
-    resumen = telegram_ingesta._resumen_borrador("gasto", borrador, tarjetas=[])
+    resumen = telegram_ingesta._resumen_borrador("gasto", borrador)
     assert "Panadería Distinción" in resumen
 
     sin_descripcion = {k: v for k, v in borrador.items() if k != "descripcion_original"}
-    resumen_sin_descripcion = telegram_ingesta._resumen_borrador("gasto", sin_descripcion, tarjetas=[])
+    resumen_sin_descripcion = telegram_ingesta._resumen_borrador("gasto", sin_descripcion)
     assert "Panadería" not in resumen_sin_descripcion
 
     borrador_ingreso = {
         "monto": 50.0, "fecha": "2026-10-20", "categoria": "Extra", "persona": "JD",
         "descripcion_original": "Venta de bici",
     }
-    resumen_ingreso = telegram_ingesta._resumen_borrador("ingreso", borrador_ingreso, tarjetas=[])
+    resumen_ingreso = telegram_ingesta._resumen_borrador("ingreso", borrador_ingreso)
     assert "Venta de bici" in resumen_ingreso
 
 
@@ -568,8 +568,6 @@ class TelegramApiTest(WsgiApiTestCase):
             "telegram_message_id": "42", "medio_pago": "Efectivo", "confirmado": True,
         })
         payload.update(changes)
-        if payload.get("medio_pago") in ("Crédito", "Débito") and "tarjeta_id" not in changes:
-            payload["tarjeta_id"] = "TC1"
         return payload
 
     def income_telegram(self, **changes):
@@ -609,7 +607,6 @@ class TelegramApiTest(WsgiApiTestCase):
             ("/api/expenses/telegram", self.expense_telegram(), "pagado_por"),
             ("/api/expenses/telegram", self.expense_telegram(), "fecha"),
             ("/api/expenses/telegram", self.expense_telegram(), "medio_pago"),
-            ("/api/expenses/telegram", self.expense_telegram(medio_pago="Crédito"), "tarjeta_id"),
             ("/api/income/telegram", self.income_telegram(), "confirmado"),
             ("/api/income/telegram", self.income_telegram(), "fecha"),
             ("/api/income/telegram", self.income_telegram(), "persona"),
@@ -942,19 +939,46 @@ class TelegramApiTest(WsgiApiTestCase):
             self.request("POST", "/api/income/telegram", self.income_telegram(), auth=False)[0],
             401,
         )
-        self.assertEqual(self.request("GET", "/api/tarjetas", auth=False)[0], 401)
         self.assertEqual(
             self.request("GET", "/api/comprobantes/dedupe?hash=x", auth=False)[0], 401,
         )
 
-    def test_list_tarjetas(self):
+    def test_card_catalog_is_not_exposed(self):
+        status, _, _ = self.request("GET", "/api/tarjetas")
+        self.assertEqual(status, 404)
+
+    def test_credito_sin_tarjeta_con_cuotas_y_confirmacion(self):
+        payload = self.expense_telegram(medio_pago="Crédito", cuotas_total=2, monto=200)
+        self.assertEqual(self.request("POST", "/api/expenses/telegram", {**payload, "confirmado": False})[0], 400)
+        status, body, _ = self.request("POST", "/api/expenses/telegram", payload)
+        self.assertEqual(status, 201)
+        self.assertEqual(len(body["expenses"]), 2)
+        self.assertTrue(all(row["medio_pago"] == "Crédito" for row in body["expenses"]))
+        self.assertTrue(all("tarjeta_id" not in row for row in body["expenses"]))
+        self.assertEqual({row["cuota_nro"] for row in body["expenses"]}, {1, 2})
+
+    def test_identificacion_legacy_no_se_acepta_ni_se_expone(self):
+        payload = self.expense_telegram(medio_pago="Débito", tarjeta_id="TC1")
+        self.assertEqual(self.request("POST", "/api/expenses/telegram", payload)[0], 400)
+        self.assertEqual(self.request("POST", "/api/expenses", self.expense(tarjeta_id="TC1"))[0], 400)
         with db.get_connection(self.db_path) as conn:
-            db.insert_tarjeta(conn, {
-                "id": "TC2", "nombre": "Mastercard", "tipo": "Crédito", "titular": "JD",
-            })
-        status, body, _ = self.request("GET", "/api/tarjetas")
+            db.insert_gasto(conn, {**self.expense(), "tarjeta_id": "TC1", "confirmado": True})
+        status, body, _ = self.request("GET", "/api/expenses")
         self.assertEqual(status, 200)
-        self.assertEqual({t["id"] for t in body["tarjetas"]}, {"TC1", "TC2"})
+        self.assertTrue(body["expenses"])
+        self.assertTrue(all("tarjeta_id" not in row for row in body["expenses"]))
+
+    def test_borrador_legacy_oculta_identificacion_sin_alterar_historico(self):
+        with db.get_connection(self.db_path) as conn:
+            db.set_estado(conn, "chat-legacy", estado="pendiente", campo_pendiente="tarjeta",
+                          payload_parcial={"monto": 100, "tarjeta_id": "TC1"}, usuario="user-1")
+        status, body, _ = self.request("GET", "/api/telegram/borrador?chat=chat-legacy&usuario=user-1")
+        self.assertEqual(status, 200)
+        self.assertIsNone(body["borrador"]["campo_pendiente"])
+        self.assertEqual(body["borrador"]["payload_parcial"], {"monto": 100})
+        with db.get_connection(self.db_path) as conn:
+            stored = db.get_estado(conn, "chat-legacy", usuario="user-1")
+        self.assertEqual(stored["payload_parcial"]["tarjeta_id"], "TC1")
 
     def test_comprobantes_dedupe_route(self):
         status, body, _ = self.request(

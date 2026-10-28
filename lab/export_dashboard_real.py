@@ -74,7 +74,8 @@ def exportar_gastos_fijos(conn) -> list:
 def main() -> None:
     conn = db.get_connection()
 
-    gastos = [g for g in db.get_gastos(conn) if es_gasto_real(g)]
+    gastos = [{key: value for key, value in g.items() if key != "tarjeta_id"}
+              for g in db.get_gastos(conn) if es_gasto_real(g)]
     ingresos = db.get_ingresos(conn)
     gastos_fijos = exportar_gastos_fijos(conn)
     deuda_pendiente = dict(db.calcular_deudas_pendientes(conn))
