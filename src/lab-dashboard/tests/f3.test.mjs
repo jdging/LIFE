@@ -8,6 +8,7 @@ import { runInNewContext } from 'node:vm';
 
 const source = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const pure = source.slice(0, source.indexOf('function fijosDateLabel('));
 const elements = new Map();
 function element(id) {
@@ -35,7 +36,8 @@ ${source.slice(source.indexOf('function renderCuotasDetail('), source.indexOf('/
   setFilter(value) { personaFiltro = value; fijosPersonaFiltro = value; },
   setIncomeFilter(value) { incomePersonaFiltro = value; },
   setPeriod(value) { period = value; },
-  renderComposicion, toggleChartPanel, renderGastosPie, renderGastosBar, renderSubcatChart, renderIncomeLines,
+  renderComposicion, toggleChartPanel, renderGastosPie, renderGastosBar, handleGastosBarMonthsChange,
+  renderSubcatChart, renderIncomeLines,
   renderFijosDetail, renderCuotasDetail, renderCreditoDetail })`, {
   document,
   renderChart(key, canvas, config) { element('chart-config-' + key).config = config; },
@@ -95,10 +97,29 @@ api.renderComposicion(31, 31, 18.6);
 assert.match(element('comp-total').textContent, /Total.*80,6/);
 assert.equal(Number(element('comp-seg-cuotas').style.width.slice(0, -1)).toFixed(2), (18.6 / 80.6 * 100).toFixed(2));
 assert.match(element('comp-legend').innerHTML, /Cuotas/);
-assert.match(element('composicion-bar').attributes['aria-label'], /Cuotas.*18,6/);
+assert.equal((element('comp-legend').innerHTML.match(/Cuotas/g) || []).length, 1, 'Cuotas se rotula una sola vez');
+assert.match(element('comp-legend').innerHTML, /Cuotas[\s\S]*18,6/);
+assert.match(html, /class="composicion-bar" aria-hidden="true"/);
+assert.match(html, /id="comp-legend" role="list" aria-label="Desglose de la composición del gasto"/);
+assert.doesNotMatch(html, /id="comp-labels-row"/, 'No hay una segunda fila de rótulos');
+assert.equal(element('composicion-bar').attributes['aria-label'], undefined, 'La barra visual no duplica los datos accesibles');
 api.renderComposicion(999, 0, 1);
 assert.equal(element('comp-seg-cuotas').style.width, '1%', 'Una cuota pequeña sigue visible en la barra');
 assert.equal(element('comp-seg-var').style.width, '99%', 'La barra conserva ancho total de 100%');
+assert.match(element('comp-legend').innerHTML, /Cuotas[\s\S]*\$\s*1</, 'La etiqueta y monto de cuotas pequeñas se leen en la leyenda');
+assert.match(element('comp-legend').innerHTML, /Cuotas[\s\S]*menos de 1%/, 'Una proporción pequeña no se anuncia como cero');
+assert.equal((element('comp-legend').innerHTML.match(/Cuotas/g) || []).length, 1);
+assert.equal(element('comp-seg-cuotas').attributes['aria-label'], undefined);
+assert.match(element('comp-total').textContent, /1\.000/, 'El mínimo visual no altera el total');
+api.renderComposicion(1000, 0, 0);
+assert.match(element('comp-legend').innerHTML, /Cuotas[\s\S]*\$\s*0</);
+assert.match(element('comp-legend').innerHTML, /Cuotas[\s\S]*\(0%\)/);
+assert.equal((element('comp-legend').innerHTML.match(/Cuotas/g) || []).length, 1, 'Cero sigue rotulado una vez');
+assert.equal(element('comp-seg-cuotas').style.width, '0%', 'Cero no se transforma en monto positivo');
+api.renderComposicion(0, 0, 0);
+assert.match(element('comp-legend').innerHTML, /Cuotas[\s\S]*\$\s*0</);
+assert.match(element('comp-total').textContent, /\$\s*0/);
+assert.match(css, /\.composicion-legend\s*\{[^}]*display:\s*flex/s);
 
 api.setFilter('pinki_comun');
 api.renderFijosDetail();
@@ -112,6 +133,14 @@ assert.match(element('credito-detail-inner').innerHTML, /Alquiler · fijo[\s\S]*
 
 assert.match(html, /id="gastos-pie-body" hidden/);
 assert.match(html, /id="gastos-bar-body" hidden/);
+assert.match(html, /<h2 id="gastos-bar-title">Últimos 6 meses<\/h2>/, 'El título conserva su semántica de encabezado sin anunciar cambios');
+assert.doesNotMatch(html, /<h2 id="gastos-bar-title"[^>]*aria-live=/, 'El título no duplica la región viva');
+assert.match(html, /<p id="gastos-bar-range" class="chart-range-note">Calculando rango…<\/p>/, 'El rango tiene un subtítulo visible');
+assert.equal((html.slice(html.indexOf('id="gastos-bar-title"'), html.indexOf('id="gastos-bar-body"')).match(/aria-live=/g) || []).length,
+  1, 'El control de meses conserva una sola región viva');
+assert.match(html, /<label[^>]*for="gastos-bar-months"[^>]*>Meses a comparar <input type="number" id="gastos-bar-months"[^>]*min="1" max="24" step="1" value="6"[^>]*aria-describedby="gastos-bar-months-help gastos-bar-months-status"/);
+assert.match(html, /id="gastos-bar-months-status" role="status" aria-live="polite"/);
+assert.match(css, /\.chart-filter-label \.chart-months-input:focus-visible/);
 assert.match(html, /id="inc-lines-body" hidden/);
 assert.match(source, /id="fijos-evolution-body" hidden/);
 for (const name of ['gastosPie', 'gastosBar', 'incLines']) {
@@ -161,9 +190,85 @@ assert.match(element('chart-inc-lines-data').innerHTML, /\$\s*0/);
 api.setPeriod({ from: '2026-01-01', to: '2026-02-28' });
 api.renderGastosBar();
 assert.equal(element('chart-config-gastos-bar').config.data.labels.length, 2, 'Gráfico de gastos respeta el período');
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-01-01 a 2026-02-28.');
 assert.equal(element('chart-config-gastos-bar').config.data.datasets[0].data[0], 130.6, 'La barra suma variable, cuota y fijo una vez');
 assert.match(element('chart-gastos-bar-data').innerHTML, /2026-01[\s\S]*\$\s*130,6/);
 assert.match(element('chart-gastos-bar-data').innerHTML, /2026-02/);
+element('gastos-bar-body').hidden = false;
+const monthsInput = element('gastos-bar-months');
+const monthsStatus = element('gastos-bar-months-status');
+const statusWrites = [];
+let statusText = monthsStatus.textContent;
+Object.defineProperty(monthsStatus, 'textContent', {
+  get() { return statusText; },
+  set(value) { statusText = value; statusWrites.push(value); },
+});
+monthsInput.value = '1';
+api.handleGastosBarMonthsChange(monthsInput);
+assert.equal(statusWrites.length, 1, 'Un cambio válido con el gráfico abierto anuncia el estado una sola vez');
+assert.equal(element('gastos-bar-title').textContent, 'Último mes');
+assert.equal(element('chart-config-gastos-bar').config.data.labels.length, 1);
+assert.doesNotMatch(element('chart-gastos-bar-data').innerHTML, /<th scope="row">2026-01<\/th>/);
+assert.match(element('chart-gastos-bar-data').innerHTML, /2026-02/);
+assert.match(element('chart-gastos-bar').attributes['aria-label'], /1 mes/);
+assert.match(element('gastos-bar-months-status').textContent, /1 mes/);
+api.renderGastosBar();
+assert.equal(statusWrites.length, 1, 'Volver a renderizar el mismo rango no repite el anuncio');
+api.setPeriod({ from: '2026-01-15', to: '2026-09-20' });
+for (const [quantity, expected] of [[3, 3], [6, 6], [9, 9], [24, 9]]) {
+  monthsInput.value = String(quantity);
+  api.handleGastosBarMonthsChange(monthsInput);
+  assert.equal(element('chart-config-gastos-bar').config.data.labels.length, expected);
+  assert.equal(element('gastos-bar-title').textContent,
+    `Últimos ${quantity} meses${quantity === expected ? '' : ` (${expected} meses mostrados)`}`);
+  assert.match(element('chart-gastos-bar-data').innerHTML,
+    new RegExp(`Se solicitaron ${quantity} meses y se muestran ${expected} meses`));
+  assert.match(element('chart-gastos-bar').attributes['aria-label'], /2026-01-15 a 2026-09-20/);
+}
+assert.match(element('chart-gastos-bar').attributes['aria-label'], /Rango mostrado: 2026-01-15 a 2026-09-20/);
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-01-15 a 2026-09-20.');
+monthsInput.value = '3';
+api.handleGastosBarMonthsChange(monthsInput);
+assert.doesNotMatch(element('chart-gastos-bar-data').innerHTML, /<th scope="row">2026-06<\/th>/, 'Tres meses recortan los anteriores');
+assert.match(element('chart-gastos-bar-data').innerHTML, /<th scope="row">2026-07<\/th>/);
+assert.match(element('chart-gastos-bar').attributes['aria-label'], /Rango mostrado: 2026-07-01 a 2026-09-20/);
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-07-01 a 2026-09-20.');
+monthsInput.value = '24';
+api.handleGastosBarMonthsChange(monthsInput);
+assert.doesNotMatch(element('chart-gastos-bar-data').innerHTML, /2026-01-10/, 'El corte de inicio excluye ingresos anteriores');
+assert.match(element('chart-gastos-bar-data').innerHTML, /<th scope="row">2026-01<\/th>/);
+assert.equal(element('chart-config-gastos-bar').config.data.datasets[1].data[0], 0, 'El inicio parcial excluye ingresos previos al día 15');
+api.setPeriod({ from: '2026-01-15', to: '2026-09-05' });
+api.renderGastosBar();
+assert.equal(element('chart-config-gastos-bar').config.data.datasets[1].data.at(-1), 0, 'El fin parcial excluye ingresos posteriores al día 5');
+const previousConfig = element('chart-config-gastos-bar').config;
+for (const invalid of ['0', '25', '2.5', '1e2', '']) {
+  monthsInput.value = invalid;
+  const writesBeforeInvalid = statusWrites.length;
+  api.handleGastosBarMonthsChange(monthsInput);
+  assert.equal(statusWrites.length, writesBeforeInvalid + 1, 'Cada entrada inválida recibe feedback en la única región viva');
+  assert.equal(monthsInput.value, '24', 'Un valor inválido vuelve al último valor válido');
+  assert.equal(element('chart-config-gastos-bar').config, previousConfig, 'No se recalcula con cantidad inválida');
+  assert.match(element('gastos-bar-months-status').textContent, /Cantidad inválida/);
+}
+monthsInput.value = '6';
+api.handleGastosBarMonthsChange(monthsInput);
+assert.equal(element('chart-config-gastos-bar').config.data.labels.length, 6);
+api.setPeriod({ from: '2026-01-15', to: '2026-06-20' });
+api.renderGastosBar();
+assert.equal(element('chart-config-gastos-bar').config.data.labels.length, 6);
+assert.equal(element('gastos-bar-title').textContent, 'Últimos 6 meses');
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-01-15 a 2026-06-20.');
+api.setPeriod({ from: '2026-04-10', to: '2026-09-05' });
+api.renderGastosBar();
+assert.equal(element('chart-config-gastos-bar').config.data.labels.length, 6, 'Dos períodos distintos muestran la misma cantidad de meses');
+assert.equal(element('gastos-bar-title').textContent, 'Últimos 6 meses');
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-04-10 a 2026-09-05.', 'El subtítulo distingue los períodos');
+api.setFilter('pinki');
+api.renderGastosBar();
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-04-10 a 2026-09-05.', 'La selección de persona conserva el rango efectivo');
+api.setPeriod({ from: '2026-01-01', to: '2026-02-28' });
+api.renderGastosBar();
 api.setFilter('jd');
 api.renderGastosBar();
 assert.match(element('chart-gastos-bar-data').innerHTML, /Persona: JD/);
@@ -228,5 +333,49 @@ assert.match(element('fijos-evolution-chart-data').innerHTML, /2026-01[\s\S]*\$\
 assert.match(element('fijos-evolution-chart-data').innerHTML, /2026-02[\s\S]*\$\s*20/);
 assert.match(element('fijos-evolution-chart-data').innerHTML, /2026-03[\s\S]*\$\s*0/);
 assert.match(element('fijos-evolution-chart').attributes['aria-label'], /JD\+Común/);
+
+api.setFilter('comun');
+api.setPeriod({ from: '2026-02-01', to: '2026-02-28' });
+element('gastos-bar-body').hidden = false;
+for (const quantity of [1, 6, 24]) {
+  monthsInput.value = String(quantity);
+  api.handleGastosBarMonthsChange(monthsInput);
+  assert.equal(element('chart-config-gastos-bar').config.data.labels.length, 1);
+  assert.equal(element('gastos-bar-title').textContent,
+    quantity === 1 ? 'Último mes' : `Últimos ${quantity} meses (1 mes mostrado)`);
+  assert.match(element('chart-gastos-bar').attributes['aria-label'],
+    new RegExp(`Se ${quantity === 1 ? 'solicitó' : 'solicitaron'} ${quantity} ${quantity === 1 ? 'mes' : 'meses'} y se muestra 1 mes`));
+  assert.match(element('chart-gastos-bar').attributes['aria-label'], /Rango mostrado: 2026-02-01 a 2026-02-28/);
+}
+
+const originalGastos = api.DATA.gastos;
+const originalFijos = api.DATA.fijos;
+const originalIngresos = api.DATA.ingresos;
+api.DATA.gastos = [];
+api.DATA.fijos = [];
+api.DATA.ingresos = [];
+api.setPeriod({ from: '2026-04-01', to: '2026-09-30' });
+monthsInput.value = '6';
+api.handleGastosBarMonthsChange(monthsInput);
+assert.equal(element('chart-config-gastos-bar').config.data.labels.length, 6, 'Meses sin movimientos conservan barras con cero');
+assert.ok(element('chart-config-gastos-bar').config.data.datasets.every((dataset) => dataset.data.every((amount) => amount === 0)));
+assert.equal(element('gastos-bar-title').textContent, 'Últimos 6 meses');
+assert.equal(element('gastos-bar-range').textContent, 'Rango mostrado: 2026-04-01 a 2026-09-30.');
+api.DATA.gastos = originalGastos;
+api.DATA.fijos = originalFijos;
+api.DATA.ingresos = originalIngresos;
+
+api.setPeriod({ from: null, to: null });
+for (const quantity of [1, 6, 24]) {
+  monthsInput.value = String(quantity);
+  api.handleGastosBarMonthsChange(monthsInput);
+  assert.equal(element('chart-config-gastos-bar').config.data.labels.length, 0);
+  assert.equal(element('gastos-bar-title').textContent,
+    quantity === 1 ? '1 mes solicitado (0 meses mostrados)' : `Últimos ${quantity} meses (0 meses mostrados)`);
+  assert.match(element('chart-gastos-bar-data').innerHTML, /No hay meses para mostrar en el período seleccionado/);
+  assert.match(element('chart-gastos-bar').attributes['aria-label'], /se muestran 0 meses/);
+  assert.match(element('gastos-bar-months-status').textContent, /se muestran 0 meses/);
+  assert.equal(element('gastos-bar-range').textContent, 'No hay meses para mostrar en el período seleccionado.');
+}
 
 console.log('F3: cuotas, filtros, reparto mensual, controles y rango: OK');

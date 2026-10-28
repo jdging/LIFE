@@ -124,14 +124,13 @@
 
       <section class="panel composicion-wrap">
         <h2>Composición del gasto</h2>
-        <div class="composicion-labels-row" id="comp-labels-row"></div>
-        <div class="composicion-bar" role="img" aria-label="Composición del gasto">
+        <div class="composicion-bar" aria-hidden="true">
           <div class="composicion-seg composicion-seg-fijos" id="comp-seg-fijos" style="width:0%"></div>
           <div class="composicion-seg composicion-seg-var" id="comp-seg-var" style="width:0%"></div>
           <div class="composicion-seg composicion-seg-cuotas" id="comp-seg-cuotas" style="width:0%"></div>
         </div>
         <p class="composicion-total" id="comp-total">Total $0</p>
-        <div class="composicion-legend" id="comp-legend"></div>
+        <div class="composicion-legend" id="comp-legend" role="list" aria-label="Desglose de la composición del gasto"></div>
       </section>
 
       <section class="charts-grid">
@@ -152,12 +151,21 @@
           </div>
         </div>
         <div class="panel">
-          <div class="panel-title-row">
-            <h2>Últimos 6 meses</h2>
-            <div class="panel-title-actions"><label class="chart-filter-label">Persona <select class="gastos-persona-select" aria-label="Filtrar gráfico de gastos de seis meses por persona" onchange="setPersonaFiltro(this.value)"><option value="comun">Comunes</option><option value="jd_comun">JD+Común</option><option value="jd">JD</option><option value="pinki_comun">Pinki+Común</option><option value="pinki">Pinki</option></select></label><button type="button" class="btn-chart-toggle" id="gastos-bar-show" aria-label="Mostrar gráfico de gastos e ingresos mensuales" aria-expanded="false" aria-controls="gastos-bar-body" onclick="toggleChartPanel('gastosBar')">Mostrar gráfico</button></div>
+          <div class="panel-title-row gastos-bar-title-row">
+            <div class="chart-title-group">
+              <h2 id="gastos-bar-title">Últimos 6 meses</h2>
+              <p id="gastos-bar-range" class="chart-range-note">Calculando rango…</p>
+            </div>
+            <div class="panel-title-actions">
+              <label class="chart-filter-label" for="gastos-bar-months">Meses a comparar <input type="number" id="gastos-bar-months" class="chart-months-input" min="1" max="24" step="1" value="6" aria-describedby="gastos-bar-months-help gastos-bar-months-status" onchange="handleGastosBarMonthsChange(this)"></label>
+              <span class="sr-only" id="gastos-bar-months-help">Elegí entre 1 y 24 meses del período seleccionado.</span>
+              <span class="sr-only" id="gastos-bar-months-status" role="status" aria-live="polite"></span>
+              <label class="chart-filter-label">Persona <select class="gastos-persona-select" aria-label="Filtrar gráfico de gastos e ingresos por persona" onchange="setPersonaFiltro(this.value)"><option value="comun">Comunes</option><option value="jd_comun">JD+Común</option><option value="jd">JD</option><option value="pinki_comun">Pinki+Común</option><option value="pinki">Pinki</option></select></label>
+              <button type="button" class="btn-chart-toggle" id="gastos-bar-show" aria-label="Mostrar gráfico de gastos e ingresos mensuales" aria-expanded="false" aria-controls="gastos-bar-body" onclick="toggleChartPanel('gastosBar')">Mostrar gráfico</button>
+            </div>
           </div>
           <div class="chart-panel-body" id="gastos-bar-body" hidden>
-            <canvas id="chart-gastos-bar" role="img" aria-label="Gastos e ingresos de los últimos seis meses" aria-describedby="chart-gastos-bar-data"></canvas>
+            <canvas id="chart-gastos-bar" role="img" aria-label="Gastos e ingresos de los últimos 6 meses" aria-describedby="chart-gastos-bar-data"></canvas>
             <details class="chart-data" id="chart-gastos-bar-data"><summary>Ver datos mensuales de gastos e ingresos</summary></details>
           </div>
         </div>

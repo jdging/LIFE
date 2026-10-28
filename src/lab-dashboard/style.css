@@ -450,10 +450,38 @@ button.card:active {
   margin-bottom: 0;
 }
 
+.gastos-bar-title-row {
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.chart-title-group {
+  min-width: 0;
+}
+
+.chart-range-note {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
 .panel-title-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .chart-panel-body[hidden] {
@@ -611,27 +639,6 @@ button.card:active {
 
 /* ---- Composición del gasto ---- */
 
-.composicion-labels-row {
-  display: flex;
-  margin-bottom: 4px;
-}
-
-.composicion-label-item {
-  display: flex;
-  flex-direction: column;
-  font-size: 10.5px;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.composicion-label-name {
-  font-weight: 600;
-}
-
-.composicion-label-val {
-  color: var(--ink-faint);
-}
-
 .composicion-bar {
   display: flex;
   height: 18px;
@@ -657,6 +664,7 @@ button.card:active {
 }
 
 .chart-filter-label select,
+.chart-filter-label .chart-months-input,
 .table-filters select {
   font: inherit;
   color: var(--ink);
@@ -666,7 +674,14 @@ button.card:active {
   padding: 4px;
 }
 
+.chart-filter-label .chart-months-input {
+  width: 4.5em;
+  min-height: 44px;
+  text-align: center;
+}
+
 .chart-filter-label select:focus-visible,
+.chart-filter-label .chart-months-input:focus-visible,
 .table-filters select:focus-visible {
   outline: 2px solid var(--terracotta);
   outline-offset: 2px;

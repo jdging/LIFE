@@ -137,6 +137,10 @@ const DATA = {
 };
 const charts = {};
 let period = null;
+let gastosBarMonths = 6;
+function gastosBarMonthsLabel() {
+  return `${gastosBarMonths} ${gastosBarMonths === 1 ? 'mes' : 'meses'}`;
+}
 let currentView = 'gastos';
 // Destinos con pestaña visible en nav.view-tabs. 'inversiones' y 'presupuesto'
 // siguen en el DOM (código/panel conservado) pero switchView los ignora: no
@@ -1887,6 +1891,7 @@ document.getElementById('form-modal').addEventListener('keydown', (event) => {
 // ── VISTA GASTOS ─────────────────────────────────────────────────────────
 
 function renderGastosView() {
+  updateGastosBarRange();
   const rows = filterGastosPeriod(period.from, period.to);
   const filteredRows = applyPersonaFiltro(rows);
   const varRows = filteredRows.filter((r) => (parseInt(r.cuota_nro, 10) || 1) === 1);
@@ -2006,10 +2011,8 @@ function renderDeudaCard() {
 function renderComposicion(varTotal, fixTotal, cuotasTotal) {
   if (DATA.loadErrors.fijos) {
     ['comp-seg-fijos', 'comp-seg-var', 'comp-seg-cuotas'].forEach((id) => { document.getElementById(id).style.width = '0%'; });
-    document.getElementById('comp-labels-row').textContent = 'Composición no disponible: falta el archivo de fijos.';
     document.getElementById('comp-total').textContent = 'Total no disponible';
-    document.querySelector('.composicion-bar').setAttribute('aria-label', 'Composición no disponible: faltan datos de fijos');
-    document.getElementById('comp-legend').textContent = '';
+    document.getElementById('comp-legend').textContent = 'Composición no disponible: falta el archivo de fijos.';
     return;
   }
   const actualTotal = varTotal + fixTotal + cuotasTotal;
@@ -2018,7 +2021,10 @@ function renderComposicion(varTotal, fixTotal, cuotasTotal) {
     { name: 'Fijos', val: fixTotal, elId: 'comp-seg-fijos', color: 'var(--terracotta)' },
     { name: 'Variable', val: varTotal, elId: 'comp-seg-var', color: 'var(--mustard)' },
     { name: 'Cuotas', val: cuotasTotal, elId: 'comp-seg-cuotas', color: 'var(--plum)' },
-  ].map((s) => ({ ...s, pct: s.val / total * 100 }));
+  ].map((s) => {
+    const pct = s.val / total * 100;
+    return { ...s, pct, pctLabel: s.val > 0 && pct < 1 ? 'menos de 1%' : `${pct.toFixed(0)}%` };
+  });
   const visibleWidths = segs.map((s) => s.val > 0 ? Math.max(s.pct, 1) : 0);
   const largestIndex = segs.findIndex((s) => s.pct === Math.max(...segs.map((item) => item.pct)));
   if (actualTotal > 0) visibleWidths[largestIndex] -= visibleWidths.reduce((sum, width) => sum + width, 0) - 100;
@@ -2026,26 +2032,15 @@ function renderComposicion(varTotal, fixTotal, cuotasTotal) {
   segs.forEach((s, index) => {
     const el = document.getElementById(s.elId);
     el.style.width = visibleWidths[index] + '%';
-    el.setAttribute('aria-label', `${s.name}: ${fmtARS(s.val)}, ${s.pct.toFixed(0)}% del total`);
   });
   document.getElementById('comp-total').textContent = `Total ${fmtARS(actualTotal)}`;
-  document.querySelector('.composicion-bar').setAttribute('aria-label', `Composición del gasto: ${segs.map((s) => `${s.name} ${fmtARS(s.val)}`).join(', ')}. Total ${fmtARS(actualTotal)}`);
-
-  document.getElementById('comp-labels-row').innerHTML = segs
-    .filter((s) => s.pct > 0)
-    .map((s) => `
-      <div class="composicion-label-item" style="width:${s.pct}%">
-        <span class="composicion-label-name">${s.name}</span>
-        <span class="composicion-label-val">${fmtARSCompact(s.val)}</span>
-      </div>`)
-    .join('');
 
   document.getElementById('comp-legend').innerHTML = segs.map((s) => `
-    <div class="composicion-leg-item">
-      <span class="composicion-leg-dot" style="background:${s.color}"></span>
+    <div class="composicion-leg-item" role="listitem">
+      <span class="composicion-leg-dot" style="background:${s.color}" aria-hidden="true"></span>
       <span>${s.name}</span>
       <span class="composicion-leg-val">${fmtARS(s.val)}</span>
-      <span class="composicion-leg-pct">(${s.pct.toFixed(0)}%)</span>
+      <span class="composicion-leg-pct">(${s.pctLabel})</span>
     </div>`).join('');
 }
 
@@ -2207,20 +2202,34 @@ function toggleChartPanel(name) {
   else destroyChart(chartKey);
 }
 
-// Las barras usan hasta seis meses del período elegido. Los meses futuros sólo
+function handleGastosBarMonthsChange(input) {
+  const raw = String(input.value);
+  const months = Number(raw);
+  const status = document.getElementById('gastos-bar-months-status');
+  if (!/^\d+$/.test(raw) || !Number.isInteger(months) || months < 1 || months > 24) {
+    input.value = String(gastosBarMonths);
+    status.textContent = 'Cantidad inválida. Elegí un número entero entre 1 y 24.';
+    return;
+  }
+  gastosBarMonths = months;
+  if (document.getElementById('gastos-bar-body').hidden) updateGastosBarRange();
+  else renderGastosBar();
+}
+
+// Las barras usan la cantidad elegida de meses del período. Los meses futuros sólo
 // aparecen cuando el usuario los incluye explícitamente en Mes o Rango.
 function renderGastosBar() {
   destroyChart('gastos-bar');
+  const { months, context } = updateGastosBarRange();
   if (DATA.loadErrors.fijos) {
     const canvas = document.getElementById('chart-gastos-bar');
     renderChartData(canvas, 'Gastos e ingresos mensuales',
-      `Período: ${period.from} a ${period.to}. Persona: ${PERSONA_FILTRO_LABELS[personaFiltro]}.`,
+      context,
       ['Mes', 'Gastos', 'Ingresos'], [], 'No se pueden calcular los gastos: faltan datos de fijos.');
     showChartError('gastos-bar', canvas, 'Gráfico no disponible: faltan datos de fijos.');
     return;
   }
-  const months = getMonthsInPeriod(period.from, period.to).slice(-6);
-  const last6 = months.map((month) => {
+  const monthlyRows = months.map((month) => {
     const from = period.from > month + '-01' ? period.from : month + '-01';
     const to = period.to < fijosLastDay(month) ? period.to : fijosLastDay(month);
     const gastos = applyPersonaFiltro(filterGastosPeriod(from, to));
@@ -2234,15 +2243,15 @@ function renderGastosBar() {
       total_ingresos: sum(selectedIncome, 'monto') };
   });
   renderChartData(document.getElementById('chart-gastos-bar'), 'Gastos e ingresos mensuales',
-    `Período: ${period.from} a ${period.to}. Persona: ${PERSONA_FILTRO_LABELS[personaFiltro]}. Se muestran hasta los últimos seis meses.`,
-    ['Mes', 'Gastos', 'Ingresos'], last6.map((row) => [row.mes, fmtARS(row.total_gastos), fmtARS(row.total_ingresos)]));
+    context,
+    ['Mes', 'Gastos', 'Ingresos'], monthlyRows.map((row) => [row.mes, fmtARS(row.total_gastos), fmtARS(row.total_ingresos)]));
   renderChart('gastos-bar', document.getElementById('chart-gastos-bar'), {
     type: 'bar',
     data: {
-      labels: last6.map((r) => shortMonth(r.mes)),
+      labels: monthlyRows.map((r) => shortMonth(r.mes)),
       datasets: [
-        { label: 'Gastos', data: last6.map((r) => r.total_gastos), backgroundColor: '#c97d55', borderRadius: 6, maxBarThickness: 26 },
-        { label: 'Ingresos', data: last6.map((r) => r.total_ingresos), backgroundColor: '#7c9a6b', borderRadius: 6, maxBarThickness: 26 },
+        { label: 'Gastos', data: monthlyRows.map((r) => r.total_gastos), backgroundColor: '#c97d55', borderRadius: 6, maxBarThickness: 26 },
+        { label: 'Ingresos', data: monthlyRows.map((r) => r.total_ingresos), backgroundColor: '#7c9a6b', borderRadius: 6, maxBarThickness: 26 },
       ],
     },
     options: {
@@ -2253,6 +2262,28 @@ function renderGastosBar() {
       plugins: { legend: { position: 'bottom', labels: { color: INK, font: FONT, boxWidth: 12 } } },
     },
   });
+}
+
+function updateGastosBarRange() {
+  const months = getMonthsInPeriod(period?.from, period?.to).slice(-gastosBarMonths);
+  const shown = months.length;
+  const shownCount = `${shown} ${shown === 1 ? 'mes' : 'meses'}`;
+  const shownLabel = `${shown} ${shown === 1 ? 'mes mostrado' : 'meses mostrados'}`;
+  const requestedLabel = gastosBarMonthsLabel();
+  const title = shown === gastosBarMonths
+    ? (shown === 1 ? 'Último mes' : `Últimos ${requestedLabel}`)
+    : (gastosBarMonths === 1 ? `1 mes solicitado (${shownLabel})` : `Últimos ${requestedLabel} (${shownLabel})`);
+  const from = shown ? (period.from > months[0] + '-01' ? period.from : months[0] + '-01') : null;
+  const lastMonth = months.at(-1);
+  const to = shown ? (period.to < fijosLastDay(lastMonth) ? period.to : fijosLastDay(lastMonth)) : null;
+  const range = shown ? `Rango mostrado: ${from} a ${to}.` : 'No hay meses para mostrar en el período seleccionado.';
+  const countDescription = `Se ${gastosBarMonths === 1 ? 'solicitó' : 'solicitaron'} ${requestedLabel} y se ${shown === 1 ? 'muestra' : 'muestran'} ${shownCount}. ${range}`;
+  const context = `Período seleccionado: ${period?.from || 'sin inicio'} a ${period?.to || 'sin fin'}. Persona: ${PERSONA_FILTRO_LABELS[personaFiltro]}. ${countDescription}`;
+  document.getElementById('gastos-bar-title').textContent = title;
+  document.getElementById('gastos-bar-range').textContent = range;
+  const status = document.getElementById('gastos-bar-months-status');
+  if (status.textContent !== countDescription) status.textContent = countDescription;
+  return { months, context };
 }
 
 // La tabla usa los mismos valores ya calculados para Chart.js. Se conserva el
