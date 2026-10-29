@@ -1,0 +1,221 @@
+"""PDF layout checks with synthetic canonical rows; no DB or service access."""
+from datetime import datetime, timezone
+from unittest import TestCase
+from unittest.mock import patch
+
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase.pdfmetrics import stringWidth
+
+import supermercado_pdf as shopping_pdf
+
+try:
+    import fitz
+except ImportError:  # Optional inspection dependency, not needed to generate PDFs.
+    fitz = None
+
+
+WHEN = datetime(2026, 10, 28, 12, tzinfo=timezone.utc)
+
+
+def row(product, category="Almacén", desired=2.5, current=0.5,
+        missing=2, unit="kg"):
+    return {
+        "producto": product,
+        "categoria": category,
+        "stock_deseado": desired,
+        "stock_actual": current,
+        "a_comprar": missing,
+        "unidad": unit,
+    }
+
+
+class RecordingCanvas:
+    instances = []
+
+    def __init__(self, output, pagesize):
+        self.output = output
+        self.pagesize = pagesize
+        self.page = 1
+        self.font = "Helvetica"
+        self.size = 9
+        self.events = []
+        self.instances.append(self)
+
+    def setFont(self, font, size):
+        self.font, self.size = font, size
+
+    def drawString(self, x, y, value):
+        self.events.append(("text", self.page, x, y, value, self.font, self.size))
+
+    def drawRightString(self, x, y, value):
+        self.events.append(("right", self.page, x, y, value, self.font, self.size))
+
+    def rect(self, x, y, width, height, stroke=1, fill=0):
+        self.events.append(("rect", self.page, x, y, width, height))
+
+    def line(self, x1, y1, x2, y2):
+        self.events.append(("line", self.page, x1, y1, x2, y2))
+
+    def showPage(self):
+        self.page += 1
+
+    def save(self):
+        self.output.write(b"%PDF-recording")
+
+
+class SupermercadoPdfTest(TestCase):
+    def render_recorded(self, rows):
+        RecordingCanvas.instances.clear()
+        with patch.object(shopping_pdf.canvas, "Canvas", RecordingCanvas):
+            result = shopping_pdf.build_pdf(rows, WHEN)
+        self.assertEqual(result, b"%PDF-recording")
+        return RecordingCanvas.instances[0]
+
+    def test_empty_and_missing_stocks_are_not_synthesized(self):
+        with self.assertRaisesRegex(ValueError, "No falta nada"):
+            shopping_pdf.build_pdf([], WHEN)
+        with self.assertRaisesRegex(ValueError, "No falta nada"):
+            shopping_pdf.build_pdf([row("Suficiente", missing=0)], WHEN)
+        for key in ("stock_actual", "stock_deseado"):
+            invalid = row("Sin dato")
+            del invalid[key]
+            with self.subTest(key=key), self.assertRaises(KeyError):
+                shopping_pdf.build_pdf([invalid], WHEN)
+
+    def test_short_list_keeps_product_quantity_and_stock_together(self):
+        rendered = self.render_recorded([
+            row("Arroz", desired=2.5, current=0.5, missing=2),
+            row("Leche", "Lácteos", desired=3, current=1, missing=2, unit="L"),
+            row("Pilas", None, desired=4, current=0, missing=4, unit="u"),
+            row("Completo", None, desired=1, current=1, missing=0),
+        ])
+        text = [event[4] for event in rendered.events if event[0] == "text"]
+        self.assertIn("Arroz — Comprar 2 kg", text)
+        self.assertIn("Actual 0,5 kg · Deseado 2,5 kg", text)
+        self.assertIn("Leche — Comprar 2 L", text)
+        self.assertIn("Actual 1 L · Deseado 3 L", text)
+        self.assertIn("Pilas — Comprar 4 u", text)
+        self.assertIn("Actual 0 u · Deseado 4 u", text)
+        self.assertNotIn("Completo", " ".join(text))
+        self.assertEqual(len([event for event in rendered.events if event[0] == "rect"]), 3)
+        self.assertEqual(rendered.page, 1)
+        self.assertEqual([event[4] for event in rendered.events if event[0] == "right"],
+                         ["Página 1"])
+
+    def test_decimal_precision_and_received_missing_are_preserved(self):
+        rendered = self.render_recorded([
+            row("Pequeño", desired=0.125001, current=0.125,
+                missing=0.000001, unit="kg"),
+            row("Fracción", desired=0.25, current=0.125,
+                missing=0.125, unit="L"),
+            row("Valor servidor", desired=3, current=1, missing=1.5, unit="u"),
+        ])
+        text = " ".join(event[4] for event in rendered.events if event[0] == "text")
+        for fragment in ("Comprar 0,000001 kg", "Actual 0,125 kg",
+                         "Deseado 0,125001 kg", "Comprar 0,125 L",
+                         "Comprar 1,5 u", "Actual 1 u", "Deseado 3 u"):
+            self.assertIn(fragment, text)
+        self.assertNotIn("Comprar 2 u", text)
+
+    def test_server_category_and_product_order_are_not_resorted(self):
+        rendered = self.render_recorded([
+            row("Zeta", "Verduras"),
+            row("Alfa", "Verduras"),
+            row("Beta", "Bebidas"),
+            row("Último", None),
+        ])
+        text = [event[4] for event in rendered.events if event[0] == "text"]
+        markers = ["VERDURAS", "Zeta — Comprar 2 kg", "Alfa — Comprar 2 kg",
+                   "BEBIDAS", "Beta — Comprar 2 kg", "SIN CATEGORÍA",
+                   "Último — Comprar 2 kg"]
+        self.assertEqual([text.index(value) for value in markers],
+                         sorted(text.index(value) for value in markers))
+
+    def test_three_columns_long_text_and_no_content_outside_page(self):
+        long_category = "Categoría extensa " * 6
+        long_product = "Producto " + "muy largo " * 10
+        long_word = "X" * 114  # Six-character ID prefix makes a 120-char name.
+        long_unit = "medidasuperlarguisimaabc"  # 24 characters
+        self.assertEqual(len(long_unit), 24)
+        rows = [
+            row(f"P{index:04d} {long_product if index % 7 == 0 else long_word}",
+                long_category if index < 75 else "Bebidas",
+                desired=2.5, current=0.125, missing=2.375,
+                unit=long_unit if index % 11 == 0 else "kg")
+            for index in range(150)
+        ]
+        rendered = self.render_recorded(rows)
+        boxes = [event for event in rendered.events if event[0] == "rect"]
+        self.assertEqual(len(boxes), 150)
+        self.assertGreater(rendered.page, 1)
+        first_page_x = {round(event[2], 2) for event in boxes if event[1] == 1}
+        expected_x = {round(shopping_pdf.MARGIN + i *
+                            (shopping_pdf.COLUMN_WIDTH + shopping_pdf.GUTTER), 2)
+                      for i in range(3)}
+        self.assertEqual(first_page_x, expected_x)
+        for event in rendered.events:
+            if event[0] == "rect":
+                _, _, x, y, width, height = event
+                self.assertGreaterEqual(y, shopping_pdf.CONTENT_BOTTOM)
+                self.assertLessEqual(y + height, shopping_pdf.CONTENT_TOP)
+                self.assertEqual(width, 8)
+                self.assertGreaterEqual(x, shopping_pdf.MARGIN)
+                self.assertLessEqual(x + width, A4[0] - shopping_pdf.MARGIN)
+            if event[0] == "text" and event[3] < shopping_pdf.CONTENT_TOP:
+                _, _, x, y, value, font, size = event
+                self.assertGreaterEqual(y, shopping_pdf.CONTENT_BOTTOM)
+                self.assertLessEqual(x + stringWidth(value, font, size),
+                                     A4[0] - shopping_pdf.MARGIN + 0.01)
+                self.assertLessEqual(x + stringWidth(value, font, size),
+                                     shopping_pdf.MARGIN +
+                                     (round((x - shopping_pdf.MARGIN) /
+                                            (shopping_pdf.COLUMN_WIDTH +
+                                             shopping_pdf.GUTTER)) *
+                                      (shopping_pdf.COLUMN_WIDTH +
+                                       shopping_pdf.GUTTER)) +
+                                     shopping_pdf.COLUMN_WIDTH + 0.01)
+        labels = [event[4].split()[0] for event in rendered.events
+                  if event[0] == "text" and event[4].startswith("P")]
+        self.assertEqual(labels, [f"P{index:04d}" for index in range(150)])
+        headings = [(position, event) for position, event in
+                    enumerate(rendered.events)
+                    if event[0] == "text" and event[5:7] == ("Helvetica-Bold", 9)]
+        self.assertTrue(any("CONT." in event[4] for _, event in headings))
+        for position, heading in headings:
+            following = next(event for event in rendered.events[position + 1:]
+                             if event[0] == "rect")
+            self.assertEqual(heading[1], following[1])
+            self.assertAlmostEqual(heading[2], following[2], places=2)
+            self.assertGreater(heading[3], following[3])
+
+    def test_1000_items_have_one_checkbox_each_without_blank_page(self):
+        rows = [row(f"P{index:04d}", "Almacén") for index in range(1000)]
+        rendered = self.render_recorded(rows)
+        boxes = [event for event in rendered.events if event[0] == "rect"]
+        self.assertEqual(len(boxes), 1000)
+        self.assertGreater(rendered.page, 1)
+        self.assertEqual({event[1] for event in boxes},
+                         set(range(1, rendered.page + 1)))
+        self.assertEqual(len([event for event in rendered.events
+                              if event[0] == "right"]), rendered.page)
+        labels = [event[4].split()[0] for event in rendered.events
+                  if event[0] == "text" and event[4].startswith("P")]
+        self.assertEqual(labels, [f"P{index:04d}" for index in range(1000)])
+
+    def test_real_pdf_is_a4_and_contains_every_product_when_fitz_is_available(self):
+        rows = [row(f"P{index:04d}", "Almacén") for index in range(130)]
+        pdf = shopping_pdf.build_pdf(rows, WHEN)
+        self.assertTrue(pdf.startswith(b"%PDF-"))
+        if fitz is None:
+            self.skipTest("PyMuPDF is optional")
+        with fitz.open(stream=pdf, filetype="pdf") as document:
+            self.assertGreater(document.page_count, 1)
+            for page in document:
+                self.assertAlmostEqual(page.rect.width, A4[0], places=1)
+                self.assertAlmostEqual(page.rect.height, A4[1], places=1)
+            content = " ".join(page.get_text() for page in document)
+            self.assertIn("Comprar 2 kg", content)
+            self.assertIn("Actual 0,5 kg", content)
+            self.assertIn("Deseado 2,5 kg", content)
+            for index in range(130):
+                self.assertEqual(content.count(f"P{index:04d}"), 1)

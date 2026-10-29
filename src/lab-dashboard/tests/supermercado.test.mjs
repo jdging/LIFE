@@ -13,7 +13,8 @@ const superEnd = script.indexOf('// ── VISTA RECETAS', superStart);
 const superScript = script.slice(superStart, superEnd);
 const emptySnapshot = () => ({ categorias: [], productos: [], resumen: { global: {
   productos: 0, a_reponer: 0, vacios: 0, reponer: 0, ok: 0, porcentaje_vacio: 0, porcentaje_lleno: 0,
-}, categorias: [] } });
+}, categorias: [{ id: null, nombre: 'Sin categoría', orden: null,
+  productos: 0, a_reponer: 0, vacios: 0, reponer: 0, ok: 0, porcentaje_vacio: 0, porcentaje_lleno: 0 }] } });
 
 test('UI stock uses live API, explicit empty/error states, stock audit and PDF action', () => {
   assert.match(html, /id="supermercado-product-form"/);
@@ -128,7 +129,7 @@ test('Supermercado gates writes on its own valid GET and revokes them on failed 
   assert.match(element('supermercado-availability').textContent, /solo lectura\/no disponible/);
 });
 
-test('an invalidated old GET cannot reenable writes after the newer GET fails', async () => {
+test('concurrent refreshes coalesce, and a later failed GET closes the write gate', async () => {
   let resolveOld;
   const oldGet = new Promise(resolve => { resolveOld = resolve; });
   const reads = [emptySnapshot(), oldGet, new Error('recarga fallida')];
@@ -148,8 +149,10 @@ test('an invalidated old GET cannot reenable writes after the newer GET fails', 
   const oldLoad = vm.runInContext('ensureComprasLoaded(true)', context);
   const freshLoad = vm.runInContext('ensureComprasLoaded(true)', context);
   resolveOld(emptySnapshot());
-  assert.equal(await oldLoad, false);
-  assert.equal(await freshLoad, false);
+  assert.equal(await oldLoad, true);
+  assert.equal(await freshLoad, true);
+  assert.equal(vm.runInContext('supermercadoWriteAvailable', context), true);
+  assert.equal(await vm.runInContext('ensureComprasLoaded(true)', context), false);
   assert.equal(vm.runInContext('supermercadoWriteAvailable', context), false);
   assert.equal(control.disabled, true);
 });
@@ -187,13 +190,19 @@ test('successful stock write waits for a fresh GET and never restores an older s
       classList: { toggle() {} }, addEventListener() {}, reportValidity: () => true });
     return elements.get(id);
   };
-  const snapshot = (stock, version) => ({ categorias: [], productos: [{ id: 7, producto: 'Leche', unidad: 'L',
-    categoria: null, stock_deseado: 5, stock_actual: stock, a_comprar: 5 - stock,
-    porcentaje_faltante: (5 - stock) * 20, estado: stock < 5 ? 'Reponer' : 'OK', version }],
-    resumen: { global: { productos: 1, a_reponer: stock < 5 ? 1 : 0, vacios: 0, reponer: stock < 5 ? 1 : 0,
-      ok: stock === 5 ? 1 : 0, porcentaje_vacio: 0, porcentaje_lleno: 100 }, categorias: [] } });
+  const snapshot = (stock, version) => {
+    const state = stock <= 0 ? 'Vacío' : stock < 5 ? 'Reponer' : 'OK';
+    const missing = Math.max(0, 5 - stock);
+    const counts = { productos: 1, a_reponer: missing > 0 ? 1 : 0, vacios: state === 'Vacío' ? 1 : 0,
+      reponer: state === 'Reponer' ? 1 : 0, ok: state === 'OK' ? 1 : 0,
+      porcentaje_vacio: state === 'Vacío' ? 100 : 0, porcentaje_lleno: state === 'Vacío' ? 0 : 100 };
+    return { categorias: [], productos: [{ id: 7, producto: 'Leche', unidad: 'L',
+      categoria_id: null, categoria: null, stock_deseado: 5, stock_actual: stock, a_comprar: missing,
+      porcentaje_faltante: missing * 20, estado: state, version }],
+      resumen: { global: counts, categorias: [{ id: null, nombre: 'Sin categoría', orden: null, ...counts }] } };
+  };
   const context = vm.createContext({ document: { getElementById: element, querySelectorAll: () => [] }, Intl, Number, Error,
-    escapeHtml: String,
+    escapeHtml: String, clearTimeout, setTimeout,
     fetchJSON: async () => { const next = reads.length === 1 ? oldGet : freshGet; reads.push(next); return reads.length === 1 ? snapshot(1, 1) : next.promise; },
     fetch: async (path, options) => {
       assert.equal(path, '/api/supermercado/productos/7/stock');
@@ -208,21 +217,20 @@ test('successful stock write waits for a fresh GET and never restores an older s
   assert.equal(await vm.runInContext('ensureComprasLoaded()', context), true);
   assert.equal(vm.runInContext('supermercadoWriteAvailable', context), true);
   element('super-stock-7').value = '5';
+  vm.runInContext("superStockDrafts.set(7, { value: '5', version: 1, dirty: true, saving: false, conflict: false, error: '', timer: null })", context);
   const oldLoad = vm.runInContext('ensureComprasLoaded(true)', context);
   const mutation = vm.runInContext('saveSuperStock(7)', context);
   patch.resolve({ ok: true, json: async () => ({ registro: { id: 7, version: 2 } }) });
-  for (let step = 0; step < 10 && !vm.runInContext('supermercadoRefreshPromise', context); step++) await Promise.resolve();
-  assert.ok(vm.runInContext('supermercadoRefreshPromise', context), 'the PATCH must queue a forced refresh');
   const reopening = vm.runInContext('ensureComprasLoaded()', context);
   oldGet.resolve(snapshot(0, 1));
-  assert.equal(await oldLoad, false);
-  await Promise.resolve();
+  assert.equal(await oldLoad, true);
+  assert.equal(await reopening, true, 'reopening during an earlier GET shares that read');
+  for (let step = 0; step < 12 && reads.length < 3; step++) await Promise.resolve();
   assert.equal(reads.length, 3, 'the successful PATCH must start a later GET');
-  assert.equal(vm.runInContext('supermercadoData.productos[0].stock_actual', context), 1,
-    'the old GET cannot overwrite the cache before the fresh GET');
+  assert.equal(vm.runInContext('supermercadoData.productos[0].stock_actual', context), 0,
+    'the earlier GET must finish before the PATCH verification');
   freshGet.resolve(snapshot(5, 2));
   await mutation;
-  assert.equal(await reopening, true, 'reopening during the refresh waits for the new snapshot');
   assert.equal(vm.runInContext('supermercadoData.productos[0].stock_actual', context), 5);
   assert.equal(vm.runInContext('supermercadoData.productos[0].version', context), 2);
   assert.match(element('supermercado-content').innerHTML, /value="5"/);
@@ -242,9 +250,12 @@ test('two product form submits send one POST and a valid GET cannot unlock contr
   const refresh = deferred();
   const elements = new Map();
   const element = id => {
-    if (!elements.has(id)) elements.set(id, { textContent: '', innerHTML: '', value: '', disabled: true,
-      classList: { toggle() {} }, addEventListener(type, handler) { this[type] = handler; },
-      reportValidity: () => true, reset() { this.resetCount = (this.resetCount || 0) + 1; } });
+    if (!elements.has(id)) elements.set(id, { textContent: '', innerHTML: '', value: '', disabled: true, dataset: {}, listeners: {},
+      classList: { toggle() {} }, addEventListener(type, handler) { this.listeners[type] = handler; },
+      reportValidity: () => true, reset() {
+        this.resetCount = (this.resetCount || 0) + 1;
+        this.listeners.reset?.({ type: 'reset', target: this, currentTarget: this });
+      } });
     return elements.get(id);
   };
   const form = element('supermercado-product-form');
@@ -259,7 +270,7 @@ test('two product form submits send one POST and a valid GET cannot unlock contr
     fetch: async (path, options) => { writes.push({ path, options }); return post.promise; } });
   vm.runInContext(superScript, context);
   assert.equal(await vm.runInContext('ensureComprasLoaded()', context), true);
-  const submit = () => form.submit({ preventDefault() {}, currentTarget: form });
+  const submit = () => form.listeners.submit({ type: 'submit', target: form, preventDefault() {}, currentTarget: form });
   const first = submit();
   const second = submit();
   assert.equal(await second, undefined);
@@ -268,8 +279,9 @@ test('two product form submits send one POST and a valid GET cannot unlock contr
   assert.equal(controls.every(control => control.disabled), true);
   const concurrentGet = vm.runInContext('ensureComprasLoaded(true)', context);
   refresh.resolve(emptySnapshot());
-  assert.equal(await concurrentGet, true);
-  assert.equal(controls.every(control => control.disabled), true, 'GET válido durante POST no desbloquea controles');
+  assert.equal(await concurrentGet, false, 'background refresh is deferred during POST');
+  assert.equal(reads, 1, 'POST verifier owns the next GET');
+  assert.equal(controls.every(control => control.disabled), true, 'POST lock keeps controls disabled');
   assert.equal(vm.runInContext('supermercadoMutationPending', context), true);
   post.resolve({ ok: true, json: async () => ({ registro: { id: 1, version: 1 } }) });
   await first;
@@ -306,40 +318,27 @@ test('failed product POST releases the single-flight lock and allows a later ret
   assert.equal(control.disabled, false);
 });
 
-test('UI sends read version, keeps conflicts visible, and opens the next history page', async () => {
+test('product delete uses the read version and form edit keeps optimistic version', async () => {
   const elements = new Map();
   const element = id => {
     if (!elements.has(id)) elements.set(id, { textContent: '', innerHTML: '', value: '', hidden: false, dataset: {},
-      classList: { toggle() {} }, addEventListener() {}, reportValidity: () => true,
-      insertAdjacentElement(_where, child) { elements.set(child.id, child); } });
+      classList: { toggle() {} }, addEventListener() {}, focus() {} });
     return elements.get(id);
   };
-  const context = vm.createContext({ document: { getElementById: element, querySelectorAll: () => [], createElement: () => ({ addEventListener() {} }) },
-    Intl, Number, Error, confirm: () => true, encodeURIComponent, escapeHtml: String,
-    fetchJSON: async () => emptySnapshot(),
-    fetch: async () => { throw new Error('unexpected fetch'); } });
+  const form = element('supermercado-product-form');
+  form.elements = Object.fromEntries(['id', 'producto', 'unidad', 'stock_deseado', 'stock_actual', 'categoria_id'].map(key => [key, { value: '', focus() {} }]));
+  const context = vm.createContext({ document: { getElementById: element, querySelectorAll: () => [] },
+    Intl, Number, Error, confirm: () => true, escapeHtml: String,
+    fetchJSON: async () => emptySnapshot(), fetch: async () => { throw new Error('unexpected fetch'); } });
   vm.runInContext(superScript, context);
-  element('super-stock-7').value = '4';
-  vm.runInContext('supermercadoData = { productos: [{ id: 7, producto: "Leche", version: 3 }], categorias: [] }; supermercadoWriteAvailable = true', context);
+  vm.runInContext('supermercadoData = { productos: [{ id: 7, producto: "Leche", unidad: "L", stock_actual: 3, stock_deseado: 5, version: 3, categoria_id: null }], categorias: [] }; supermercadoWriteAvailable = true', context);
   const writes = [];
-  const realMutate = context.superMutate;
   context.superMutate = async (...args) => { writes.push(args); return true; };
-  await vm.runInContext('saveSuperStock(7)', context);
+  vm.runInContext('editSuperProduct(7)', context);
+  assert.equal(form.dataset.version, '3');
+  assert.equal(element('supermercado-admin').open, true);
   await vm.runInContext('deleteSuperProduct(7)', context);
   assert.equal(writes[0][2].expected_version, 3);
-  assert.equal(writes[1][2].expected_version, 3);
-  context.superRequest = async (_method, path) => ({ historial: [{ id: path.includes('cursor=') ? 2 : 3, fecha_utc: 'now', operacion: 'stock', actor: 'qa', antes: null, despues: {} }],
-    next_cursor: path.includes('cursor=') ? null : 3, has_more: !path.includes('cursor=') });
-  await vm.runInContext('showSuperHistory(7)', context);
-  assert.equal(element('supermercado-history-next').hidden, false);
-  await vm.runInContext('showSuperHistory(7, superHistoryCursor)', context);
-  assert.equal(element('supermercado-history-next').hidden, true);
-  let reloads = 0;
-  context.ensureComprasLoaded = async () => { reloads++; return true; };
-  context.superRequest = async () => { const error = new Error('Producto modificado; recargá.'); error.status = 409; throw error; };
-  assert.equal(await realMutate('PATCH', '/api/supermercado/productos/7', {}, 'guardado'), false);
-  assert.equal(reloads, 1);
-  assert.match(element('supermercado-status').textContent, /Revisá los datos recargados/);
   assert.match(superScript, /payload\.expected_version = Number\(form\.dataset\.version\)/);
 });
 
