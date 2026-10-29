@@ -339,10 +339,39 @@
     <div class="view" id="view-supermercado" role="tabpanel" aria-labelledby="tab-supermercado" hidden>
       <div class="section-header">
         <h2 class="section-title">Supermercado</h2>
-        <input type="search" id="supermercado-search" class="search-input" placeholder="Buscar ítem…" aria-label="Buscar ítem" oninput="renderSupermercadoList()">
+        <input type="search" id="supermercado-search" class="search-input" placeholder="Buscar producto…" aria-label="Buscar producto" oninput="renderSupermercadoList()">
       </div>
-      <section class="panel" id="supermercado-panel">
+      <p id="supermercado-availability" role="status" aria-live="polite">Supermercado en solo lectura/no disponible · actualizá el stock para verificar la conexión antes de guardar.</p>
+      <p id="supermercado-status" role="status" aria-live="polite">Cargando…</p>
+      <button type="button" onclick="ensureComprasLoaded(true)">Actualizar stock</button>
+      <div id="supermercado-summary" class="super-summary"></div>
+      <div id="supermercado-category-summary" class="super-category-summary"></div>
+      <section class="panel" aria-labelledby="super-categories-title">
+        <h3 id="super-categories-title">Categorías</h3>
+        <div id="supermercado-categories"></div>
+        <form id="supermercado-category-form" class="super-form">
+          <input type="hidden" name="id">
+          <label>Nombre <input name="nombre" required maxlength="120" data-super-write disabled></label>
+          <label>Orden <input name="orden" type="number" min="0" max="1000000" step="1" required data-super-write disabled></label>
+          <button type="submit" data-super-write disabled>Guardar categoría</button>
+          <button type="reset">Cancelar edición</button>
+        </form>
+      </section>
+      <section class="panel" aria-labelledby="super-products-title">
+        <h3 id="super-products-title">Productos y stock</h3>
+        <form id="supermercado-product-form" class="super-form">
+          <input type="hidden" name="id">
+          <label>Categoría <select name="categoria_id" id="supermercado-category-select" data-super-write disabled><option value="">Sin categoría</option></select></label>
+          <label>Producto <input name="producto" required maxlength="120" data-super-write disabled></label>
+          <label>Unidad <input name="unidad" required maxlength="24" placeholder="u, kg, L…" data-super-write disabled></label>
+          <label>Deseado <input name="stock_deseado" type="number" min="0" max="1000000000" step="0.000001" required data-super-write disabled></label>
+          <label>Actual <input name="stock_actual" type="number" min="0" max="1000000000" step="0.000001" required data-super-write disabled></label>
+          <button type="submit" data-super-write disabled>Guardar producto</button>
+          <button type="reset">Cancelar edición</button>
+        </form>
+        <div class="super-actions"><button id="supermercado-pdf" type="button" onclick="downloadSupermercadoPdf()">Descargar lista PDF A4</button></div>
         <div id="supermercado-content">Cargando…</div>
+        <pre id="supermercado-history" class="super-history" role="status" aria-live="polite" hidden></pre>
       </section>
     </div><!-- /view-supermercado -->
 

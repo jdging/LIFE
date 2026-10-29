@@ -130,6 +130,16 @@ test('missing or invalid upstream configuration fails closed', async () => {
 
 test('every contracted method forwards the exact path and query to the configured host', async () => {
   const routes = [
+    ['GET', '/api/supermercado'],
+    ['GET', '/api/supermercado/lista.pdf'],
+    ['GET', '/api/supermercado/productos/1/historial?cursor=12'],
+    ['POST', '/api/supermercado/categorias', '{}'],
+    ['PATCH', '/api/supermercado/categorias/1', '{}'],
+    ['DELETE', '/api/supermercado/categorias/1'],
+    ['POST', '/api/supermercado/productos', '{}'],
+    ['PATCH', '/api/supermercado/productos/1', '{}'],
+    ['PATCH', '/api/supermercado/productos/1/stock', '{}'],
+    ['DELETE', '/api/supermercado/productos/1', '{"expected_version":1}'],
     ['GET', '/api/health'],
     ['GET', '/api/expenses?month=2026-10'],
     ['POST', '/api/expenses', '{}'],
@@ -160,7 +170,8 @@ test('every contracted method forwards the exact path and query to the configure
     for (const [method, path, body] of routes) {
       const response = await middleware(apiRequest(path, { method, body }));
       assert.equal(response.status, method === 'POST' ? 201 : 200, `${method} ${path}`);
-      assert.deepEqual(await response.json(), { ok: true });
+      if (path.endsWith('.pdf')) assert.match(await response.text(), /^%PDF-/);
+      else assert.deepEqual(await response.json(), { ok: true });
     }
   }, {
     fetch: async (target, options) => {
@@ -173,6 +184,7 @@ test('every contracted method forwards the exact path and query to the configure
       assert.deepEqual([...options.headers.keys()].sort(), body === undefined
         ? ['x-internal-proxy-secret'] : ['content-type', 'x-internal-proxy-secret']);
       assert.equal(body === undefined ? options.body : new TextDecoder().decode(options.body), body);
+      if (path.endsWith('.pdf')) return new Response(new TextEncoder().encode('%PDF-1.4\nsynthetic'), { headers: { 'content-type': 'application/pdf' } });
       return upstreamJson({ ok: true }, method === 'POST' ? 201 : 200, { 'set-cookie': 'ignored=1' });
     },
   });
@@ -181,6 +193,14 @@ test('every contracted method forwards the exact path and query to the configure
 
 test('known paths reject wrong methods with Allow; unknown paths stay 404', async () => {
   const wrong = [
+    ['/api/supermercado', 'POST', 'GET'],
+    ['/api/supermercado/lista.pdf', 'POST', 'GET'],
+    ['/api/supermercado/productos/1/historial', 'PATCH', 'GET'],
+    ['/api/supermercado/categorias', 'GET', 'POST'],
+    ['/api/supermercado/categorias/1', 'POST', 'PATCH, DELETE'],
+    ['/api/supermercado/productos', 'GET', 'POST'],
+    ['/api/supermercado/productos/1/stock', 'DELETE', 'PATCH'],
+    ['/api/supermercado/productos/1', 'POST', 'PATCH, DELETE'],
     ['/api/health', 'POST', 'GET'],
     ['/api/expenses', 'PATCH', 'GET, POST'],
     ['/api/expenses/1', 'GET', 'PATCH, DELETE'],
@@ -199,6 +219,7 @@ test('known paths reject wrong methods with Allow; unknown paths stay 404', asyn
     ['/api/categories', 'POST', 'GET'],
   ];
   const unknown = [
+    '/api/supermercado/productos/0', '/api/supermercado/productos/-1', '/api/supermercado/anything',
     '/api/gastos', '/api/ingresos', '/api/fijos', '/api/inventario', '/api/expenses/F-1',
     '/api/expenses/0', '/api/expenses/1/saldar/x', '/api/expenses/saldar-todas/x', '/api/income/-1', '/api/inventory/0', '/api/inventory/-1',
     '/api/fixed/0/historial', '/api/fixed/1/versions', '/api/fixed/1%2Fhistorial',
@@ -222,6 +243,12 @@ test('known paths reject wrong methods with Allow; unknown paths stay 404', asyn
 
 test('query whitelist validates names, multiplicity, dates, and method scope', async () => {
   const invalid = [
+    '/api/supermercado?x=1', '/api/supermercado/lista.pdf?x=1',
+    '/api/supermercado/productos/1/historial?cursor=0',
+    '/api/supermercado/productos/1/historial?cursor=abc',
+    '/api/supermercado/productos/1/historial?cursor=1&cursor=2',
+    '/api/supermercado/productos/1/historial?cursor=9223372036854775808',
+    '/api/supermercado/productos/1/stock?x=1',
     '/api/health?month=2026-10', '/api/expenses?tag=x',
     '/api/expenses?month=2026-10&month=2026-11', '/api/expenses?month=2026-13',
     '/api/expenses?month=0000-01', '/api/income?month=2026-10',
@@ -236,7 +263,8 @@ test('query whitelist validates names, multiplicity, dates, and method scope', a
   let calls = 0;
   await withHarness(async () => {
     for (const path of invalid) {
-      const method = path.startsWith('/api/expenses/1?') ? 'DELETE'
+      const method = path.startsWith('/api/supermercado/productos/1/stock?') ? 'PATCH'
+        : path.startsWith('/api/expenses/1?') ? 'DELETE'
         : path.startsWith('/api/expenses/saldar-todas?') ? 'POST' : 'GET';
       const response = await middleware(apiRequest(path, { method }));
       assert.equal(response.status, 400, path);
@@ -371,6 +399,31 @@ test('one deadline covers an unfinished request body and cancels its reader', as
   }, { timeoutMs: 10, fetch: () => { calls++; return upstreamJson({ ok: true }); } });
   assert.equal(cancelled, true);
   assert.equal(calls, 0);
+});
+
+test('F4 stalled write body and PDF response obey deadline and cancel their readers', async () => {
+  let writeCancelled = false;
+  const body = new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode('{')); },
+    cancel() { writeCancelled = true; },
+  });
+  await withHarness(async () => {
+    const response = await settleWithin(middleware(apiRequest('/api/supermercado/productos/1/stock', { method: 'PATCH', body })));
+    assert.equal(response.status, 504);
+  }, { timeoutMs: 10, fetch: () => assert.fail('stalled request reached upstream') });
+  assert.equal(writeCancelled, true);
+  let pdfCancelled = false;
+  await withHarness(async () => {
+    const response = await settleWithin(middleware(apiRequest('/api/supermercado/lista.pdf')));
+    assert.equal(response.status, 504);
+  }, {
+    timeoutMs: 10,
+    fetch: async () => new Response(new ReadableStream({
+      start(controller) { controller.enqueue(new TextEncoder().encode('%PDF-')); },
+      cancel() { pdfCancelled = true; },
+    }), { headers: { 'content-type': 'application/pdf' } }),
+  });
+  assert.equal(pdfCancelled, true);
 });
 
 test('one deadline covers stalled upstream headers even if fetch ignores abort', async () => {

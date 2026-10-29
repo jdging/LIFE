@@ -126,6 +126,14 @@ const PROXY_UPSTREAM_TIMEOUT_MS_DEFAULT = 10_000;
 const PROXY_UPSTREAM_TIMEOUT_MS_MAX = 60_000;
 
 const PROXY_ROUTES = [
+  { pattern: /^\/api\/supermercado$/, methods: ['GET'], query: {} },
+  { pattern: /^\/api\/supermercado\/lista\.pdf$/, methods: ['GET'], query: {}, pdf: true },
+  { pattern: /^\/api\/supermercado\/productos\/[1-9]\d*\/historial$/, methods: ['GET'], query: { GET: { cursor: 'cursor' } } },
+  { pattern: /^\/api\/supermercado\/categorias$/, methods: ['POST'], query: {} },
+  { pattern: /^\/api\/supermercado\/categorias\/[1-9]\d*$/, methods: ['PATCH', 'DELETE'], query: {} },
+  { pattern: /^\/api\/supermercado\/productos$/, methods: ['POST'], query: {} },
+  { pattern: /^\/api\/supermercado\/productos\/[1-9]\d*\/stock$/, methods: ['PATCH'], query: {} },
+  { pattern: /^\/api\/supermercado\/productos\/[1-9]\d*$/, methods: ['PATCH', 'DELETE'], query: {} },
   { pattern: /^\/api\/health$/, methods: ['GET'], query: {} },
   { pattern: /^\/api\/expenses$/, methods: ['GET', 'POST'], query: { GET: { month: 'month' } } },
   { pattern: /^\/api\/expenses\/[1-9]\d*$/, methods: ['PATCH', 'DELETE'], query: {} },
@@ -181,6 +189,11 @@ function isValidTipo(value) {
   return CATEGORY_TIPOS.has(value);
 }
 
+function isValidCursor(value) {
+  if (!/^[1-9]\d{0,18}$/.test(value)) return false;
+  try { return BigInt(value) <= 9223372036854775807n; } catch { return false; }
+}
+
 function isValidProxyQuery(search, route, method) {
   try {
     decodeURIComponent(search);
@@ -194,6 +207,7 @@ function isValidProxyQuery(search, route, method) {
     if (allowed[key] === 'month' && !isValidMonth(value)) return false;
     if (allowed[key] === 'date' && !isValidDate(value)) return false;
     if (allowed[key] === 'tipo' && !isValidTipo(value)) return false;
+    if (allowed[key] === 'cursor' && !isValidCursor(value)) return false;
     seen.add(key);
   }
   return (route.requiredQuery || []).every((key) => seen.has(key));
@@ -480,6 +494,24 @@ async function handleApiProxy(request, url, pathname) {
 
     if (!PROXY_SAFE_UPSTREAM_STATUSES.has(upstreamResponse.status)) {
       return jsonResponse(502, { error: 'upstream_error' });
+    }
+
+    if (route.pdf && upstreamResponse.status === 200) {
+      if (upstreamResponse.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/pdf') {
+        return jsonResponse(502, { error: 'upstream_invalid_response' });
+      }
+      const pdfBytes = await readLimitedStream(upstreamResponse.body, 8 * 1024 * 1024, 'UPSTREAM_RESPONSE_TOO_LARGE', controller.signal);
+      upstreamBodyComplete = true;
+      if (controller.signal.aborted || Date.now() >= deadline || pdfBytes.byteLength < 5 ||
+          new TextDecoder().decode(pdfBytes.slice(0, 5)) !== '%PDF-' ||
+          [vpsSecret, baseUrlRaw].some(value => value && new TextDecoder().decode(pdfBytes).includes(value))) {
+        return jsonResponse(502, { error: 'upstream_invalid_response' });
+      }
+      return new Response(pdfBytes, { status: 200, headers: {
+        'content-type': 'application/pdf',
+        'content-disposition': 'attachment; filename="lista-supermercado.pdf"',
+        'cache-control': 'no-store',
+      } });
     }
 
     if (!isJsonContentType(upstreamResponse.headers.get('content-type'))) {

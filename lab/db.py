@@ -457,7 +457,9 @@ def _migrar_estado_conversacional(conn: sqlite3.Connection) -> None:
 
 
 def init_db(conn: sqlite3.Connection) -> None:
+    import supermercado
     conn.executescript(SCHEMA)
+    supermercado.init_schema(conn)
     conn.commit()
     _migrar_columnas_gastos(conn)
     _migrar_columnas_tarjetas(conn)

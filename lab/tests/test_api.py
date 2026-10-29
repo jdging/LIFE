@@ -112,7 +112,7 @@ class ApiTest(WsgiApiTestCase):
         status, body, headers = self.request("GET", "/api/health")
         self.assertEqual(status, 200)
         self.assertEqual(body, {
-            "ok": True, "capabilities": ["expenses", "income", "fixed", "inventory"], "mode": "live",
+            "ok": True, "capabilities": ["expenses", "income", "fixed", "inventory", "supermercado"], "mode": "live",
         })
         self.assertTrue(headers["Content-Type"].startswith("application/json"))
         self.assertEqual(headers["Cache-Control"], "no-store")

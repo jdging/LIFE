@@ -28,6 +28,7 @@ from wsgiref.simple_server import make_server
 
 import db
 import validaciones
+import supermercado
 
 MAX_BODY_BYTES = 64 * 1024
 MAX_MONEY = Decimal("1000000000000")
@@ -322,6 +323,16 @@ class _RequestContext:
 
 class _App:
     ROUTES = (
+        ("GET", re.compile(r"^/api/supermercado$"), "supermercado_list"),
+        ("GET", re.compile(r"^/api/supermercado/lista\.pdf$"), "supermercado_pdf"),
+        ("GET", re.compile(r"^/api/supermercado/productos/(?P<id>\d+)/historial$"), "supermercado_history"),
+        ("POST", re.compile(r"^/api/supermercado/categorias$"), "supermercado_category_create"),
+        ("PATCH", re.compile(r"^/api/supermercado/categorias/(?P<id>\d+)$"), "supermercado_category_update"),
+        ("DELETE", re.compile(r"^/api/supermercado/categorias/(?P<id>\d+)$"), "supermercado_category_delete"),
+        ("POST", re.compile(r"^/api/supermercado/productos$"), "supermercado_product_create"),
+        ("PATCH", re.compile(r"^/api/supermercado/productos/(?P<id>\d+)$"), "supermercado_product_update"),
+        ("PATCH", re.compile(r"^/api/supermercado/productos/(?P<id>\d+)/stock$"), "supermercado_stock_update"),
+        ("DELETE", re.compile(r"^/api/supermercado/productos/(?P<id>\d+)$"), "supermercado_product_delete"),
         ("GET", re.compile(r"^/api/health$"), "health"),
         ("GET", re.compile(r"^/api/expenses$"), "list_expenses"),
         ("POST", re.compile(r"^/api/expenses$"), "create_expense"),
@@ -361,6 +372,7 @@ class _App:
         ("DELETE", re.compile(r"^/api/telegram/borrador$"), "clear_telegram_borrador"),
     )
     QUERY_FIELDS = {
+        "supermercado_history": {"cursor"},
         "list_expenses": {"month"}, "list_fixed": {"dateISO"},
         "fixed_range": {"fromISO", "toISO"}, "summary": {"month"},
         "list_categories": {"tipo"},
@@ -483,7 +495,7 @@ class _App:
             raw_id = path_params["id"]
             if len(raw_id) > 19 or not 1 <= int(raw_id) <= MAX_SQLITE_ID:
                 return self._error(start_response, 400, "id fuera de rango.")
-        if method in {"GET", "DELETE"} and handler_name != "delete_fixed" and content_length:
+        if method in {"GET", "DELETE"} and handler_name not in {"delete_fixed", "supermercado_product_delete"} and content_length:
             return self._error(start_response, 400, "esta ruta no acepta un cuerpo.")
         body = environ["wsgi.input"].read(content_length) if content_length > 0 else b""
         if len(body) != content_length:
@@ -549,7 +561,7 @@ class _App:
     def health(self, ctx, conn, start_response):
         return self._json(start_response, 200, {
             "ok": True,
-            "capabilities": ["expenses", "income", "fixed", "inventory"],
+            "capabilities": ["expenses", "income", "fixed", "inventory", "supermercado"],
             "mode": "live",
         })
 
@@ -1527,6 +1539,116 @@ class _App:
         db.clear_estado(conn, chat, usuario=usuario)
         return self._json(start_response, 200, {"cleared": True})
 
+
+    # --- supermercado F4 --------------------------------------------------
+
+    def supermercado_list(self, ctx, conn, start_response):
+        conn.execute("BEGIN")
+        try:
+            cats = supermercado.categories(conn)
+            rows = supermercado.products(conn, cats)
+            result = {"categorias": cats, "productos": rows, "resumen": supermercado.summary(rows, cats)}
+        finally:
+            conn.rollback()
+        return self._json(start_response, 200, result)
+
+    def supermercado_pdf(self, ctx, conn, start_response):
+        conn.execute("BEGIN")
+        try:
+            rows = supermercado.products(conn)
+        finally:
+            conn.rollback()
+        if not any(row["a_comprar"] > 0 for row in rows):
+            return self._error(start_response, 409, "No falta nada")
+        try:
+            from supermercado_pdf import build_pdf
+            body = build_pdf(rows)
+        except ImportError:
+            return self._error(start_response, 500, "falta la dependencia PDF del servidor")
+        start_response("200 OK", [("Content-Type", "application/pdf"),
+                                   ("Content-Disposition", 'attachment; filename="lista-supermercado.pdf"'),
+                                   ("Content-Length", str(len(body))), ("Cache-Control", "no-store")])
+        return [body]
+
+    def supermercado_history(self, ctx, conn, start_response):
+        raw_cursor = ctx.query_param("cursor")
+        if raw_cursor is not None and (not raw_cursor.isascii() or not raw_cursor.isdecimal() or
+                                       len(raw_cursor) > 19 or not 1 <= int(raw_cursor) <= MAX_SQLITE_ID):
+            return self._error(start_response, 400, "cursor inválido")
+        try:
+            page = supermercado.history(conn, int(ctx.path_params["id"]), int(raw_cursor) if raw_cursor else None)
+        except LookupError:
+            return self._error(start_response, 404, "producto inexistente")
+        except ValueError:
+            return self._error(start_response, 400, "cursor inválido")
+        return self._json(start_response, 200, page)
+
+    def _supermercado_write(self, ctx, conn, start_response, operation, allowed, required=()):
+        data = {}
+        if ctx.method != "DELETE" or operation == "product_delete":
+            data, err = self._parse_json(ctx, start_response)
+            if err is not None:
+                return err
+            if set(data) - allowed or not set(required).issubset(data) or not data:
+                return self._error(start_response, 400, "campos inválidos o faltantes")
+        if operation in {"product_update", "stock_update", "product_delete"}:
+            version = data.get("expected_version")
+            if isinstance(version, bool) or not isinstance(version, int) or version < 1 or version > MAX_SQLITE_ID:
+                return self._error(start_response, 400, "expected_version inválida o faltante")
+        if operation == "product_update" and set(data) == {"expected_version"}:
+            return self._error(start_response, 400, "indicá al menos un campo para editar")
+        row_id = int(ctx.path_params["id"]) if "id" in ctx.path_params else None
+        try:
+            if operation == "category_create":
+                row = supermercado.category_create(conn, data)
+            elif operation == "category_update":
+                row = supermercado.category_update(conn, row_id, data)
+            elif operation == "category_delete":
+                supermercado.category_delete(conn, row_id)
+                row = None
+            elif operation == "product_create":
+                row = supermercado.product_create(conn, data)
+            elif operation == "product_update":
+                row = supermercado.product_update(conn, row_id, data)
+            elif operation == "stock_update":
+                row = supermercado.product_update(conn, row_id, data, stock_only=True)
+            else:
+                row = supermercado.product_delete(conn, row_id, data["expected_version"])
+        except supermercado.VersionConflict as exc:
+            return self._error(start_response, 409, str(exc))
+        except supermercado.CapacityExceeded as exc:
+            return self._error(start_response, 409, str(exc))
+        except (ValueError, KeyError):
+            return self._error(start_response, 400, "datos de supermercado inválidos")
+        except LookupError:
+            return self._error(start_response, 404, "registro inexistente")
+        except sqlite3.IntegrityError:
+            return self._error(start_response, 409, "categoría duplicada o referencia inválida")
+        return self._json(start_response, 201 if operation.endswith("create") else 200,
+                          {"registro": row, "deleted": True} if operation == "product_delete" else
+                          {"registro": row} if row is not None else {"deleted": True})
+
+    def supermercado_category_create(self, ctx, conn, start_response):
+        return self._supermercado_write(ctx, conn, start_response, "category_create", {"nombre", "orden"}, {"nombre", "orden"})
+
+    def supermercado_category_update(self, ctx, conn, start_response):
+        return self._supermercado_write(ctx, conn, start_response, "category_update", {"nombre", "orden"})
+
+    def supermercado_category_delete(self, ctx, conn, start_response):
+        return self._supermercado_write(ctx, conn, start_response, "category_delete", set())
+
+    def supermercado_product_create(self, ctx, conn, start_response):
+        fields = {"categoria_id", "producto", "unidad", "stock_deseado", "stock_actual"}
+        return self._supermercado_write(ctx, conn, start_response, "product_create", fields, fields - {"categoria_id"})
+
+    def supermercado_product_update(self, ctx, conn, start_response):
+        return self._supermercado_write(ctx, conn, start_response, "product_update", {"categoria_id", "producto", "unidad", "stock_deseado", "stock_actual", "expected_version"}, {"expected_version"})
+
+    def supermercado_stock_update(self, ctx, conn, start_response):
+        return self._supermercado_write(ctx, conn, start_response, "stock_update", {"stock_actual", "expected_version"}, {"stock_actual", "expected_version"})
+
+    def supermercado_product_delete(self, ctx, conn, start_response):
+        return self._supermercado_write(ctx, conn, start_response, "product_delete", {"expected_version"}, {"expected_version"})
 
 def create_app(db_path, internal_secret):
     """Fábrica única de la app. Falla cerrado si falta cualquiera de los dos

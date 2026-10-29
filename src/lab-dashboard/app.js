@@ -417,13 +417,13 @@ function updateAvailability() {
   const status = document.getElementById('api-status');
   status.textContent = liveMode
     ? (reloadFailed
-      ? 'Conexión autenticada · guardado confirmado, pero el panel no pudo actualizarse. Nuevas escrituras pausadas hasta reintentar la lectura.'
+      ? 'Finanzas y otros módulos · conexión autenticada; guardado confirmado, pero el panel no pudo actualizarse. Nuevas escrituras pausadas hasta reintentar la lectura. Supermercado informa su propio estado.'
       : (writePending || reloadPending)
-        ? 'Conexión autenticada · procesando el cambio y actualizando el panel.'
-        : 'Conexión autenticada · datos en vivo. Escrituras disponibles.')
+        ? 'Finanzas y otros módulos · conexión autenticada; procesando el cambio y actualizando el panel. Supermercado informa su propio estado.'
+        : 'Finanzas y otros módulos · conexión autenticada; datos en vivo. Escrituras disponibles. Supermercado informa su propio estado.')
     : (authState === 'authenticated'
-      ? 'Conexión autenticada · los datos live no se pudieron verificar. Modo snapshot de solo lectura; no se pueden guardar cambios.'
-      : 'Modo snapshot · solo lectura. La conexión autenticada no está disponible; no se pueden guardar cambios.');
+      ? 'Finanzas y otros módulos · los datos live no se pudieron verificar. Snapshot de solo lectura; no se pueden guardar cambios en esas vistas. Supermercado informa su propio estado.'
+      : 'Finanzas y otros módulos · modo snapshot de solo lectura. Su conexión autenticada no está disponible; no se pueden guardar cambios en esas vistas. Supermercado informa su propio estado.');
   status.classList.toggle('status-live', liveMode);
   document.querySelectorAll('[data-write-action]').forEach((button) => {
     // Los botones marcados data-requires="inventory" (alta/edición/baja de
@@ -2743,64 +2743,279 @@ function renderIncomeLines() {
 
 // ── VISTA SUPERMERCADO ───────────────────────────────────────────────────
 
-async function ensureComprasLoaded() {
-  if (comprasLoaded) { renderSupermercadoList(); return; }
-  comprasLoaded = true;
-  document.getElementById('supermercado-content').textContent = 'Cargando…';
-  try {
-    DATA.compras = await fetchJSON('data/compras.json');
-    DATA.comprasError = null;
-  } catch (err) {
-    DATA.compras = [];
-    DATA.comprasError = err.message;
-    console.error('No se pudo cargar data/compras.json', err);
+let supermercadoData = null;
+let supermercadoLoadPromise = null;
+let supermercadoRefreshPromise = null;
+let supermercadoLoadRevision = 0;
+let supermercadoWriteAvailable = false;
+let supermercadoMutationPending = false;
+let superHistoryProductId = null;
+let superHistoryCursor = null;
+const superNumber = (value) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 6 }).format(value);
+
+function superStatus(message, error = false) {
+  const node = document.getElementById('supermercado-status');
+  node.textContent = message;
+  node.classList.toggle('super-error', error);
+}
+
+function setSuperWriteAvailable(available) {
+  supermercadoWriteAvailable = available;
+  document.getElementById('supermercado-availability').textContent = available
+    ? (supermercadoMutationPending ? 'Supermercado en vivo · guardando y actualizando stock.' : 'Supermercado en vivo · escrituras disponibles.')
+    : 'Supermercado en solo lectura/no disponible · actualizá el stock para verificar la conexión antes de guardar.';
+  document.querySelectorAll('[data-super-write]').forEach(control => { control.disabled = !available || supermercadoMutationPending; });
+}
+
+function requireSuperWrite() {
+  if (supermercadoMutationPending) {
+    superStatus('Esperá a que termine el guardado y se actualice el stock.', true);
+    return false;
   }
-  renderSupermercadoList();
+  if (supermercadoWriteAvailable && supermercadoData) return true;
+  superStatus('Supermercado en solo lectura/no disponible. Actualizá el stock antes de guardar.', true);
+  return false;
+}
+
+function validSuperSnapshot(data) {
+  const global = data?.resumen?.global;
+  const counts = ['productos', 'a_reponer', 'vacios', 'reponer', 'ok', 'porcentaje_vacio', 'porcentaje_lleno'];
+  return Array.isArray(data?.categorias) && Array.isArray(data?.productos) &&
+    Array.isArray(data?.resumen?.categorias) && global &&
+    counts.every(key => typeof global[key] === 'number' && Number.isFinite(global[key])) &&
+    data.categorias.every(row => Number.isInteger(row?.id) && typeof row.nombre === 'string' && Number.isInteger(row.orden)) &&
+    data.productos.every(row => Number.isInteger(row?.id) && typeof row.producto === 'string' &&
+      typeof row.unidad === 'string' && typeof row.estado === 'string' && Number.isInteger(row.version) && row.version > 0 &&
+      ['stock_actual', 'stock_deseado', 'a_comprar', 'porcentaje_faltante'].every(key => typeof row[key] === 'number' && Number.isFinite(row[key]))) &&
+    data.resumen.categorias.every(row => typeof row?.nombre === 'string' &&
+      counts.every(key => typeof row[key] === 'number' && Number.isFinite(row[key])));
+}
+
+async function superRequest(method, path, payload) {
+  const response = await fetch(path, {
+    method, credentials: 'same-origin',
+    ...(payload === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }),
+  });
+  let body;
+  try { body = await response.json(); }
+  catch (error) { if (response.ok) throw error; }
+  if (!response.ok) {
+    const error = new Error(body?.error || `HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return body;
+}
+
+function loadSupermercado() {
+  const revision = ++supermercadoLoadRevision;
+  superStatus('Cargando stock…');
+  const promise = (async () => {
+    try {
+      const data = await fetchJSON('/api/supermercado');
+      if (!validSuperSnapshot(data)) throw new Error('Respuesta de stock inválida');
+      if (revision !== supermercadoLoadRevision) return false;
+      supermercadoData = data;
+      renderSupermercadoList();
+      setSuperWriteAvailable(true);
+      superStatus('Stock actualizado.');
+      return true;
+    } catch (error) {
+      if (revision !== supermercadoLoadRevision) return false;
+      supermercadoData = null;
+      setSuperWriteAvailable(false);
+      document.getElementById('supermercado-content').textContent = 'No se pudo cargar el stock. Usá «Actualizar stock» para reintentar.';
+      superStatus(error.message, true);
+      return false;
+    }
+  })();
+  supermercadoLoadPromise = promise;
+  promise.then(() => {
+    if (supermercadoLoadPromise === promise) {
+      supermercadoLoadPromise = null;
+    }
+  });
+  return promise;
+}
+
+function ensureComprasLoaded(force = false) {
+  if (supermercadoRefreshPromise) return supermercadoRefreshPromise;
+  if (supermercadoLoadPromise) {
+    if (!force) return supermercadoLoadPromise;
+    ++supermercadoLoadRevision; // The pending GET predates this requested refresh.
+    supermercadoRefreshPromise = supermercadoLoadPromise.then(() => {
+      supermercadoRefreshPromise = null;
+      return loadSupermercado();
+    });
+    return supermercadoRefreshPromise;
+  }
+  if (supermercadoData && supermercadoWriteAvailable && !force) { renderSupermercadoList(); return Promise.resolve(true); }
+  return loadSupermercado();
 }
 
 function renderSupermercadoList() {
+  if (!supermercadoData) return;
+  const { categorias, productos, resumen } = supermercadoData;
+  const global = resumen.global;
+  document.getElementById('supermercado-summary').textContent = `${global.productos} productos · ${global.a_reponer} a comprar · ${global.vacios} vacíos · ${global.reponer} reponer · ${global.ok} OK · ${superNumber(global.porcentaje_vacio)}% vacío · ${superNumber(global.porcentaje_lleno)}% lleno`;
+  document.getElementById('supermercado-category-summary').innerHTML = resumen.categorias.map(cat =>
+    `<div><strong>${escapeHtml(cat.nombre)}</strong>: ${cat.productos} productos · ${cat.a_reponer} a comprar · ${cat.vacios} vacíos · ${superNumber(cat.porcentaje_vacio)}% vacío · ${superNumber(cat.porcentaje_lleno)}% lleno</div>`).join('');
+  document.getElementById('supermercado-categories').innerHTML = categorias.length ? categorias.map(cat => `
+    <div class="super-category"><span>${escapeHtml(cat.nombre)} · orden ${cat.orden}</span>
+    <button type="button" data-super-write onclick="editSuperCategory(${cat.id})" aria-label="Editar categoría ${escapeHtml(cat.nombre)}" ${supermercadoWriteAvailable && !supermercadoMutationPending ? '' : 'disabled'}>Editar</button>
+    <button type="button" data-super-write onclick="deleteSuperCategory(${cat.id})" aria-label="Eliminar categoría ${escapeHtml(cat.nombre)}" ${supermercadoWriteAvailable && !supermercadoMutationPending ? '' : 'disabled'}>Dar de baja</button></div>`).join('') : '<p class="empty-state">Todavía no hay categorías.</p>';
+  const select = document.getElementById('supermercado-category-select');
+  const previous = select.value;
+  select.innerHTML = '<option value="">Sin categoría</option>' + categorias.map(cat => `<option value="${cat.id}">${escapeHtml(cat.nombre)}</option>`).join('');
+  select.value = previous;
+  const query = document.getElementById('supermercado-search').value.trim().toLocaleLowerCase('es-AR');
+  const shown = productos.filter(row => row.producto.toLocaleLowerCase('es-AR').includes(query));
   const content = document.getElementById('supermercado-content');
-  if (!content) return;
-  if (DATA.comprasError) {
-    content.innerHTML = `<div class="empty-state">No se pudo cargar la lista del súper (${escapeHtml(DATA.comprasError)}). Verificá que exista <code>data/compras.json</code>.</div>`;
-    return;
-  }
-  if (DATA.compras === null) return; // todavía cargando
-
-  const query = (document.getElementById('supermercado-search')?.value || '').trim().toLowerCase();
-  const items = DATA.compras.filter((it) => !query || String(it.item_nombre || '').toLowerCase().includes(query));
-
-  if (!DATA.compras.length) {
-    content.innerHTML = '<div class="empty-state">La lista del súper está vacía.</div>';
-    return;
-  }
-  if (!items.length) {
-    content.innerHTML = '<div class="empty-state">Sin ítems que coincidan con la búsqueda.</div>';
-    return;
-  }
-
-  const pendientes = items.filter((it) => !it.comprado);
-  const comprados = items.filter((it) => it.comprado);
-  const renderItem = (it) => {
-    const prioridad = (it.prioridad || '').toLowerCase();
-    return `
-    <div class="super-item${it.comprado ? ' done' : ''}">
-      <div class="super-item-main">
-        <span>${escapeHtml(it.item_nombre)}</span>
-        <span class="super-item-meta">
-          ${escapeHtml(it.cantidad_deseada)} ${escapeHtml(it.unidad)}${it.agregado_por ? ' · agregado por ' + escapeHtml(it.agregado_por) : ''}${it.fecha_agregado ? ' · ' + escapeHtml(it.fecha_agregado) : ''}
-        </span>
-      </div>
-      ${it.prioridad ? `<span class="${prioridad === 'alta' ? 'prioridad-alta' : ''}">${escapeHtml(it.prioridad)}</span>` : ''}
-    </div>`;
-  };
-
-  content.innerHTML = `
-    <div class="super-section-title">Pendientes (${pendientes.length})</div>
-    <div class="super-list">${pendientes.length ? pendientes.map(renderItem).join('') : '<div class="empty-state">Nada pendiente.</div>'}</div>
-    <div class="super-section-title">Comprados (${comprados.length})</div>
-    <div class="super-list">${comprados.length ? comprados.map(renderItem).join('') : '<div class="empty-state">Nada marcado como comprado.</div>'}</div>`;
+  if (!productos.length) { content.innerHTML = '<p class="empty-state">No hay productos. Cargá el primero con el formulario.</p>'; return; }
+  if (!shown.length) { content.innerHTML = '<p class="empty-state">No hay productos que coincidan.</p>'; return; }
+  content.innerHTML = `<div class="super-list">${shown.map(row => `
+    <div class="super-item">
+      <div class="super-item-main"><strong>${escapeHtml(row.producto)}</strong><span class="super-item-meta">${escapeHtml(row.categoria || 'Sin categoría')} · ${escapeHtml(row.estado)} · deseado ${superNumber(row.stock_deseado)} ${escapeHtml(row.unidad)} · faltan ${superNumber(row.a_comprar)} ${escapeHtml(row.unidad)} (${superNumber(row.porcentaje_faltante)}%)</span></div>
+      <label>Actual <input type="number" data-super-write min="0" max="1000000000" step="0.000001" required value="${row.stock_actual}" id="super-stock-${row.id}" aria-label="Stock actual de ${escapeHtml(row.producto)}" ${supermercadoWriteAvailable && !supermercadoMutationPending ? '' : 'disabled'}></label>
+      <button type="button" data-super-write onclick="saveSuperStock(${row.id})" ${supermercadoWriteAvailable && !supermercadoMutationPending ? '' : 'disabled'}>Guardar stock</button>
+      <button type="button" data-super-write onclick="editSuperProduct(${row.id})" ${supermercadoWriteAvailable && !supermercadoMutationPending ? '' : 'disabled'}>Editar</button>
+      <button type="button" onclick="showSuperHistory(${row.id})">Historial</button>
+      <button type="button" data-super-write onclick="deleteSuperProduct(${row.id})" ${supermercadoWriteAvailable && !supermercadoMutationPending ? '' : 'disabled'}>Dar de baja</button>
+    </div>`).join('')}</div>`;
 }
+
+async function superMutate(method, path, payload, success) {
+  if (!requireSuperWrite()) return false;
+  supermercadoMutationPending = true;
+  setSuperWriteAvailable(supermercadoWriteAvailable);
+  try {
+    superStatus('Guardando…');
+    await superRequest(method, path, payload);
+    const loaded = await ensureComprasLoaded(true);
+    if (!loaded) { superStatus('Se guardó, pero no se pudo recargar el stock. Reabrí la pestaña para reintentar.', true); return true; }
+    superStatus(success);
+    return true;
+  } catch (error) {
+    if (error.status === 401 || error.status === 403) {
+      ++supermercadoLoadRevision;
+      setSuperWriteAvailable(false);
+      superStatus(`${error.message} Supermercado en solo lectura/no disponible; actualizá el stock antes de guardar.`, true);
+      return false;
+    }
+    if (error.status === 409) {
+      await ensureComprasLoaded(true);
+      superStatus(`${error.message} Revisá los datos recargados antes de volver a guardar.`, true);
+    } else superStatus(error.message, true);
+    return false;
+  } finally {
+    supermercadoMutationPending = false;
+    setSuperWriteAvailable(supermercadoWriteAvailable);
+  }
+}
+
+function editSuperCategory(id) {
+  if (!requireSuperWrite()) return;
+  const row = supermercadoData?.categorias.find(item => item.id === id);
+  if (!row) return;
+  const form = document.getElementById('supermercado-category-form');
+  form.elements.id.value = row.id;
+  form.elements.nombre.value = row.nombre;
+  form.elements.orden.value = row.orden;
+  form.elements.nombre.focus();
+}
+function editSuperProduct(id) {
+  if (!requireSuperWrite()) return;
+  const row = supermercadoData?.productos.find(item => item.id === id);
+  if (!row) return;
+  const form = document.getElementById('supermercado-product-form');
+  for (const key of ['id', 'producto', 'unidad', 'stock_deseado', 'stock_actual']) form.elements[key].value = row[key];
+  form.elements.categoria_id.value = row.categoria_id ?? '';
+  form.dataset.version = String(row.version);
+  form.elements.producto.focus();
+}
+async function deleteSuperCategory(id) {
+  if (!requireSuperWrite()) return;
+  const row = supermercadoData?.categorias.find(item => item.id === id);
+  if (!row || !confirm(`¿Dar de baja la categoría ${row.nombre}? Sus productos quedarán sin categoría.`)) return;
+  await superMutate('DELETE', `/api/supermercado/categorias/${id}`, undefined, 'Categoría dada de baja.');
+}
+async function deleteSuperProduct(id) {
+  if (!requireSuperWrite()) return;
+  const row = supermercadoData?.productos.find(item => item.id === id);
+  if (!row || !confirm(`¿Dar de baja el producto ${row.producto}? Quedará en el historial.`)) return;
+  await superMutate('DELETE', `/api/supermercado/productos/${id}`, { expected_version: row.version }, 'Producto dado de baja.');
+}
+async function saveSuperStock(id) {
+  if (!requireSuperWrite()) return;
+  const row = supermercadoData?.productos.find(item => item.id === id);
+  if (!row) { superStatus('Recargá el stock antes de guardar.', true); return; }
+  const input = document.getElementById(`super-stock-${id}`);
+  if (!input.reportValidity()) return;
+  const stock = Number(input.value);
+  if (!Number.isFinite(stock) || stock < 0) { superStatus('Stock inválido.', true); return; }
+  await superMutate('PATCH', `/api/supermercado/productos/${id}/stock`, { stock_actual: stock, expected_version: row.version }, 'Stock actualizado con auditoría.');
+}
+async function showSuperHistory(id, cursor = null) {
+  try {
+    const query = cursor === null ? '' : `?cursor=${encodeURIComponent(cursor)}`;
+    const { historial, next_cursor, has_more } = await superRequest('GET', `/api/supermercado/productos/${id}/historial${query}`);
+    const panel = document.getElementById('supermercado-history');
+    panel.hidden = false;
+    panel.textContent = historial.map(item => `${item.fecha_utc} · ${item.operacion} · ${item.actor}\nAntes: ${JSON.stringify(item.antes)}\nDespués: ${JSON.stringify(item.despues)}`).join('\n\n') || 'Sin cambios registrados.';
+    superHistoryProductId = id;
+    superHistoryCursor = next_cursor;
+    let next = document.getElementById('supermercado-history-next');
+    if (!next) {
+      next = document.createElement('button');
+      next.id = 'supermercado-history-next';
+      next.type = 'button';
+      next.textContent = 'Ver historial anterior';
+      next.addEventListener('click', () => {
+        if (superHistoryCursor !== null) showSuperHistory(superHistoryProductId, superHistoryCursor);
+      });
+      panel.insertAdjacentElement('afterend', next);
+    }
+    next.hidden = !has_more;
+  } catch (error) { superStatus(error.message, true); }
+}
+async function downloadSupermercadoPdf() {
+  if (!supermercadoData) { superStatus('Cargá el stock antes de generar la lista.', true); return; }
+  try {
+    superStatus('Generando PDF…');
+    const response = await fetch('/api/supermercado/lista.pdf', { credentials: 'same-origin' });
+    if (!response.ok) { const body = await response.json(); throw new Error(body.error || `HTTP ${response.status}`); }
+    if (!response.headers.get('content-type')?.startsWith('application/pdf')) throw new Error('Respuesta PDF inválida.');
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a'); link.href = url; link.download = 'lista-supermercado.pdf'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    superStatus('PDF descargado.');
+  } catch (error) { superStatus(error.message, error.message !== 'No falta nada'); }
+}
+
+document.getElementById('supermercado-category-form')?.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!requireSuperWrite()) return;
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const id = form.elements.id.value;
+  if (await superMutate(id ? 'PATCH' : 'POST', `/api/supermercado/categorias${id ? '/' + id : ''}`,
+    { nombre: form.elements.nombre.value, orden: Number(form.elements.orden.value) }, 'Categoría guardada.')) form.reset();
+});
+document.getElementById('supermercado-product-form')?.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!requireSuperWrite()) return;
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const id = form.elements.id.value;
+  const payload = { producto: form.elements.producto.value, unidad: form.elements.unidad.value,
+    categoria_id: form.elements.categoria_id.value ? Number(form.elements.categoria_id.value) : null,
+    stock_deseado: Number(form.elements.stock_deseado.value), stock_actual: Number(form.elements.stock_actual.value) };
+  if (id) {
+    if (!/^\d+$/.test(form.dataset.version || '')) { superStatus('Recargá el producto antes de guardar.', true); return; }
+    payload.expected_version = Number(form.dataset.version);
+  }
+  if (await superMutate(id ? 'PATCH' : 'POST', `/api/supermercado/productos${id ? '/' + id : ''}`, payload, 'Producto guardado.')) form.reset();
+});
 
 // ── VISTA RECETAS ────────────────────────────────────────────────────────
 

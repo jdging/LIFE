@@ -54,7 +54,7 @@ El dashboard (`app.js`) solo conoce la primera capa: llama a rutas relativas
 
 | Método y ruta | Entrada | Respuesta exitosa |
 | --- | --- | --- |
-| `GET /api/health` | Sin parámetros | `{"ok":true,"capabilities":["expenses","income","fixed"],"mode":"live"}` |
+| `GET /api/health` | Sin parámetros | `{"ok":true,"capabilities":["expenses","income","fixed","inventory","supermercado"],"mode":"live"}` |
 | `GET /api/expenses?month=YYYY-MM` | `month` opcional | `{"expenses":[...]}`; excluye bajas lógicas |
 | `POST /api/expenses` | `fecha`, `monto`, `moneda`, `categoria`, `subcategoria`, `medio_pago`, `pagado_por`, `descripcion_original`, `tipo_proporcion`, `proporcion_jd`, `proporcion_pinki`, `cuotas_total` | `201 {"expenses":[...]}`; una fila por cuota |
 | `PATCH /api/expenses/:id` | Subconjunto no vacío de los campos del alta, **excepto `cuotas_total`** | `{"expense":{...}}`; `404` si no existe o está borrado |
@@ -132,3 +132,11 @@ obligatorias en `GET /api/fixed/range`). Una query no listada devuelve
   `INTEGRACION.md`.
 - Endpoints no listados en la tabla de rutas (no hay más superficie que la
   que exponen `api.py` y `middleware.js` hoy).
+
+## F4 Supermercado (candidato, sin desplegar)
+
+Ver [contrato y QA](../../docs/F4-SUPERMERCADO-QA.md). Rutas autenticadas por sesión y secreto: `GET /api/supermercado`, `POST /api/supermercado/categorias`, `PATCH|DELETE /api/supermercado/categorias/:id`, `POST /api/supermercado/productos`, `PATCH|DELETE /api/supermercado/productos/:id`, `PATCH /api/supermercado/productos/:id/stock`, `GET /api/supermercado/productos/:id/historial?cursor=ID`, `GET /api/supermercado/lista.pdf`. La última retorna PDF binario A4 o JSON 409 «No falta nada».
+
+Los productos públicos incluyen `version` (alta=1). Todo PATCH/DELETE de producto, incluso stock, exige `expected_version` entero positivo en JSON. DELETE lleva cuerpo JSON. Ausente/inválido: 400; obsoleto: 409 con mensaje de recarga, sin mutación ni auditoría. La baja de categoría incrementa versiones de productos reasignados. Historial: máximo 50 eventos por respuesta, orden id descendente, `next_cursor` entero o null y `has_more` booleano; cursor inválido/inexistente: 400, producto nunca existente: 404, soft deleted: 200. Hay límite técnico de 1000 productos y 100 categorías activos; alta excedida: 409. Listado de categorías, productos y resumen se calcula desde un snapshot SQLite.
+
+En la UI, `liveMode` y el banner snapshot describen Finanzas y otros módulos; Supermercado informa disponibilidad propia. Solo un `GET /api/supermercado` autenticado con estructura válida habilita `supermercadoWriteAvailable` y los controles de alta, edición, stock y baja. Antes de esa lectura, tras una recarga fallida o una mutación 401/403, el módulo queda en solo lectura/no disponible y `superMutate` rechaza escrituras sin llamar a la API. Una respuesta GET invalidada por una recarga posterior no puede restablecer disponibilidad. El PDF y el historial son lecturas con semántica propia; su disponibilidad no implica permiso de escritura. El proxy y el servidor mantienen autenticación y controles de origen en cada operación; este flag es solo un gate de interfaz. El harness local no implementa `/api/health` ni habilita Finanzas.
