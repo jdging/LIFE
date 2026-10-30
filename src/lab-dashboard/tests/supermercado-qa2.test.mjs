@@ -174,6 +174,28 @@ function domHarness(reads, writes = []) {
   return { context, element, document, requests, content };
 }
 
+test('QA3: los controles de una unidad conservan los nodos al pasar al siguiente producto', async () => {
+  const { context, element, document, requests } = domHarness([snapshot([product(1, 0.5), product(2, 1.25)])]);
+  assert.equal(await vm.runInContext('ensureComprasLoaded()', context), true);
+  const first = element('super-stock-1');
+  const second = element('super-stock-2');
+  vm.runInContext('handleSuperStockBlur(1)', context);
+  assert.equal(element('super-stock-2'), second, 'un blur limpio conserva el destino');
+  first.value = '0.5';
+  first.focus();
+  vm.runInContext('handleSuperStockStep(1, 1)', context);
+  assert.equal(first.value, '1.5');
+  vm.runInContext('handleSuperStockBlur(1, { relatedTarget: { dataset: { superStockTarget: "super-stock-1" } } })', context);
+  assert.equal(requests.length, 0, 'el click del control no publica un valor anterior');
+  second.focus();
+  vm.runInContext('renderSupermercadoList()', context);
+  assert.equal(element('super-stock-1'), first);
+  assert.equal(element('super-stock-2'), second);
+  assert.equal(document.activeElement, second);
+  assert.equal(vm.runInContext('superStockDrafts.get(1).value', context), '1.5');
+  vm.runInContext('clearTimeout(superStockDrafts.get(1).timer)', context);
+});
+
 // The old manual action tests remain in supermercado.test.mjs; these cover the new flows.
 test('clean stock blur keeps the next input and History action mounted through verified saves', async () => {
   const rows = [product(1, 0), product(2, 0, 5, 1, 1, 'Arroz')];

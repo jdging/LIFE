@@ -2776,6 +2776,7 @@ function setSuperWriteAvailable(available) {
     ? (supermercadoMutationPending ? 'Supermercado en vivo · guardando cambios.' : 'Supermercado en vivo · escrituras disponibles.')
     : 'Supermercado en solo lectura/no disponible · esperando una lectura verificada de la API.';
   document.querySelectorAll('[data-super-write]').forEach(control => { control.disabled = !available || supermercadoMutationPending; });
+  refreshSuperStockStepButtons();
 }
 function requireSuperWrite() {
   if (supermercadoMutationPending) { superStatus('Esperá a que termine el guardado.', true); return false; }
@@ -2997,6 +2998,12 @@ function reconcileSupermercadoContent(content, markup) {
         const label = article.querySelector('.super-stock-control label');
         const nextLabel = desiredArticle.querySelector('.super-stock-control label');
         if (label.innerHTML !== nextLabel.innerHTML) label.innerHTML = nextLabel.innerHTML;
+        const stepButtons = article.querySelectorAll('[data-super-step]');
+        const nextStepButtons = desiredArticle.querySelectorAll('[data-super-step]');
+        stepButtons.forEach((button, stepIndex) => {
+          const nextLabelText = nextStepButtons[stepIndex]?.getAttribute('aria-label');
+          if (nextLabelText && button.getAttribute('aria-label') !== nextLabelText) button.setAttribute('aria-label', nextLabelText);
+        });
         const input = article.querySelector('input');
         const draft = superStockDrafts.get(Number(id));
         if (!draft?.dirty && !draft?.saving && input.value !== desiredArticle.querySelector('input').value) {
@@ -3060,7 +3067,7 @@ function renderSupermercadoList() {
         const coverage = superCoverage(row);
         const draft = superStockDrafts.get(row.id);
         return `<article class="super-item" data-super-product-id="${row.id}"><div class="super-item-main"><strong>${escapeHtml(row.producto)}</strong><span class="super-badge super-badge-${row.estado === 'Vacío' ? 'empty' : row.estado === 'Reponer' ? 'low' : 'ok'}">${escapeHtml(row.estado)}</span><span>Deseado: ${escapeHtml(superQuantity(row.stock_deseado, row.unidad))} · Actual: ${escapeHtml(superQuantity(row.stock_actual, row.unidad))}</span><span>${escapeHtml(coverage.text)}</span>${coverage.percent === null ? '' : `<div class="super-coverage" role="meter" aria-label="Cobertura de ${escapeHtml(row.producto)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(coverage.percent)}"><span style="width:${coverage.percent}%"></span></div>`}</div>
-        <div class="super-stock-control"><label for="super-stock-${row.id}">Stock actual (${escapeHtml(row.unidad)})</label><input type="number" data-super-write min="0" max="1000000000" step="0.000001" value="${escapeHtml(draft?.value ?? row.stock_actual)}" id="super-stock-${row.id}" aria-describedby="super-stock-status-${row.id}" oninput="handleSuperStockInput(event, ${row.id})" onblur="handleSuperStockBlur(${row.id})" onkeydown="handleSuperStockKeydown(event, ${row.id})" ${supermercadoWriteAvailable && !supermercadoMutationPending ? '' : 'disabled'}><div id="super-stock-status-${row.id}" class="super-stock-status" role="status" aria-live="polite">${superStockStatus(row.id)}</div></div>
+        <div class="super-stock-control"><label for="super-stock-${row.id}">Stock actual (${escapeHtml(row.unidad)})</label><div class="super-step-row"><input type="number" data-super-write min="0" max="1000000000" step="any" value="${escapeHtml(draft?.value ?? row.stock_actual)}" id="super-stock-${row.id}" aria-describedby="super-stock-status-${row.id}" oninput="handleSuperStockInput(event, ${row.id})" onblur="handleSuperStockBlur(${row.id}, event)" onkeydown="handleSuperStockKeydown(event, ${row.id})" ${supermercadoWriteAvailable && !supermercadoMutationPending ? '' : 'disabled'}><div class="super-step-actions"><button type="button" data-super-write data-super-step="-1" data-super-stock-target="super-stock-${row.id}" aria-label="Restar 1 al stock actual de ${escapeHtml(row.producto)}" onclick="handleSuperStockStep(${row.id}, -1)">−</button><button type="button" data-super-write data-super-step="1" data-super-stock-target="super-stock-${row.id}" aria-label="Sumar 1 al stock actual de ${escapeHtml(row.producto)}" onclick="handleSuperStockStep(${row.id}, 1)">+</button></div></div><div id="super-stock-status-${row.id}" class="super-stock-status" role="status" aria-live="polite">${superStockStatus(row.id)}</div></div>
         <div class="super-item-actions"><button type="button" data-super-write onclick="editSuperProduct(${row.id})">Editar</button><button type="button" id="super-history-button-${row.id}" onclick="showSuperHistory(${row.id}, null, this)">Historial</button><button type="button" data-super-write onclick="deleteSuperProduct(${row.id})">Dar de baja</button></div></article>`;
       }).join('')}</div></section>`;
   }).join('');
@@ -3124,6 +3131,7 @@ function editSuperProduct(id) {
   for (const key of ['id', 'producto', 'unidad', 'stock_deseado', 'stock_actual']) form.elements[key].value = row[key];
   form.elements.categoria_id.value = row.categoria_id ?? '';
   form.dataset.version = String(row.version);
+  refreshSuperStockStepButtons();
   form.elements.producto.focus();
 }
 async function deleteSuperCategory(id) {
@@ -3143,6 +3151,32 @@ function validSuperStock(raw) {
   const value = Number(raw);
   return Number.isFinite(value) && value >= 0 && value <= 1000000000;
 }
+function stepSuperStock(raw, direction) {
+  if (!validSuperStock(raw) || ![-1, 1].includes(direction)) return null;
+  const [whole, fraction = ''] = raw.split('.');
+  const scale = 1000000n;
+  const scaled = BigInt(whole) * scale + BigInt(fraction.padEnd(6, '0') || '0');
+  const next = scaled + BigInt(direction) * scale;
+  if (next < 0n || next > 1000000000n * scale) return null;
+  const nextWhole = String(next / scale);
+  return fraction ? `${nextWhole}.${String(next % scale).padStart(6, '0').slice(0, fraction.length)}` : nextWhole;
+}
+function refreshSuperStockStepButtons() {
+  document.querySelectorAll('[data-super-step]').forEach(button => {
+    if (!button.dataset || button.dataset.superStep === undefined) return;
+    const input = document.getElementById(button.dataset.superStockTarget);
+    button.disabled = !supermercadoWriteAvailable || supermercadoMutationPending || !input || input.disabled ||
+      stepSuperStock(input.value, Number(button.dataset.superStep)) === null;
+  });
+}
+function handleSuperStockStep(id, direction) {
+  const input = document.getElementById(`super-stock-${id}`);
+  if (!input || input.disabled || !supermercadoWriteAvailable || supermercadoMutationPending) return;
+  const next = stepSuperStock(input.value, direction);
+  if (next === null) return;
+  input.value = next;
+  handleSuperStockInput({ target: input }, id);
+}
 function handleSuperStockInput(event, id) {
   const row = supermercadoData?.productos.find(item => item.id === id);
   if (!row) return;
@@ -3161,17 +3195,68 @@ function handleSuperStockInput(event, id) {
     draft.timer = setTimeout(() => saveSuperStock(id), 900);
   }
   updateSuperStockStatus(id);
+  refreshSuperStockStepButtons();
 }
-function handleSuperStockBlur(id) {
+function handleSuperStockBlur(id, event) {
+  if (event?.relatedTarget?.dataset?.superStockTarget === `super-stock-${id}`) return;
   const draft = superStockDrafts.get(id);
   if (draft && validSuperStock(draft.value) && !draft.conflict) saveSuperStock(id);
   if (!draft || !draft.dirty) renderSupermercadoList();
 }
 function handleSuperStockKeydown(event, id) {
+  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+    event.preventDefault();
+    handleSuperStockStep(id, event.key === 'ArrowUp' ? 1 : -1);
+    return;
+  }
   if (event.key !== 'Enter') return;
   event.preventDefault();
   event.target.blur();
   handleSuperStockBlur(id);
+}
+function handleSuperFormStockStep(input, direction) {
+  if (input.disabled || !supermercadoWriteAvailable || supermercadoMutationPending) return;
+  const next = stepSuperStock(input.value, direction);
+  if (next === null) return;
+  input.value = next;
+  refreshSuperStockStepButtons();
+}
+function configureSuperProductStockControls() {
+  const form = document.getElementById('supermercado-product-form');
+  if (!form?.elements) return;
+  for (const [name, labelText] of [['stock_deseado', 'deseado'], ['stock_actual', 'actual']]) {
+    const input = form.elements[name];
+    if (!input) continue;
+    input.step = 'any';
+    input.id = `super-form-${name}`;
+    input.addEventListener?.('keydown', event => {
+      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+      event.preventDefault();
+      handleSuperFormStockStep(input, event.key === 'ArrowUp' ? 1 : -1);
+    });
+    input.addEventListener?.('input', refreshSuperStockStepButtons);
+    const label = input.closest?.('label');
+    if (!label || !document.createElement) continue;
+    const group = document.createElement('div');
+    group.className = 'super-form-stock-control';
+    label.before(group);
+    group.appendChild(label);
+    const actions = document.createElement('div');
+    actions.className = 'super-step-actions';
+    for (const [direction, text, action] of [[-1, '−', 'Restar'], [1, '+', 'Sumar']]) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = text;
+      button.setAttribute('data-super-write', '');
+      button.dataset.superStep = String(direction);
+      button.dataset.superStockTarget = input.id;
+      button.setAttribute('aria-label', `${action} 1 al stock ${labelText}`);
+      button.addEventListener('click', () => handleSuperFormStockStep(input, direction));
+      actions.appendChild(button);
+    }
+    group.appendChild(actions);
+  }
+  refreshSuperStockStepButtons();
 }
 function enqueueSuperStock(id) {
   if (!supermercadoStockQueued.has(id)) {
@@ -3442,9 +3527,11 @@ async function downloadSupermercadoPdf() {
 }
 function handleSuperFormReset(event) {
   delete event.currentTarget.dataset.version;
+  if (typeof setTimeout === 'function') setTimeout(refreshSuperStockStepButtons, 0);
 }
 document.getElementById('supermercado-category-form')?.addEventListener('reset', handleSuperFormReset);
 document.getElementById('supermercado-product-form')?.addEventListener('reset', handleSuperFormReset);
+configureSuperProductStockControls();
 document.getElementById('supermercado-category-form')?.addEventListener('submit', async event => {
   event.preventDefault();
   if (!requireSuperWrite()) return;

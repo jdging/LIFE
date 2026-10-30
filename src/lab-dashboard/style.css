@@ -1511,6 +1511,15 @@ footer {
 .super-coverage { width: 100%; max-width: 270px; }
 .super-stock-control { display: grid; gap: 5px; min-width: 0; }
 .super-stock-control label { font-weight: 600; font-size: 12px; }
+.super-form-stock-control { display: grid; gap: 5px; min-width: 0; }
+.super-step-row { display: flex; align-items: stretch; gap: 5px; min-width: 0; }
+.super-step-row input { flex: 1 1 auto; }
+.super-step-actions { display: flex; gap: 4px; }
+.super-step-actions button { min-width: 34px; padding: 6px 8px; font-size: 16px; line-height: 1; }
+.super-form-stock-control .super-step-actions button { flex: 0 0 34px; }
+.super-stock-control input[type="number"], .super-form-stock-control input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+.super-stock-control input[type="number"]::-webkit-inner-spin-button, .super-stock-control input[type="number"]::-webkit-outer-spin-button,
+.super-form-stock-control input[type="number"]::-webkit-inner-spin-button, .super-form-stock-control input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .super-stock-status { font-size: 12px; overflow-wrap: anywhere; }
 .super-orphan { padding: 10px; border-left: 3px solid var(--danger); background: var(--paper-deep); overflow-wrap: anywhere; }
 .super-stock-status button { padding: 5px 7px; margin-top: 4px; }

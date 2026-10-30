@@ -1,12 +1,13 @@
-"""Generate two clearly synthetic PDF demos without using a DB or service."""
+"""Generate reproducible synthetic PDF layout demos without a DB or service."""
 import argparse
 from datetime import datetime, timezone
 from pathlib import Path
+from tempfile import gettempdir
 
-from supermercado_pdf import build_pdf
+from supermercado_pdf import _item_lines, _pdf_text, _plan_pages, build_pdf
 
 
-DEFAULT_OUT = Path(__file__).resolve().parents[1] / "evidencia"
+DEFAULT_OUT = Path(gettempdir()) / "f4-qa3-pdf"
 
 
 def item(name, category, desired, current, missing, unit):
@@ -18,6 +19,21 @@ def item(name, category, desired, current, missing, unit):
         "a_comprar": missing,
         "unidad": unit,
     }
+
+
+def layout_rows(page_count, last_columns):
+    """Find a compact synthetic list with the requested occupied page shape."""
+    rows = []
+    prepared = []
+    for index in range(1, 1001):
+        entry = item(f"Producto sintético {index:04d}", "Almacén sintético",
+                     2.5, 0.5, 2, "kg")
+        rows.append(entry)
+        prepared.append((_pdf_text(entry["categoria"]), _item_lines(entry)))
+        pages = _plan_pages(prepared)
+        if len(pages) == page_count and len(pages[-1]) == last_columns:
+            return rows
+    raise RuntimeError("No se encontró el escenario sintético solicitado")
 
 
 def main():
@@ -32,21 +48,15 @@ def main():
         item("Leche sintética", "Lácteos", 3, 1, 2, "L"),
         item("Pilas sintéticas", None, 4, 0, 4, "u"),
     ]
-    long = []
-    categories = [
-        "Verduras sintéticas",
-        "Almacén sintético de prueba con categoría larga y acentos",
-        "Lácteos sintéticos",
-        "Limpieza sintética",
-        None,
-    ]
-    for index in range(240):
-        category = categories[min(index // 48, len(categories) - 1)]
-        name = f"Producto sintético {index:03d} " + ("nombre muy largo " * 4)
-        long.append(item(name, category, 2.5, 0.125, 2.375,
-                         "medidasuperlarguisimaabc" if index % 17 == 0 else "kg"))
-    (args.out / "f4-lista-demo-sintetica.pdf").write_bytes(build_pdf(short, when))
-    (args.out / "f4-lista-larga-demo-sintetica.pdf").write_bytes(build_pdf(long, when))
+    demos = {
+        "f4-qa3-1-columna.pdf": short,
+        "f4-qa3-2-columnas.pdf": layout_rows(1, 2),
+        "f4-qa3-3-columnas.pdf": layout_rows(1, 3),
+        "f4-qa3-ultima-1-columna.pdf": layout_rows(2, 1),
+        "f4-qa3-ultima-2-columnas.pdf": layout_rows(2, 2),
+    }
+    for filename, rows in demos.items():
+        (args.out / filename).write_bytes(build_pdf(rows, when))
 
 
 if __name__ == "__main__":
