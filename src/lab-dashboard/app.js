@@ -1217,14 +1217,14 @@ function formMarkup(kind, row, categoriesCatalog) {
       <datalist id="inventario-categorias">${categorias.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
       ${formField('ubicacion', 'Ubicación', row?.ubicacion || '', 'text', 'list="inventario-ubicaciones"')}
       <datalist id="inventario-ubicaciones">${ubicaciones.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
-      ${formField('valor_estimado', 'Valor estimado (ARS)', row?.valor_estimado ?? '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
+      ${formField('valor_estimado', 'Valor estimado (ARS)', row?.valor_estimado ?? '', 'text', 'required inputmode="decimal" min="0.01" max="1000000000000" step="0.01"')}
       ${formField('fecha_adquisicion', 'Fecha de compra (opcional)', row?.fecha_adquisicion || '', 'date')}
-      ${formField('precio_ars', 'ARS pagado en la compra (opcional)', row?.precio_ars ?? '', 'number', 'min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdSugerido()"')}
-      ${formField('cotizacion_usd_compra', 'Cotización USD al comprar (opcional)', row?.cotizacion_usd_compra ?? '', 'number', 'min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdSugerido()"')}
-      ${formField('precio_usd_compra', 'USD de compra (sugerido = ARS / cotización)', row?.precio_usd_compra ?? '', 'number', 'min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdEdited()"')}
+      ${formField('precio_ars', 'ARS pagado en la compra (opcional)', row?.precio_ars ?? '', 'text', 'inputmode="decimal" min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdSugerido()"')}
+      ${formField('cotizacion_usd_compra', 'Cotización USD al comprar (opcional)', row?.cotizacion_usd_compra ?? '', 'text', 'inputmode="decimal" min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdSugerido()"')}
+      ${formField('precio_usd_compra', 'USD de compra (sugerido = ARS / cotización)', row?.precio_usd_compra ?? '', 'text', 'inputmode="decimal" min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdEdited()"')}
       <div id="inventory-proportion">${formField('proporcion_jd', 'JD (%)', pctJD, 'number', pctJDExtra)}
       <p class="form-help">Pinki: <output id="inventory-pinki-percent" aria-live="polite">${pctJD !== '' && Number.isFinite(Number(pctJD)) ? `${100 - Number(pctJD)}%` : '—'}</output></p></div>
-      ${formField('precio_venta_estimado_usd', 'Precio de reventa estimado (USD, opcional)', row?.precio_venta_estimado_usd ?? '', 'number', 'min="0" max="1000000000000" step="0.01"')}
+      ${formField('precio_venta_estimado_usd', 'Precio de reventa estimado (USD, opcional)', row?.precio_venta_estimado_usd ?? '', 'text', 'inputmode="decimal" min="0" max="1000000000000" step="0.01"')}
       ${formSelect('estado', 'Estado', INVENTARIO_ESTADOS, row?.estado || 'Activo')}
       ${formField('notas', 'Notas', row?.notas || '')}`;
   }
@@ -1235,7 +1235,7 @@ function formMarkup(kind, row, categoriesCatalog) {
     const proporcionJd = tipoProporcion === 'custom' && row?.proporcion_jd != null ? row.proporcion_jd : '50';
     const proporcionPinki = tipoProporcion === 'custom' && row?.proporcion_pinki != null ? row.proporcion_pinki : '50';
     return `${isEdit ? `<p class="form-help">Esta edición aplica solo a esta fila (cuota ${escapeHtml(cuotaLabel(row))} de ${escapeHtml(String(row.cuotas_total))}); las demás cuotas de este gasto no cambian. La cantidad de cuotas no se puede editar desde aquí.</p>` : ''}
-      ${formField('monto', 'Monto total (ARS)', row?.monto ?? '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
+      ${formField('monto', 'Monto total (ARS)', row?.monto ?? '', 'text', 'required inputmode="decimal" min="0.01" max="1000000000000" step="0.01"')}
       ${formField('fecha', 'Fecha', row?.fecha || todayLocalISO(), 'date', 'required')}
       ${categoryFields}
       ${formField('descripcion_original', 'Descripción', row?.descripcion_original || '')}
@@ -1253,7 +1253,7 @@ function formMarkup(kind, row, categoriesCatalog) {
       ${isEdit ? '' : formField('cuotas_total', 'Cantidad de cuotas', '1', 'number', 'required min="1" max="120" step="1"')}`;
   }
   if (kind === 'income' || kind === 'income-edit') return `
-    ${formField('monto', 'Monto (ARS)', row?.monto ?? '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
+    ${formField('monto', 'Monto (ARS)', row?.monto ?? '', 'text', 'required inputmode="decimal" min="0.01" max="1000000000000" step="0.01"')}
     ${formField('fecha', 'Fecha', row?.fecha || todayLocalISO(), 'date', 'required')}
     ${formSelect('persona', 'Persona', ['JD', 'Pinki'], row?.persona || 'JD')}
     ${formSelect('categoria', 'Categoría', ['Salario', 'Extra', 'Freelance', 'Otro'], row?.categoria || 'Salario')}
@@ -1262,7 +1262,7 @@ function formMarkup(kind, row, categoriesCatalog) {
   const fixedCategoryFields = categoriesCatalog ? formFixedCategorySelects(categoriesCatalog, row) : formFixedCategoryText(row);
   return `${formField('nombre', 'Descripción', row?.nombre || '', 'text', 'required')}
     ${fixedCategoryFields}
-    ${formField('monto_estimado', 'Monto bruto (ARS)', row?.monto_estimado ?? '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
+    ${formField('monto_estimado', 'Monto bruto (ARS)', row?.monto_estimado ?? '', 'text', 'required inputmode="decimal" min="0.01" max="1000000000000" step="0.01"')}
     ${formSelect('periodicidad', 'Periodicidad', ['mensual', 'bimestral'], row?.periodicidad || 'mensual')}
     ${formSelect('responsable', 'Responsable', ['Común', 'JD', 'Pinki'], row?.responsable || 'Común')}
     <div id="fixed-split-fields">
@@ -1487,17 +1487,35 @@ function validFixedPercent(raw) {
 }
 
 function validMoney(raw) {
-  if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(String(raw))) return false;
-  const value = Number(raw);
+  if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(String(normalizeDecimalInput(raw)))) return false;
+  const value = Number(normalizeDecimalInput(raw));
   return Number.isFinite(value) && value > 0 && value <= 1e12;
+}
+
+// Mejora Juan 2026-11-05 (#1 lista de mejoras): el teclado/locale de cada
+// dispositivo decide si "," o "." es el separador decimal válido para
+// montos; sin esto, tipear el que no espera el input dejaba el campo
+// vacío/inválido sin aviso claro. Se acepta cualquiera de los dos como
+// separador decimal (no se admiten separadores de miles) antes de validar
+// o convertir a Number. Declarada como function (hoisted) para que quede
+// disponible sin importar en qué orden la lean los slices de tests.
+function normalizeDecimalInput(raw) {
+  if (typeof raw !== 'string') return raw;
+  const trimmed = raw.trim();
+  // Sólo se normaliza la coma cuando funciona como separador decimal (una
+  // sola, sin puntos de miles mezclados) — mantiene el mensaje de error
+  // existente para entradas realmente inválidas en vez de aceptar cualquier
+  // combinación de separadores.
+  if (/^\d*,\d{1,2}$/.test(trimmed)) return trimmed.replace(',', '.');
+  return trimmed;
 }
 
 // Igual que validMoney, pero admite 0 — para los campos monetarios opcionales
 // de paridad con el legacy (precio_ars, cotizacion_usd_compra, etc.), que en
 // el servidor se validan con positive=False (ver api.py, INVENTORY_MONEY_OPTIONAL_FIELDS).
 function validMoneyOptional(raw) {
-  if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(String(raw))) return false;
-  const value = Number(raw);
+  if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(String(normalizeDecimalInput(raw)))) return false;
+  const value = Number(normalizeDecimalInput(raw));
   return Number.isFinite(value) && value >= 0 && value <= 1e12;
 }
 
@@ -1509,6 +1527,13 @@ function validDate(raw) {
 
 function collectForm(kind, row, values) {
   const errors = {};
+  // Normaliza coma/punto una sola vez acá, así todo lo de abajo (validMoney,
+  // Number(values.X) directo al armar el payload) ya trabaja con el valor
+  // correcto sin tener que acordarse de hacerlo en cada campo monetario.
+  for (const moneyField of ['monto', 'monto_estimado', 'valor_estimado', 'precio_ars',
+    'cotizacion_usd_compra', 'precio_usd_compra', 'precio_venta_estimado_usd']) {
+    if (typeof values[moneyField] === 'string') values[moneyField] = normalizeDecimalInput(values[moneyField]);
+  }
   if (kind === 'expense-saldar' || kind === 'expense-saldar-todas') return { payload: null, errors };
   // Inventario tiene su propia forma (campos y fecha opcional distintos de
   // gastos/ingresos/fijos): se resuelve aparte en vez de forzarla en la
