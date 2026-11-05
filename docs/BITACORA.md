@@ -14,9 +14,14 @@ sobre `main` antes de pushear. `git push origin main:main`.
 **Vercel:** nuevo deployment de Production autodisparado por el push
 (`life-noxjqfe19-jdg7.vercel.app`, build desde `main` vía
 `life-git-main-jdg7.vercel.app`). El alias `life-jdg7.vercel.app` estaba
-pineado a un deployment de 3 días — re-aliaseado al nuevo. Se agregó el
-dominio al proyecto (`vercel domains add`) para que siga automáticamente
-los próximos pushes a `main` sin tener que re-aliasear a mano cada vez.
+pineado a un deployment de 3 días — re-aliaseado al nuevo
+(`vercel alias set`). Se intentó `vercel domains add life-jdg7.vercel.app
+life` para que siguiera production automáticamente, pero NO funcionó
+como se esperaba (`vercel domains inspect` sigue devolviendo "no access",
+y un push de docs posterior no re-aliaseó solo) -- queda confirmado que
+cada push a `main` necesita un `vercel alias set <deployment-nuevo>
+life-jdg7.vercel.app` manual después del deploy automático, no hay forma
+de dejarlo en automático con las herramientas probadas hoy.
 **Backend real (`life-api.service`, puerto 8765):** backup previo en
 `/home/ai-os/hermes/backups/life-api-deploy-20261105T125526Z/` (api.py,
 db.py, validaciones.py + copia de `lasso.sqlite`). Se copiaron los 3
