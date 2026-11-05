@@ -111,11 +111,11 @@ INVENTORY_MONEY_OPTIONAL_FIELDS = (
 )
 ALLOWED_FIXED_CREATE_FIELDS = {
     "nombre", "monto_estimado", "periodicidad", "vigente_desde", "responsable",
-    "tipo_proporcion", "proporcion_jd", "categoria", "subcategoria",
+    "tipo_proporcion", "proporcion_jd", "categoria", "subcategoria", "medio_pago",
 }
 ALLOWED_FIXED_PATCH_FIELDS = {
     "nombre", "monto_estimado", "periodicidad", "responsable", "vigente_desde",
-    "tipo_proporcion", "proporcion_jd", "categoria", "subcategoria",
+    "tipo_proporcion", "proporcion_jd", "categoria", "subcategoria", "medio_pago",
 }
 CATEGORY_TIPOS = ("Gasto", "Ingreso", "Inversión")
 
@@ -1092,6 +1092,12 @@ class _App:
         if subcategoria not in (db._FIXED_UNSET, None) and (not isinstance(subcategoria, str) or not subcategoria.strip()):
             return self._error(start_response, 400, "subcategoria, si se especifica, no puede estar vacía.")
 
+        # medio_pago (mejora Juan 2026-11-05, #4 lista de mejoras): mismo
+        # centinela omitido/None/valor que categoria/subcategoria.
+        medio_pago = data.get("medio_pago", db._FIXED_UNSET)
+        if medio_pago not in (db._FIXED_UNSET, None) and medio_pago not in validaciones.MEDIOS_PAGO_VALIDOS:
+            return self._error(start_response, 400, "medio_pago inválido.")
+
         monto_estimado = data.get("monto_estimado")
         if monto_estimado is not None:
             errores = validaciones.validar_fixed_update({"monto_estimado": monto_estimado})
@@ -1133,6 +1139,7 @@ class _App:
                 periodicidad=periodicidad,
                 categoria=categoria,
                 subcategoria=subcategoria,
+                medio_pago=medio_pago,
                 actor=SERVER_ACTOR,
                 **{key: data[key] for key in ("tipo_proporcion", "proporcion_jd") if key in data},
             )

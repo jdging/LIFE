@@ -2282,6 +2282,7 @@ def crear_version_fijo(
     proporcion_jd=_FIXED_UNSET,
     categoria=_FIXED_UNSET,
     subcategoria=_FIXED_UNSET,
+    medio_pago=_FIXED_UNSET,
 ) -> int:
     """Crea una versión NUEVA de un gasto fijo, vigente desde `vigente_desde`.
 
@@ -2356,14 +2357,20 @@ def crear_version_fijo(
     nueva_periodicidad = periodicidad if periodicidad is not None else anterior["periodicidad"]
     nuevo_monto = monto_nuevo if monto_nuevo is not None else anterior["monto_estimado"]
     nueva_categoria, nueva_subcategoria = resolve_fixed_categoria(categoria, subcategoria, anterior)
+    # medio_pago (mejora Juan 2026-11-05, #4 lista de mejoras): mismo
+    # centinela que categoria/subcategoria -- omitido hereda, explícito
+    # (incluido None) reemplaza. Permite marcar "Crédito" en una edición sin
+    # tocar monto/responsable, para que el fijo aparezca agrupado junto a
+    # los vencimientos de tarjeta (ver creditFixedItems en el dashboard).
+    nuevo_medio_pago = anterior["medio_pago"] if medio_pago is _FIXED_UNSET else medio_pago
     nuevo_tipo, nueva_proporcion = resolve_fixed_split(
         nuevo_responsable, tipo_proporcion, proporcion_jd, anterior
     )
     if (nuevo_nombre, nuevo_monto, nueva_periodicidad, nuevo_responsable,
-            nuevo_tipo, nueva_proporcion, nueva_categoria, nueva_subcategoria) == (
+            nuevo_tipo, nueva_proporcion, nueva_categoria, nueva_subcategoria, nuevo_medio_pago) == (
             anterior["nombre"], anterior["monto_estimado"], anterior["periodicidad"],
             anterior["responsable"], anterior["tipo_proporcion"], anterior["proporcion_jd"],
-            anterior["categoria"], anterior["subcategoria"]):
+            anterior["categoria"], anterior["subcategoria"], anterior["medio_pago"]):
         raise FixedNoChangeError("La nueva versión no tiene cambios reales.")
 
     errores = validar_gasto_fijo(
@@ -2375,6 +2382,7 @@ def crear_version_fijo(
             "periodicidad": nueva_periodicidad,
             "categoria": nueva_categoria,
             "subcategoria": nueva_subcategoria,
+            "medio_pago": nuevo_medio_pago,
         }
     )
     if errores:
@@ -2390,7 +2398,7 @@ def crear_version_fijo(
             (nuevo_nombre, nuevo_monto, nueva_periodicidad, anterior["dia_vencimiento"],
              nueva_categoria, nueva_subcategoria, anterior["activo"],
              _now(), nuevo_responsable, nuevo_tipo,
-             nueva_proporcion, anterior["medio_pago"], vigente_desde,
+             nueva_proporcion, nuevo_medio_pago, vigente_desde,
              fijo_grupo_id),
         )
         nuevo_id = cursor.lastrowid

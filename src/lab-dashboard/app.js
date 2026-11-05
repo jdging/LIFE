@@ -1266,6 +1266,7 @@ function formMarkup(kind, row, categoriesCatalog) {
     ${fixedCategoryFields}
     ${formField('monto_estimado', 'Monto bruto (ARS)', row?.monto_estimado ?? '', 'text', 'required inputmode="decimal" min="0.01" max="1000000000000" step="0.01"')}
     ${formSelect('periodicidad', 'Periodicidad', ['mensual', 'bimestral'], row?.periodicidad || 'mensual')}
+    ${formSelect('medio_pago', 'Medio de pago', ['Efectivo', 'Transferencia', 'Débito', 'Crédito'], row?.medio_pago || 'Efectivo')}
     ${formSelect('responsable', 'Responsable', ['Común', 'JD', 'Pinki'], row?.responsable || 'Común')}
     <div id="fixed-split-fields">
       ${formSelect('fixed_tipo_proporcion', 'Reparto del fijo común', [
@@ -1718,8 +1719,10 @@ function collectForm(kind, row, values) {
   if (!values.nombre?.trim()) errors.nombre = 'Ingresá una descripción.';
   if (!['mensual', 'bimestral'].includes(values.periodicidad)) errors.periodicidad = 'Elegí una periodicidad válida.';
   if (!['Común', 'JD', 'Pinki'].includes(values.responsable)) errors.responsable = 'Elegí un responsable.';
+  if (!['Efectivo', 'Transferencia', 'Débito', 'Crédito'].includes(values.medio_pago)) errors.medio_pago = 'Elegí un medio de pago válido.';
   const payload = { nombre: values.nombre.trim(), monto_estimado: Number(values.monto_estimado),
-    periodicidad: values.periodicidad, responsable: values.responsable, vigente_desde: values.vigente_desde };
+    periodicidad: values.periodicidad, responsable: values.responsable, vigente_desde: values.vigente_desde,
+    medio_pago: values.medio_pago };
   // Semántica explícita omitido/null (brief t_38a7253f F1b-fix2, hallazgo 2
   // del revisor; espejo de `db.resolve_fixed_categoria`): en edición, elegir
   // "Sin categoría/subcategoría" cuando antes había un valor envía `null`

@@ -296,4 +296,14 @@ def validar_gasto_fijo(payload: dict) -> list:
     if subcategoria is not None and categoria is None:
         errores.append("subcategoria no puede quedar asignada sin categoria.")
 
+    # medio_pago (mejora Juan 2026-11-05, #4 lista de mejoras): OPCIONAL,
+    # misma regla que categoria/subcategoria -- un fijo legacy sin medio de
+    # pago asignado no debe rechazarse. Si SE especifica, debe ser uno de
+    # los mismos valores que usa un gasto variable (MEDIOS_PAGO_VALIDOS),
+    # así "Crédito" habilita que el fijo aparezca agrupado en la carga de
+    # crédito (ver db.creditFixedItems en el dashboard).
+    medio_pago = payload.get("medio_pago")
+    if medio_pago is not None and medio_pago not in MEDIOS_PAGO_VALIDOS:
+        errores.append(f"medio_pago inválido: {medio_pago!r} (usar {MEDIOS_PAGO_VALIDOS}).")
+
     return errores
