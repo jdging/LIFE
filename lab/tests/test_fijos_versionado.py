@@ -522,3 +522,68 @@ def test_get_fijos_vigentes_con_dos_versiones_mismo_dia_devuelve_la_ultima_inser
 
     fila_original = conn.execute("SELECT * FROM gastos_fijos WHERE id = ?", (id_v1,)).fetchone()
     assert fila_original["monto_estimado"] == 8000.0  # la fila original no se pisó
+
+
+# ── medio_pago en gastos_fijos (mejora Juan 2026-11-05, #4 lista de mejoras) ─
+# Habilita marcar un fijo como pagado con tarjeta de crédito, para que
+# aparezca agrupado en la carga de crédito del dashboard (creditFixedItems).
+
+def test_insert_gasto_fijo_persiste_medio_pago_credito(conn):
+    nuevo_id = db.insert_gasto_fijo(conn, _gasto_fijo_valido(medio_pago="Crédito"))
+    fila = conn.execute("SELECT * FROM gastos_fijos WHERE id = ?", (nuevo_id,)).fetchone()
+    assert fila["medio_pago"] == "Crédito"
+
+
+def test_insert_gasto_fijo_sin_medio_pago_queda_null_como_antes(conn):
+    nuevo_id = db.insert_gasto_fijo(conn, _gasto_fijo_valido())
+    fila = conn.execute("SELECT * FROM gastos_fijos WHERE id = ?", (nuevo_id,)).fetchone()
+    assert fila["medio_pago"] is None
+
+
+def test_crear_version_fijo_omitido_hereda_medio_pago(conn):
+    id_v1 = db.insert_gasto_fijo(conn, _gasto_fijo_valido(medio_pago="Crédito"))
+    id_v2 = db.crear_version_fijo(
+        conn, id_v1, monto_nuevo=150000.0, vigente_desde="2026-02-01",
+    )
+    fila = conn.execute("SELECT * FROM gastos_fijos WHERE id = ?", (id_v2,)).fetchone()
+    assert fila["medio_pago"] == "Crédito"
+
+
+def test_crear_version_fijo_explicito_cambia_medio_pago(conn):
+    """El pedido real de Juan: un fijo que ya existía en Efectivo pasa a
+    Crédito en una edición posterior, sin tocar monto/responsable."""
+    id_v1 = db.insert_gasto_fijo(conn, _gasto_fijo_valido())
+    id_v2 = db.crear_version_fijo(
+        conn, id_v1, vigente_desde="2026-02-01", medio_pago="Crédito",
+    )
+    fila = conn.execute("SELECT * FROM gastos_fijos WHERE id = ?", (id_v2,)).fetchone()
+    assert fila["medio_pago"] == "Crédito"
+
+
+def test_crear_version_fijo_explicito_none_limpia_medio_pago(conn):
+    id_v1 = db.insert_gasto_fijo(conn, _gasto_fijo_valido(medio_pago="Crédito"))
+    id_v2 = db.crear_version_fijo(
+        conn, id_v1, vigente_desde="2026-02-01", medio_pago=None,
+    )
+    fila = conn.execute("SELECT * FROM gastos_fijos WHERE id = ?", (id_v2,)).fetchone()
+    assert fila["medio_pago"] is None
+
+
+def test_crear_version_fijo_solo_medio_pago_no_es_fixednochange(conn):
+    """Cambiar únicamente medio_pago (nada de monto/responsable/etc.) debe
+    contar como cambio real, no disparar FixedNoChangeError."""
+    id_v1 = db.insert_gasto_fijo(conn, _gasto_fijo_valido())
+    id_v2 = db.crear_version_fijo(
+        conn, id_v1, vigente_desde="2026-02-01", medio_pago="Débito",
+    )
+    assert id_v2 != id_v1
+
+
+def test_validar_gasto_fijo_rechaza_medio_pago_invalido():
+    errores = db.validar_gasto_fijo(_gasto_fijo_valido(medio_pago="Bitcoin"))
+    assert any("medio_pago" in error for error in errores)
+
+
+def test_validar_gasto_fijo_acepta_medio_pago_ausente_o_valido():
+    assert db.validar_gasto_fijo(_gasto_fijo_valido()) == []
+    assert db.validar_gasto_fijo(_gasto_fijo_valido(medio_pago="Crédito")) == []

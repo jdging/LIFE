@@ -111,11 +111,11 @@ INVENTORY_MONEY_OPTIONAL_FIELDS = (
 )
 ALLOWED_FIXED_CREATE_FIELDS = {
     "nombre", "monto_estimado", "periodicidad", "vigente_desde", "responsable",
-    "tipo_proporcion", "proporcion_jd", "categoria", "subcategoria",
+    "tipo_proporcion", "proporcion_jd", "categoria", "subcategoria", "medio_pago",
 }
 ALLOWED_FIXED_PATCH_FIELDS = {
     "nombre", "monto_estimado", "periodicidad", "responsable", "vigente_desde",
-    "tipo_proporcion", "proporcion_jd", "categoria", "subcategoria",
+    "tipo_proporcion", "proporcion_jd", "categoria", "subcategoria", "medio_pago",
 }
 CATEGORY_TIPOS = ("Gasto", "Ingreso", "Inversión")
 
@@ -357,6 +357,9 @@ class _App:
         ("DELETE", re.compile(r"^/api/fixed/(?P<id>\d+)$"), "delete_fixed"),
         ("GET", re.compile(r"^/api/summary$"), "summary"),
         ("GET", re.compile(r"^/api/categories$"), "list_categories"),
+        ("GET", re.compile(r"^/api/tarjeta-vencimientos$"), "list_tarjeta_vencimientos"),
+        ("POST", re.compile(r"^/api/tarjeta-vencimientos$"), "create_tarjeta_vencimiento"),
+        ("DELETE", re.compile(r"^/api/tarjeta-vencimientos/(?P<id>\d+)$"), "delete_tarjeta_vencimiento"),
         # --- Telegram (brief S2/S3, T2): rutas internas, no se agregan al
         # proxy de Vercel (middleware.js no se toca).
         ("POST", re.compile(r"^/api/expenses/telegram$"), "create_expense_telegram"),
@@ -1092,6 +1095,12 @@ class _App:
         if subcategoria not in (db._FIXED_UNSET, None) and (not isinstance(subcategoria, str) or not subcategoria.strip()):
             return self._error(start_response, 400, "subcategoria, si se especifica, no puede estar vacía.")
 
+        # medio_pago (mejora Juan 2026-11-05, #4 lista de mejoras): mismo
+        # centinela omitido/None/valor que categoria/subcategoria.
+        medio_pago = data.get("medio_pago", db._FIXED_UNSET)
+        if medio_pago not in (db._FIXED_UNSET, None) and medio_pago not in validaciones.MEDIOS_PAGO_VALIDOS:
+            return self._error(start_response, 400, "medio_pago inválido.")
+
         monto_estimado = data.get("monto_estimado")
         if monto_estimado is not None:
             errores = validaciones.validar_fixed_update({"monto_estimado": monto_estimado})
@@ -1133,6 +1142,7 @@ class _App:
                 periodicidad=periodicidad,
                 categoria=categoria,
                 subcategoria=subcategoria,
+                medio_pago=medio_pago,
                 actor=SERVER_ACTOR,
                 **{key: data[key] for key in ("tipo_proporcion", "proporcion_jd") if key in data},
             )
@@ -1270,6 +1280,41 @@ class _App:
             if subcategoria not in subcategorias:
                 subcategorias.append(subcategoria)
         return self._json(start_response, 200, {"categories": categories})
+
+    # --- Vencimientos de tarjeta (mejora Juan 2026-11-05, #6 lista de
+    # mejoras): agenda mínima para que el dashboard agrupe la carga de
+    # crédito por ciclo (entre vencimientos) en vez de por mes calendario.
+    # Una sola tarjeta en uso -- no hay selector de tarjeta ni tarjeta_id.
+
+    def list_tarjeta_vencimientos(self, ctx, conn, start_response):
+        vencimientos = db.get_tarjeta_vencimientos(conn)
+        return self._json(start_response, 200, {"vencimientos": vencimientos})
+
+    def create_tarjeta_vencimiento(self, ctx, conn, start_response):
+        data, err = self._parse_json(ctx, start_response)
+        if err is not None:
+            return err
+        unknown = self._unknown_fields(data.keys(), {"mes", "vencimiento"})
+        if unknown:
+            return self._error(start_response, 400, "campos desconocidos.")
+        mes = data.get("mes")
+        vencimiento = data.get("vencimiento")
+        if not isinstance(mes, str) or not re.match(r"^\d{4}-(0[1-9]|1[0-2])$", mes):
+            return self._error(start_response, 400, "mes es obligatorio y debe ser 'YYYY-MM'.")
+        if not _is_iso_date(vencimiento):
+            return self._error(start_response, 400, "vencimiento es obligatorio y debe ser 'YYYY-MM-DD' válida.")
+        try:
+            fila = db.set_tarjeta_vencimiento(conn, mes, vencimiento)
+        except ValueError as exc:
+            return self._error(start_response, 400, str(exc))
+        return self._json(start_response, 201, {"vencimiento": fila})
+
+    def delete_tarjeta_vencimiento(self, ctx, conn, start_response):
+        vencimiento_id = int(ctx.path_params["id"])
+        existia = db.eliminar_tarjeta_vencimiento(conn, vencimiento_id)
+        if not existia:
+            return self._error(start_response, 404, f"no existe vencimiento id={vencimiento_id}.")
+        return self._json(start_response, 200, {"deleted": True})
 
     # --- Telegram (brief S2/S3, T2) -----------------------------------------
     #

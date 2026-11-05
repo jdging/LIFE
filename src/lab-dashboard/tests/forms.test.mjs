@@ -35,6 +35,14 @@ const reply = (path, status, body) => {
 const fetch = async (path, options = {}) => {
   calls.push({ path, options });
   const next = replies.get(path)?.shift();
+  // Default silencioso para vencimientos de tarjeta (mejora #6 lista de
+  // mejoras): ningún test de este archivo es sobre esa feature, así que no
+  // tiene sentido obligar a mockear este endpoint en cada reply manual de
+  // loadLive -- se comporta como "sin vencimientos" salvo que un test
+  // puntual encole su propia respuesta (shift tiene prioridad).
+  if (!next && path === '/api/tarjeta-vencimientos') {
+    return { ok: true, status: 200, json: async () => ({ vencimientos: [] }) };
+  }
   if (!next) throw new Error(`Mock sin respuesta: ${path}`);
   if (next.status === 0) throw new Error('Sin red en prueba sintética');
   return { ok: next.status >= 200 && next.status < 300, status: next.status,
@@ -106,7 +114,7 @@ const income = { id: 31, fecha: '2026-10-03 12:00:00', monto: 900, persona: 'JD'
 const fixed = { id: 41, fijo_grupo_id: 41, vigente_desde: '2026-10-01',
   nombre: 'Prueba sintética', monto_estimado: 100, monto_mensual: 100,
   periodicidad: 'mensual', responsable: 'Común', tipo_proporcion: 'dinamica',
-  proporcion_jd: null, activo: 1 };
+  proporcion_jd: null, activo: 1, medio_pago: 'Efectivo' };
 const summary = { ...summaryFixture, month: '2026-10' };
 assert.equal(summaryFixture.proportion.JD, 100);
 assert.equal(summaryFixture.proportion.Pinki, 0);
@@ -118,6 +126,7 @@ const liveReplies = (monthSummary = summary) => {
   reply('/api/fixed/versions', 200, { versions: [fixed] });
   reply('/api/summary', 200, { months: [monthSummary] });
   reply('/api/summary?month=2026-10', 200, monthSummary);
+  reply('/api/tarjeta-vencimientos', 200, { vencimientos: [] });
 };
 
 reply('/api/health', 401, { error: 'sin sesión' });
@@ -291,7 +300,7 @@ assert.match(api.describeForm('income-edit', { ...income, categoria: 'Extra' },
   { ...collectedIncome.payload, categoria: 'Salario' }), /proporciones/);
 const fixedValues = { nombre: 'Prueba sintética nueva', monto_estimado: '120',
   periodicidad: 'mensual', responsable: 'Común', fixed_tipo_proporcion: 'dinamica',
-  vigente_desde: '2026-10-15' };
+  medio_pago: 'Efectivo', vigente_desde: '2026-10-15' };
 assert.equal(Object.keys(api.collectForm('fixed', null, fixedValues).errors).length, 0);
 const customFixed = { ...fixed, tipo_proporcion: 'custom', proporcion_jd: 0 };
 const retainedCustom = api.collectForm('fixed-edit', customFixed,
@@ -1051,7 +1060,7 @@ ${slice('async function handleFormSubmit(', "document.getElementById('life-form'
     FormData: class { constructor(target) { this.target = target; } entries() { return Object.entries(this.target.values); } } });
 
 const modalFixedValues = { nombre: 'Prueba ciclo', monto_estimado: '50', periodicidad: 'mensual',
-  responsable: 'Común', fixed_tipo_proporcion: 'dinamica', vigente_desde: '2026-10-15' };
+  responsable: 'Común', fixed_tipo_proporcion: 'dinamica', medio_pago: 'Efectivo', vigente_desde: '2026-10-15' };
 const modalSubmit = () => ({ preventDefault() {}, currentTarget: { values: modalFixedValues } });
 
 // Ciclo 1: abrir → confirmar → guardar (closeForm se dispara dentro de handleFormSubmit) → reabrir.
@@ -1482,7 +1491,7 @@ assert.doesNotMatch(fixedSubcatHtml, />Supermercado</, 'No debe mezclar subcateg
 
 // Payload de alta con catálogo: categoria/subcategoria viajan como texto plano.
 const chosenFixedValues = { nombre: 'Alquiler', monto_estimado: '200000', periodicidad: 'mensual',
-  responsable: 'Común', fixed_tipo_proporcion: 'dinamica', vigente_desde: '2026-10-15',
+  responsable: 'Común', fixed_tipo_proporcion: 'dinamica', medio_pago: 'Efectivo', vigente_desde: '2026-10-15',
   categoria: 'Hogar', subcategoria: 'Alquiler' };
 const { payload: chosenFixedPayload, errors: chosenFixedErrors } = fixedCatalogForm.api.collectForm('fixed', null, chosenFixedValues);
 assert.equal(Object.keys(chosenFixedErrors).length, 0);
@@ -1496,7 +1505,7 @@ const fixedConAmbas = { categoria: 'Hogar', subcategoria: 'Alquiler' };
 
 // Heredar: el <select> sigue mostrando el valor vigente, sin tocarlo -- se omite.
 const heredarValues = { nombre: 'Alquiler', monto_estimado: '200000', periodicidad: 'mensual',
-  responsable: 'Común', fixed_tipo_proporcion: 'dinamica', vigente_desde: '2026-10-15',
+  responsable: 'Común', fixed_tipo_proporcion: 'dinamica', medio_pago: 'Efectivo', vigente_desde: '2026-10-15',
   categoria: 'Hogar', subcategoria: 'Alquiler' };
 const heredar = fixedCatalogForm.api.collectForm('fixed-edit', fixedConAmbas, heredarValues);
 assert.equal(Object.keys(heredar.errors).length, 0);

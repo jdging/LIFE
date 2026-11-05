@@ -413,6 +413,32 @@ button.card:active {
   padding: 12px 14px 4px;
 }
 
+/* Vencimientos de tarjeta y ciclos de crédito (mejora Juan 2026-11-05, #6
+   lista de mejoras): reutiliza tipografía/espaciado de .form-help y
+   .credito-tarjeta-header, sólo agrega layout propio. */
+.credito-vencimientos {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-soft, rgba(255, 255, 255, 0.08));
+}
+.credito-vencimientos-list {
+  list-style: none;
+  margin: 6px 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.credito-vencimientos-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+.credito-ciclo + .credito-ciclo {
+  border-top: 1px solid var(--line-soft, rgba(255, 255, 255, 0.08));
+}
+
 /* ---- Panels genéricos ---- */
 
 .panel {

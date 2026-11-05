@@ -1,5 +1,103 @@
 # Bitácora del Proyecto
 
+### [2026-11-05] - Mejora #5 Juan: vencimientos de tarjeta y crédito por ciclo
+**Objetivo:** quinto ítem de la lista ordenada (vencimientos de tarjeta, una
+sola tarjeta en uso).
+**Cambios (commit `03219bb`, `lab/reinvencion`, sin push a main):** tabla
+nueva `tarjeta_vencimientos` (mes→fecha real de vencimiento, upsert por mes)
++ endpoints `GET/POST/DELETE /api/tarjeta-vencimientos`. En el dashboard, un
+panel de alta/baja de vencimientos siempre visible en "Carga en crédito"
+(incluso sin cargos todavía); con al menos un vencimiento cargado,
+`creditCycles()`/`creditCycleForDate()` agrupan gastos y fijos en crédito
+por CICLO entre vencimientos consecutivos (no por mes calendario), con un
+bloque "Ciclo abierto" para lo posterior al último vencimiento. Sin ningún
+vencimiento cargado el comportamiento es exactamente el de antes
+(compatibilidad total).
+**Verificación:** 17 tests nuevos (`test_tarjeta_vencimientos.py`) + 1 nuevo
+en `test_api.py` (CRUD/validaciones/auth por HTTP) + fixtures de
+`forms.test.mjs` actualizadas. Suite completa: 76/76 Node, 680/680 Python
+(13 skipped preexistentes), sin regresiones.
+**En curso en paralelo:** consulta de rol CPO (proceso en background,
+`proc_9977b412dcc6`) sobre el ítem #4 de la lista ordenada ("filtros/orden
+de los gastos del fondo") — hallazgo del coordinador: no existe ninguna
+pantalla llamada "fondo"; la hipótesis más fuerte es la pestaña
+"Inversiones", que hoy es sólo un placeholder vacío sin construir. Es una
+ampliación de alcance real vs. lo que Juan pidió literalmente (agregar
+filtros a algo que no existe todavía), así que se consulta al CPO para
+una propuesta concreta antes de construir nada, en vez de asumir el alcance.
+**Siguiente:** sync opcional a Google Sheets (pendiente del kanban) y/o
+rediseño de configuración de Supermercado (#7 original de Juan), mientras
+se espera el resultado del CPO para el ítem de "fondo".
+
+### [2026-11-05] - Mejora #4 Juan: tarjeta de crédito en gastos fijos
+**Objetivo:** tercer ítem de la lista ordenada. Juan insistió en seguir sin
+pausar ("tenés que seguir solo siempre") — se retoma de inmediato sin pedir
+autorización adicional, según lo ya acordado.
+**Hallazgo:** el dashboard ya agrupaba fijos con `medio_pago='Crédito'` en
+`creditFixedItems()` para la vista de carga de crédito, pero el campo nunca
+estuvo expuesto: faltaba en el `<select>` del formulario Y en el whitelist
+de la API (`ALLOWED_FIXED_CREATE_FIELDS`/`PATCH_FIELDS`) — quedaba
+inalcanzable aunque la columna de la tabla y la lógica de agregación ya
+existían.
+**Cambios (commit `514db8c`, `lab/reinvencion`, sin push a main):** selector
+"Medio de pago" en el alta/edición de gasto fijo (`src/lab-dashboard/app.js`);
+`medio_pago` sumado al whitelist y a `validar_gasto_fijo` (opcional, mismos
+valores que un gasto variable) en `lab/api.py`/`lab/validaciones.py`;
+`db.crear_version_fijo` acepta `medio_pago` con el mismo centinela
+omitido/None/valor que `categoria`/`subcategoria`, y se agregó al check de
+"sin cambios reales" para que cambiar sólo el medio de pago cuente como
+edición válida.
+**Verificación:** 8 tests nuevos en `test_fijos_versionado.py` (alta,
+herencia, cambio explícito, limpieza, no-op, validación) + fixtures de
+`forms.test.mjs` actualizadas. Suite completa: 76/76 Node, 662/662 Python
+(13 skipped preexistentes), sin regresiones.
+**Siguiente:** filtros/orden en la vista de gastos del fondo (#5 de la lista
+ordenada) — ese ítem pide diseño del CTO antes de implementar.
+
+### [2026-11-05] - Mejora #3 Juan: cotización dólar oficial para gastos en USD
+**Objetivo:** siguiente ítem de la lista ordenada tras #1 (coma/punto). Juan: "no
+te veo siguiendo" tras el primer cierre — se retoma en el mismo hilo sin volver
+a consultarle, según autorización ya dada.
+**Cambios (commit `f2f592a`, `lab/reinvencion`, sin push a main):** toggle de
+moneda ARS/USD en el alta/edición de gasto (`src/lab-dashboard/app.js`). Con
+USD, `updateExpenseMonedaHint()` busca la cotización oficial en
+`dolarapi.com/v1/dolares/oficial` (cacheada 10' en memoria, sin API key) y
+muestra siempre la otra moneda en chiquito como referencia (ARS→USD o
+USD→ARS). Al enviar, `collectForm()` convierte el monto tipeado en USD a ARS
+con esa cotización (los totales/gráficos existentes sólo agregan ARS); si no
+hay cotización fresca, bloquea el envío con error claro en vez de guardar a
+mitad de convertir. La descripción guarda `[USD X @ $Y oficial]` como
+trazabilidad del monto original.
+**Verificación:** 7 tests nuevos (`tests/dolar-oficial.test.mjs`, fetch
+mockeado, sin llamados reales a la API) + suite completa 76/76 Node sin
+regresiones.
+**Siguiente:** tarjeta de crédito en gastos fijos (#4 de la lista ordenada).
+
+### [2026-11-05] - Mejora #1 Juan: coma y punto válidos para ingresar montos
+**Objetivo:** Juan trajo una lista de 7 mejoras + se confirmó que ítem previo de
+CRUD web general ya estaba cerrado. Se ordenó la lista de más rápida a más
+larga/difícil (mezclando lo pendiente del kanban: bot conversacional, recetas/
+inventario Fase 3, sync Sheets, LIFE v2) y Juan autorizó avanzar sin consultar,
+llamando al CTO si hace falta desbloqueo, sin parar.
+**Cambios (commit `3c07225`, `lab/reinvencion`, sin push a main):** los inputs de
+monto (gasto, ingreso, fijo, inventario: `monto`, `monto_estimado`,
+`valor_estimado`, `precio_ars`, `cotizacion_usd_compra`, `precio_usd_compra`,
+`precio_venta_estimado_usd`) eran `type="number"`, cuyo separador decimal
+aceptado depende del locale del dispositivo — tipear el que el input no
+esperaba dejaba el campo vacío/inválido sin aviso claro. Pasaron a
+`type="text" inputmode="decimal"` y se agregó `normalizeDecimalInput()` en
+`src/lab-dashboard/app.js`, que acepta tanto `,` como `.` como separador
+decimal (no separador de miles) antes de validar (`validMoney`/
+`validMoneyOptional`) o convertir a `Number` en el payload.
+**Verificación:** suite completa de `src/lab-dashboard/tests` (69/69 Node)
+corrida por mí en `lab/reinvencion` tras el fast-forward a `32a8872`, sin
+regresiones. No se tocó `main`, API/DB real, ni infraestructura.
+**Siguiente:** continuar con el resto de la lista ordenada (dólar oficial,
+tarjeta en gastos fijos, filtros de fondo con CTO, vencimientos de tarjeta,
+sync Sheets, config Supermercado inline, recetas/inventario, lectura de
+facturas por Telegram/Gmail, bot conversacional, LIFE v2) sin pausar salvo
+bloqueo real.
+
 ### [2026-10-30] - F4 QA3: integración de stock y PDF, trazabilidad corregida
 **Alcance:** en `lab/f4-qa3-integracion`, sobre `85a08183e908c8c4826006d2215a2a425e62707f`, quedaron integrados el paso de stock de **una unidad** por botón/flecha con fracciones manuales preservadas y el PDF A4 de Supermercado con columnas centradas por página y estética LIFE existente. Guías: `docs/F4-QA3-STOCK.md` y `docs/F4-QA3-PDF.md`. El manifiesto `evidencia/qa3-manifest.json` registra las 11 rutas integradas; esta corrección documental actualiza únicamente las dos rutas de contexto.
 **Verificación del coordinador sobre el integrado:** `evidencia/node-integracion.log`: 69/69; `evidencia/pytest-integracion.log`: 666 aprobadas, 1 omitida, 52.961 subtests aprobados y un warning de `fitz`; `evidencia/browser-qa3-final.log`: Chromium real aprobó `+1` conservando fracciones, un solo PATCH al pulsar `+` tras edición manual, decimales manuales y de formulario, límites 0/máximo, conservación de nodos y foco, 409/401, cuatro anchos móviles/escritorio (320/390/768/1280), descarga PDF y cero errores de página. El coordinador generó cinco PDF demo y sus PNG; `evidencia/pdf-inspeccion.json` registra A4, columnas 1/2/3 y últimas páginas de 1/2 columnas, con error de centrado inferior a 0,01 pt. El revisor PDF `9a5bfb11` dictaminó APTO. Los archivos fuente permanecen sin cambios desde esas pruebas.

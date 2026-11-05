@@ -133,7 +133,7 @@ function getDebtRows() {
 const DATA = {
   gastos: [], ingresos: [], fijos: [], resumen: [], deudaPendiente: null,
   loadErrors: {}, compras: null, comprasError: null, recetas: null, recetasError: null,
-  inventario: [],
+  inventario: [], tarjetaVencimientos: [],
 };
 const charts = {};
 let period = null;
@@ -293,11 +293,12 @@ async function loadLive() {
   // conserva la vigencia histórica y `summary` los porcentajes mensuales.
   // La serie de 1–24 meses se calcula localmente con estas respuestas completas:
   // consultar sólo el mes del período global ocultaría los meses anteriores.
-  const [expenses, income, inventory, versions, summary, currentSummary] = await Promise.all([
+  const [expenses, income, inventory, versions, summary, currentSummary, tarjetaVencimientos] = await Promise.all([
     fetchJSON('/api/expenses'), fetchJSON('/api/income'),
     inventoryAvailable ? fetchJSON('/api/inventory') : Promise.resolve(null),
     fetchJSON('/api/fixed/versions'), fetchJSON('/api/summary'),
     fetchJSON(`/api/summary?month=${currentMonth}`),
+    fetchJSON('/api/tarjeta-vencimientos'),
   ]);
   const months = requireList(summary, 'months').map(adaptSummary);
   const current = adaptSummary(currentSummary);
@@ -314,6 +315,7 @@ async function loadLive() {
     inventario: inventoryAvailable ? requireList(inventory, 'inventory').map(adaptLiveInventario) : [],
     fijos: requireList(versions, 'versions').map(adaptLiveFixed),
     resumen: months,
+    tarjetaVencimientos: requireList(tarjetaVencimientos, 'vencimientos'),
   };
   Object.assign(DATA, next, { loadErrors: {}, deudaPendiente: current.debt_pending_through_month });
   liveMode = true;
@@ -802,6 +804,36 @@ function creditFixedItems() {
     .map((row) => ({ row, month })));
 }
 
+// Ciclos de crédito entre vencimientos de tarjeta (mejora Juan 2026-11-05,
+// #6 lista de mejoras): una sola tarjeta, Juan ingresa el vencimiento real
+// mes a mes (no siempre el mismo día). Un ciclo va desde el día siguiente
+// al vencimiento ANTERIOR (exclusive) hasta el vencimiento que lo cierra
+// (inclusive); el primer ciclo registrado no tiene piso (`from: null`) así
+// que también agrupa toda la carga histórica previa a cargar el primer
+// vencimiento, en vez de perderla. Sin ningún vencimiento registrado
+// devuelve `[]` -- quien llama debe caer al agrupado plano de siempre
+// (compatibilidad total con bases que todavía no usan esta mejora).
+function creditCycles() {
+  return [...(DATA.tarjetaVencimientos || [])]
+    .sort((a, b) => a.vencimiento.localeCompare(b.vencimiento))
+    .map((v, i, sorted) => ({
+      label: v.vencimiento,
+      from: i === 0 ? null : sorted[i - 1].vencimiento,
+      to: v.vencimiento,
+    }));
+}
+
+// `null` = posterior al último vencimiento registrado: ciclo abierto, sin
+// fecha de cierre todavía (se muestra agrupado aparte, no se descarta).
+function creditCycleForDate(fecha, cycles) {
+  const dia = String(fecha || '').slice(0, 10);
+  if (!dia) return null;
+  for (const cycle of cycles) {
+    if ((cycle.from === null || dia > cycle.from) && dia <= cycle.to) return cycle.label;
+  }
+  return null;
+}
+
 function fixedAllocation(row, month) {
   if (row.responsable === 'JD') return { pct1: 100, pct2: 0 };
   if (row.responsable === 'Pinki') return { pct1: 0, pct2: 100 };
@@ -1217,14 +1249,14 @@ function formMarkup(kind, row, categoriesCatalog) {
       <datalist id="inventario-categorias">${categorias.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
       ${formField('ubicacion', 'Ubicación', row?.ubicacion || '', 'text', 'list="inventario-ubicaciones"')}
       <datalist id="inventario-ubicaciones">${ubicaciones.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>
-      ${formField('valor_estimado', 'Valor estimado (ARS)', row?.valor_estimado ?? '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
+      ${formField('valor_estimado', 'Valor estimado (ARS)', row?.valor_estimado ?? '', 'text', 'required inputmode="decimal" min="0.01" max="1000000000000" step="0.01"')}
       ${formField('fecha_adquisicion', 'Fecha de compra (opcional)', row?.fecha_adquisicion || '', 'date')}
-      ${formField('precio_ars', 'ARS pagado en la compra (opcional)', row?.precio_ars ?? '', 'number', 'min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdSugerido()"')}
-      ${formField('cotizacion_usd_compra', 'Cotización USD al comprar (opcional)', row?.cotizacion_usd_compra ?? '', 'number', 'min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdSugerido()"')}
-      ${formField('precio_usd_compra', 'USD de compra (sugerido = ARS / cotización)', row?.precio_usd_compra ?? '', 'number', 'min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdEdited()"')}
+      ${formField('precio_ars', 'ARS pagado en la compra (opcional)', row?.precio_ars ?? '', 'text', 'inputmode="decimal" min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdSugerido()"')}
+      ${formField('cotizacion_usd_compra', 'Cotización USD al comprar (opcional)', row?.cotizacion_usd_compra ?? '', 'text', 'inputmode="decimal" min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdSugerido()"')}
+      ${formField('precio_usd_compra', 'USD de compra (sugerido = ARS / cotización)', row?.precio_usd_compra ?? '', 'text', 'inputmode="decimal" min="0" max="1000000000000" step="0.01" oninput="onInventoryUsdEdited()"')}
       <div id="inventory-proportion">${formField('proporcion_jd', 'JD (%)', pctJD, 'number', pctJDExtra)}
       <p class="form-help">Pinki: <output id="inventory-pinki-percent" aria-live="polite">${pctJD !== '' && Number.isFinite(Number(pctJD)) ? `${100 - Number(pctJD)}%` : '—'}</output></p></div>
-      ${formField('precio_venta_estimado_usd', 'Precio de reventa estimado (USD, opcional)', row?.precio_venta_estimado_usd ?? '', 'number', 'min="0" max="1000000000000" step="0.01"')}
+      ${formField('precio_venta_estimado_usd', 'Precio de reventa estimado (USD, opcional)', row?.precio_venta_estimado_usd ?? '', 'text', 'inputmode="decimal" min="0" max="1000000000000" step="0.01"')}
       ${formSelect('estado', 'Estado', INVENTARIO_ESTADOS, row?.estado || 'Activo')}
       ${formField('notas', 'Notas', row?.notas || '')}`;
   }
@@ -1235,7 +1267,9 @@ function formMarkup(kind, row, categoriesCatalog) {
     const proporcionJd = tipoProporcion === 'custom' && row?.proporcion_jd != null ? row.proporcion_jd : '50';
     const proporcionPinki = tipoProporcion === 'custom' && row?.proporcion_pinki != null ? row.proporcion_pinki : '50';
     return `${isEdit ? `<p class="form-help">Esta edición aplica solo a esta fila (cuota ${escapeHtml(cuotaLabel(row))} de ${escapeHtml(String(row.cuotas_total))}); las demás cuotas de este gasto no cambian. La cantidad de cuotas no se puede editar desde aquí.</p>` : ''}
-      ${formField('monto', 'Monto total (ARS)', row?.monto ?? '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
+      ${formSelect('moneda_ingreso', 'Moneda', ['ARS', 'USD'], 'ARS')}
+      ${formField('monto', 'Monto total (ARS)', row?.monto ?? '', 'text', 'required inputmode="decimal" min="0.01" max="1000000000000" step="0.01" oninput="updateExpenseMonedaHint()"')}
+      <p class="form-help" id="expense-moneda-hint" aria-live="polite"></p>
       ${formField('fecha', 'Fecha', row?.fecha || todayLocalISO(), 'date', 'required')}
       ${categoryFields}
       ${formField('descripcion_original', 'Descripción', row?.descripcion_original || '')}
@@ -1253,7 +1287,7 @@ function formMarkup(kind, row, categoriesCatalog) {
       ${isEdit ? '' : formField('cuotas_total', 'Cantidad de cuotas', '1', 'number', 'required min="1" max="120" step="1"')}`;
   }
   if (kind === 'income' || kind === 'income-edit') return `
-    ${formField('monto', 'Monto (ARS)', row?.monto ?? '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
+    ${formField('monto', 'Monto (ARS)', row?.monto ?? '', 'text', 'required inputmode="decimal" min="0.01" max="1000000000000" step="0.01"')}
     ${formField('fecha', 'Fecha', row?.fecha || todayLocalISO(), 'date', 'required')}
     ${formSelect('persona', 'Persona', ['JD', 'Pinki'], row?.persona || 'JD')}
     ${formSelect('categoria', 'Categoría', ['Salario', 'Extra', 'Freelance', 'Otro'], row?.categoria || 'Salario')}
@@ -1262,8 +1296,9 @@ function formMarkup(kind, row, categoriesCatalog) {
   const fixedCategoryFields = categoriesCatalog ? formFixedCategorySelects(categoriesCatalog, row) : formFixedCategoryText(row);
   return `${formField('nombre', 'Descripción', row?.nombre || '', 'text', 'required')}
     ${fixedCategoryFields}
-    ${formField('monto_estimado', 'Monto bruto (ARS)', row?.monto_estimado ?? '', 'number', 'required min="0.01" max="1000000000000" step="0.01"')}
+    ${formField('monto_estimado', 'Monto bruto (ARS)', row?.monto_estimado ?? '', 'text', 'required inputmode="decimal" min="0.01" max="1000000000000" step="0.01"')}
     ${formSelect('periodicidad', 'Periodicidad', ['mensual', 'bimestral'], row?.periodicidad || 'mensual')}
+    ${formSelect('medio_pago', 'Medio de pago', ['Efectivo', 'Transferencia', 'Débito', 'Crédito'], row?.medio_pago || 'Efectivo')}
     ${formSelect('responsable', 'Responsable', ['Común', 'JD', 'Pinki'], row?.responsable || 'Común')}
     <div id="fixed-split-fields">
       ${formSelect('fixed_tipo_proporcion', 'Reparto del fijo común', [
@@ -1487,18 +1522,86 @@ function validFixedPercent(raw) {
 }
 
 function validMoney(raw) {
-  if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(String(raw))) return false;
-  const value = Number(raw);
+  if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(String(normalizeDecimalInput(raw)))) return false;
+  const value = Number(normalizeDecimalInput(raw));
   return Number.isFinite(value) && value > 0 && value <= 1e12;
+}
+
+// Mejora Juan 2026-11-05 (#1 lista de mejoras): el teclado/locale de cada
+// dispositivo decide si "," o "." es el separador decimal válido para
+// montos; sin esto, tipear el que no espera el input dejaba el campo
+// vacío/inválido sin aviso claro. Se acepta cualquiera de los dos como
+// separador decimal (no se admiten separadores de miles) antes de validar
+// o convertir a Number. Declarada como function (hoisted) para que quede
+// disponible sin importar en qué orden la lean los slices de tests.
+function normalizeDecimalInput(raw) {
+  if (typeof raw !== 'string') return raw;
+  const trimmed = raw.trim();
+  // Sólo se normaliza la coma cuando funciona como separador decimal (una
+  // sola, sin puntos de miles mezclados) — mantiene el mensaje de error
+  // existente para entradas realmente inválidas en vez de aceptar cualquier
+  // combinación de separadores.
+  if (/^\d*,\d{1,2}$/.test(trimmed)) return trimmed.replace(',', '.');
+  return trimmed;
 }
 
 // Igual que validMoney, pero admite 0 — para los campos monetarios opcionales
 // de paridad con el legacy (precio_ars, cotizacion_usd_compra, etc.), que en
 // el servidor se validan con positive=False (ver api.py, INVENTORY_MONEY_OPTIONAL_FIELDS).
 function validMoneyOptional(raw) {
-  if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(String(raw))) return false;
-  const value = Number(raw);
+  if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(String(normalizeDecimalInput(raw)))) return false;
+  const value = Number(normalizeDecimalInput(raw));
   return Number.isFinite(value) && value >= 0 && value <= 1e12;
+}
+
+// Mejora Juan 2026-11-05 (#3 lista de mejoras): cotización del dólar oficial
+// (dolarapi.com, sin API key) para poder cargar un gasto en USD y que el
+// sistema lo convierta a ARS solo (único que agregan totales/gráficos
+// existentes), mostrando siempre la otra moneda en chiquito como referencia.
+// Cache simple en memoria -- no hace falta persistir entre sesiones, y evita
+// pegarle a la API en cada tecla.
+const DOLAR_CACHE_MS = 10 * 60 * 1000;
+let DOLAR_OFICIAL_CACHE = { venta: null, fetchedAt: 0 };
+
+async function fetchDolarOficialVenta() {
+  const now = Date.now();
+  if (DOLAR_OFICIAL_CACHE.venta && (now - DOLAR_OFICIAL_CACHE.fetchedAt) < DOLAR_CACHE_MS) {
+    return DOLAR_OFICIAL_CACHE.venta;
+  }
+  try {
+    const res = await fetch('https://dolarapi.com/v1/dolares/oficial');
+    if (!res.ok) throw new Error(`dolarapi status ${res.status}`);
+    const data = await res.json();
+    const venta = Number(data?.venta);
+    if (!Number.isFinite(venta) || venta <= 0) throw new Error('cotización inválida');
+    DOLAR_OFICIAL_CACHE = { venta, fetchedAt: now };
+    return venta;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Muestra siempre la moneda "chica" complementaria a la elegida (USD si se
+// tipeó en ARS, ARS si se tipeó en USD) -- pedido explícito de Juan de ver
+// ambas, sin bloquear la carga si la API externa falla (se avisa y se puede
+// seguir en pesos).
+async function updateExpenseMonedaHint() {
+  const hint = document.getElementById('expense-moneda-hint');
+  const monedaField = document.getElementById('field-moneda_ingreso');
+  const montoField = document.getElementById('field-monto');
+  if (!hint || !monedaField || !montoField) return;
+  const rawMonto = normalizeDecimalInput(montoField.value || '');
+  const monto = Number(rawMonto);
+  if (!rawMonto || !Number.isFinite(monto) || monto <= 0) { hint.textContent = ''; return; }
+  hint.textContent = 'Buscando cotización oficial…';
+  const venta = await fetchDolarOficialVenta();
+  if (!venta) {
+    hint.textContent = 'No se pudo obtener la cotización oficial ahora; se puede seguir cargando en pesos.';
+    return;
+  }
+  hint.textContent = monedaField.value === 'USD'
+    ? `≈ ${fmtARSExact(monto * venta)} (dólar oficial venta ${fmtARSExact(venta)})`
+    : `≈ ${fmtUSD(monto / venta)} (dólar oficial venta ${fmtARSExact(venta)})`;
 }
 
 function validDate(raw) {
@@ -1509,6 +1612,13 @@ function validDate(raw) {
 
 function collectForm(kind, row, values) {
   const errors = {};
+  // Normaliza coma/punto una sola vez acá, así todo lo de abajo (validMoney,
+  // Number(values.X) directo al armar el payload) ya trabaja con el valor
+  // correcto sin tener que acordarse de hacerlo en cada campo monetario.
+  for (const moneyField of ['monto', 'monto_estimado', 'valor_estimado', 'precio_ars',
+    'cotizacion_usd_compra', 'precio_usd_compra', 'precio_venta_estimado_usd']) {
+    if (typeof values[moneyField] === 'string') values[moneyField] = normalizeDecimalInput(values[moneyField]);
+  }
   if (kind === 'expense-saldar' || kind === 'expense-saldar-todas') return { payload: null, errors };
   // Inventario tiene su propia forma (campos y fecha opcional distintos de
   // gastos/ingresos/fijos): se resuelve aparte en vez de forzarla en la
@@ -1568,11 +1678,32 @@ function collectForm(kind, row, values) {
   if (kind.endsWith('delete')) return { payload: kind === 'fixed-delete' ? { fecha_baja: values.fecha_baja } : null, errors };
   const moneyKey = kind.startsWith('fixed') ? 'monto_estimado' : 'monto';
   if (!validMoney(values[moneyKey])) errors[moneyKey] = 'Ingresá un monto positivo, finito, de hasta 2 decimales y máximo 1 billón.';
+  // Mejora Juan 2026-11-05 (#3 lista de mejoras): si el gasto se tipeó en
+  // USD, el monto que viaja al backend sigue siendo ARS (único que agregan
+  // los totales/gráficos existentes) -- se convierte acá con la cotización
+  // oficial ya cacheada por updateExpenseMonedaHint(). Si no hay cotización
+  // fresca todavía (usuario tipeó rápido sin esperar el fetch), se bloquea
+  // el envío en vez de guardar un monto a medio convertir.
+  if ((kind === 'expense' || kind === 'expense-edit') && values.moneda_ingreso === 'USD' && !errors[moneyKey]) {
+    const venta = DOLAR_OFICIAL_CACHE.venta && (Date.now() - DOLAR_OFICIAL_CACHE.fetchedAt) < DOLAR_CACHE_MS
+      ? DOLAR_OFICIAL_CACHE.venta : null;
+    if (!venta) {
+      errors.monto = 'No se pudo confirmar la cotización oficial todavía; esperá un instante y volvé a tocar el monto.';
+    } else {
+      values.monto_usd_original = values.monto;
+      values.monto = String(Math.round(Number(values.monto) * venta * 100) / 100);
+      values.dolar_oficial_venta = String(venta);
+    }
+  }
   if (kind === 'expense' || kind === 'expense-edit') {
     const isEdit = kind === 'expense-edit';
     if (!values.categoria?.trim()) errors.categoria = 'Ingresá una categoría.';
+    const descripcionBase = values.descripcion_original.trim();
+    const descripcionFinal = values.monto_usd_original
+      ? `${descripcionBase}${descripcionBase ? ' ' : ''}[USD ${values.monto_usd_original} @ $${values.dolar_oficial_venta} oficial]`
+      : descripcionBase;
     const payload = { fecha: values.fecha, monto: Number(values.monto), categoria: values.categoria.trim(),
-      subcategoria: values.subcategoria.trim(), descripcion_original: values.descripcion_original.trim(),
+      subcategoria: values.subcategoria.trim(), descripcion_original: descripcionFinal,
       medio_pago: values.medio_pago, pagado_por: values.pagado_por, tipo_proporcion: values.tipo_proporcion };
     if (!isEdit) {
       const cuotas = Number(values.cuotas_total);
@@ -1620,8 +1751,10 @@ function collectForm(kind, row, values) {
   if (!values.nombre?.trim()) errors.nombre = 'Ingresá una descripción.';
   if (!['mensual', 'bimestral'].includes(values.periodicidad)) errors.periodicidad = 'Elegí una periodicidad válida.';
   if (!['Común', 'JD', 'Pinki'].includes(values.responsable)) errors.responsable = 'Elegí un responsable.';
+  if (!['Efectivo', 'Transferencia', 'Débito', 'Crédito'].includes(values.medio_pago)) errors.medio_pago = 'Elegí un medio de pago válido.';
   const payload = { nombre: values.nombre.trim(), monto_estimado: Number(values.monto_estimado),
-    periodicidad: values.periodicidad, responsable: values.responsable, vigente_desde: values.vigente_desde };
+    periodicidad: values.periodicidad, responsable: values.responsable, vigente_desde: values.vigente_desde,
+    medio_pago: values.medio_pago };
   // Semántica explícita omitido/null (brief t_38a7253f F1b-fix2, hallazgo 2
   // del revisor; espejo de `db.resolve_fixed_categoria`): en edición, elegir
   // "Sin categoría/subcategoría" cuando antes había un valor envía `null`
@@ -1883,6 +2016,7 @@ document.getElementById('form-fields').addEventListener('change', syncCustomProp
 document.getElementById('form-fields').addEventListener('input', syncCustomProportion);
 document.getElementById('form-fields').addEventListener('change', (event) => {
   if (event.target?.id === 'field-categoria') onExpenseCategoriaChange();
+  if (event.target?.id === 'field-moneda_ingreso') updateExpenseMonedaHint();
 });
 document.getElementById('form-modal').addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !writePending) { event.preventDefault(); closeForm(); return; }
@@ -2564,18 +2698,111 @@ function renderCuotasDetail() {
     </table>`;
 }
 
+// Panel de administración de vencimientos (mejora Juan 2026-11-05, #6 lista
+// de mejoras): siempre visible arriba del detalle de crédito, incluso sin
+// cargos todavía, para que Juan pueda ir registrando los vencimientos mes a
+// mes de la única tarjeta en uso.
+function renderVencimientosAdmin() {
+  const vencimientos = [...DATA.tarjetaVencimientos].sort((a, b) => a.mes.localeCompare(b.mes));
+  return `
+    <div class="credito-vencimientos">
+      <p class="form-help">Vencimientos de la tarjeta (un ciclo = desde el día
+        siguiente al vencimiento anterior hasta éste). Agregalos mes a mes;
+        sin ninguno cargado, la carga de crédito se ve agrupada por período
+        como siempre.</p>
+      ${vencimientos.length ? `<ul class="credito-vencimientos-list">
+        ${vencimientos.map((v) => `<li>
+          <span>${escapeHtml(v.mes)}: vence ${escapeHtml(v.vencimiento)}</span>
+          <button type="button" class="fijos-secondary" onclick="handleVencimientoDelete(${Number(v.id)})"
+            ${!liveMode || writePending ? 'disabled' : ''}>Borrar</button>
+        </li>`).join('')}
+      </ul>` : ''}
+      <form id="vencimiento-form" class="super-form" onsubmit="handleVencimientoFormSubmit(event); return false;">
+        <label>Mes <input type="month" id="vencimiento-mes" required ${!liveMode || writePending ? 'disabled' : ''}></label>
+        <label>Vence <input type="date" id="vencimiento-fecha" required ${!liveMode || writePending ? 'disabled' : ''}></label>
+        <button type="submit" class="btn-print" ${!liveMode || writePending ? 'disabled' : ''}>Guardar vencimiento</button>
+      </form>
+      <p class="field-error" id="vencimiento-form-error" role="alert"></p>
+    </div>`;
+}
+
+async function saveTarjetaVencimiento(mes, vencimiento) {
+  const response = await fetch('/api/tarjeta-vencimientos', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mes, vencimiento }),
+  });
+  let result = null;
+  try { result = await response.json(); } catch { /* respuesta sin cuerpo JSON válido */ }
+  if (!response.ok) throw new Error(result?.error || `HTTP ${response.status}: no se pudo guardar.`);
+  return result?.vencimiento;
+}
+
+async function deleteTarjetaVencimientoRequest(id) {
+  const response = await fetch(`/api/tarjeta-vencimientos/${encodeURIComponent(id)}`, {
+    method: 'DELETE', credentials: 'same-origin',
+  });
+  if (!response.ok) {
+    let result = null;
+    try { result = await response.json(); } catch { /* sin cuerpo */ }
+    throw new Error(result?.error || `HTTP ${response.status}: no se pudo borrar.`);
+  }
+}
+
+async function handleVencimientoFormSubmit(event) {
+  event.preventDefault();
+  if (!liveMode || writePending) return;
+  const mes = document.getElementById('vencimiento-mes').value;
+  const vencimiento = document.getElementById('vencimiento-fecha').value;
+  const errorBox = document.getElementById('vencimiento-form-error');
+  errorBox.textContent = '';
+  if (!/^\d{4}-\d{2}$/.test(mes) || !/^\d{4}-\d{2}-\d{2}$/.test(vencimiento)) {
+    errorBox.textContent = 'Completá mes y fecha de vencimiento válidos.';
+    return;
+  }
+  writePending = true;
+  try {
+    await saveTarjetaVencimiento(mes, vencimiento);
+    await loadLive();
+    renderCreditoDetail();
+  } catch (error) {
+    document.getElementById('vencimiento-form-error').textContent = error.message || 'No se pudo guardar el vencimiento.';
+  } finally {
+    writePending = false;
+  }
+}
+
+async function handleVencimientoDelete(id) {
+  if (!liveMode || writePending) return;
+  writePending = true;
+  try {
+    await deleteTarjetaVencimientoRequest(id);
+    await loadLive();
+    renderCreditoDetail();
+  } catch (error) {
+    document.getElementById('vencimiento-form-error').textContent = error.message || 'No se pudo borrar el vencimiento.';
+  } finally {
+    writePending = false;
+  }
+}
+
 function renderCreditoDetail() {
   const inner = document.getElementById('credito-detail-inner');
   const rows = applyPersonaFiltro(filterGastosPeriod(period.from, period.to).filter((r) => r.medio_pago === 'Crédito'));
   const fixedItems = creditFixedItems();
+  const admin = renderVencimientosAdmin();
   if (!rows.length && !fixedItems.length) {
-    inner.innerHTML = '<div class="empty-state">Sin cargos en crédito en este período.</div>';
+    inner.innerHTML = `${admin}<div class="empty-state">Sin cargos en crédito en este período.</div>`;
     return;
   }
-  const total = rows.reduce((value, row) => value + expenseAmount(row), 0)
-    + fixedItems.reduce((value, item) => value + fixedAmount(item.row, item.month, personaFiltro), 0);
-  const items = [...rows].sort((a, b) => expenseAmount(b) - expenseAmount(a));
-  inner.innerHTML = `
+  const cycles = creditCycles();
+  // Sin vencimientos registrados: el agrupado plano de siempre (sin cambios
+  // de comportamiento para quien no usa esta mejora todavía).
+  if (!cycles.length) {
+    const total = rows.reduce((value, row) => value + expenseAmount(row), 0)
+      + fixedItems.reduce((value, item) => value + fixedAmount(item.row, item.month, personaFiltro), 0);
+    const items = [...rows].sort((a, b) => expenseAmount(b) - expenseAmount(a));
+    inner.innerHTML = `${admin}
       <table>
         <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th style="text-align:right">Monto</th></tr></thead>
         <tbody>
@@ -2593,6 +2820,51 @@ function renderCreditoDetail() {
           </tr>`).join('')}
         </tbody>
       </table><div class="credito-tarjeta-header">Total crédito · ${fmtARS(total)}</div>`;
+    return;
+  }
+  // Con vencimientos registrados: agrupado por ciclo (entre vencimientos
+  // consecutivos), más un bloque "Ciclo abierto" para lo posterior al
+  // último vencimiento cargado (brief #6: "que se muestre entre
+  // vencimientos de tarjeta").
+  const buckets = new Map();
+  const bucketFor = (label) => {
+    if (!buckets.has(label)) buckets.set(label, { rows: [], fixedItems: [] });
+    return buckets.get(label);
+  };
+  rows.forEach((r) => bucketFor(creditCycleForDate(r.fecha, cycles) ?? 'abierto').rows.push(r));
+  fixedItems.forEach((item) => bucketFor(creditCycleForDate(`${item.month}-01`, cycles) ?? 'abierto').fixedItems.push(item));
+  const orderedLabels = [...cycles.map((c) => c.label), 'abierto'].filter((label) => buckets.has(label));
+  const total = rows.reduce((value, row) => value + expenseAmount(row), 0)
+    + fixedItems.reduce((value, item) => value + fixedAmount(item.row, item.month, personaFiltro), 0);
+  inner.innerHTML = `${admin}
+    ${orderedLabels.map((label) => {
+      const bucket = buckets.get(label);
+      const items = [...bucket.rows].sort((a, b) => expenseAmount(b) - expenseAmount(a));
+      const subtotal = bucket.rows.reduce((value, row) => value + expenseAmount(row), 0)
+        + bucket.fixedItems.reduce((value, item) => value + fixedAmount(item.row, item.month, personaFiltro), 0);
+      const titulo = label === 'abierto' ? 'Ciclo abierto (sin vencimiento cargado todavía)' : `Vence ${escapeHtml(label)}`;
+      return `<div class="credito-ciclo">
+        <div class="credito-tarjeta-header">${titulo} · ${fmtARS(subtotal)}</div>
+        <table>
+          <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th style="text-align:right">Monto</th></tr></thead>
+          <tbody>
+            ${items.map((r) => `<tr>
+              <td class="td-muted">${r.fecha || '—'}</td>
+              <td>${escapeHtml(r.descripcion_original)}</td>
+              <td class="td-muted">${escapeHtml(r.categoria)}</td>
+              <td class="td-amount td-accent">${expenseAmountLabel(r)}</td>
+            </tr>`).join('')}
+            ${bucket.fixedItems.map(({ row, month }) => `<tr>
+              <td class="td-muted">${escapeHtml(month)}</td>
+              <td>${escapeHtml(row.nombre)} · fijo</td>
+              <td class="td-muted">${escapeHtml(row.categoria)}</td>
+              <td class="td-amount td-accent">${fixedAmountLabel(row, month, personaFiltro)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    }).join('')}
+    <div class="credito-tarjeta-header">Total crédito · ${fmtARS(total)}</div>`;
 }
 
 // Detalle de deuda: composición gasto a gasto del saldo pendiente actual

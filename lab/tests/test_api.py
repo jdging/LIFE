@@ -1086,6 +1086,59 @@ class ApiTest(WsgiApiTestCase):
         # Auth por el mismo header que todas las rutas.
         self.assertEqual(self.request("GET", "/api/categories?tipo=Gasto", auth=False)[0], 401)
 
+    def test_tarjeta_vencimientos_crud_y_upsert_por_mes(self):
+        # Mejora Juan 2026-11-05 (#6 lista de mejoras): agenda de vencimientos
+        # de la única tarjeta de crédito en uso, para agrupar la carga de
+        # crédito por ciclo en vez de mes calendario.
+        status, body, _ = self.request("GET", "/api/tarjeta-vencimientos")
+        self.assertEqual(status, 200)
+        self.assertEqual(body, {"vencimientos": []})
+
+        status, body, _ = self.request(
+            "POST", "/api/tarjeta-vencimientos", {"mes": "2026-11", "vencimiento": "2026-11-10"}
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(body["vencimiento"]["mes"], "2026-11")
+        self.assertEqual(body["vencimiento"]["vencimiento"], "2026-11-10")
+        primer_id = body["vencimiento"]["id"]
+
+        # Upsert: corregir el mismo mes reemplaza la fila, no crea otra.
+        status, body, _ = self.request(
+            "POST", "/api/tarjeta-vencimientos", {"mes": "2026-11", "vencimiento": "2026-11-12"}
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(body["vencimiento"]["id"], primer_id)
+        self.assertEqual(body["vencimiento"]["vencimiento"], "2026-11-12")
+
+        self.request("POST", "/api/tarjeta-vencimientos", {"mes": "2026-12", "vencimiento": "2026-12-10"})
+        status, body, _ = self.request("GET", "/api/tarjeta-vencimientos")
+        self.assertEqual(status, 200)
+        self.assertEqual([v["mes"] for v in body["vencimientos"]], ["2026-11", "2026-12"])
+
+        # Validaciones.
+        for payload in (
+            {"mes": "2026-13", "vencimiento": "2026-11-10"},
+            {"mes": "noviembre", "vencimiento": "2026-11-10"},
+            {"mes": "2026-11", "vencimiento": "no-es-fecha"},
+            {"mes": "2026-11"},
+            {"vencimiento": "2026-11-10"},
+            {"mes": "2026-11", "vencimiento": "2026-11-10", "extra": 1},
+        ):
+            self.assertEqual(self.request("POST", "/api/tarjeta-vencimientos", payload)[0], 400)
+
+        # Borrado: idempotente en los mensajes de error, 404 si no existe.
+        status, body, _ = self.request("DELETE", f"/api/tarjeta-vencimientos/{primer_id}")
+        self.assertEqual(status, 200)
+        self.assertEqual(body, {"deleted": True})
+        self.assertEqual(self.request("DELETE", f"/api/tarjeta-vencimientos/{primer_id}")[0], 404)
+        self.assertEqual(self.request("DELETE", "/api/tarjeta-vencimientos/999999")[0], 404)
+
+        # Auth por el mismo header que todas las rutas.
+        self.assertEqual(self.request("GET", "/api/tarjeta-vencimientos", auth=False)[0], 401)
+        self.assertEqual(self.request(
+            "POST", "/api/tarjeta-vencimientos", {"mes": "2027-01", "vencimiento": "2027-01-10"}, auth=False
+        )[0], 401)
+
     def test_local_http_roundtrip(self):
         server = make_server("127.0.0.1", 0, self.app)
         worker = threading.Thread(target=server.serve_forever, daemon=True)
