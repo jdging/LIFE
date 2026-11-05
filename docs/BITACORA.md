@@ -1,5 +1,30 @@
 # Bitácora del Proyecto
 
+### [2026-11-05] - Mejora #4 Juan: tarjeta de crédito en gastos fijos
+**Objetivo:** tercer ítem de la lista ordenada. Juan insistió en seguir sin
+pausar ("tenés que seguir solo siempre") — se retoma de inmediato sin pedir
+autorización adicional, según lo ya acordado.
+**Hallazgo:** el dashboard ya agrupaba fijos con `medio_pago='Crédito'` en
+`creditFixedItems()` para la vista de carga de crédito, pero el campo nunca
+estuvo expuesto: faltaba en el `<select>` del formulario Y en el whitelist
+de la API (`ALLOWED_FIXED_CREATE_FIELDS`/`PATCH_FIELDS`) — quedaba
+inalcanzable aunque la columna de la tabla y la lógica de agregación ya
+existían.
+**Cambios (commit `514db8c`, `lab/reinvencion`, sin push a main):** selector
+"Medio de pago" en el alta/edición de gasto fijo (`src/lab-dashboard/app.js`);
+`medio_pago` sumado al whitelist y a `validar_gasto_fijo` (opcional, mismos
+valores que un gasto variable) en `lab/api.py`/`lab/validaciones.py`;
+`db.crear_version_fijo` acepta `medio_pago` con el mismo centinela
+omitido/None/valor que `categoria`/`subcategoria`, y se agregó al check de
+"sin cambios reales" para que cambiar sólo el medio de pago cuente como
+edición válida.
+**Verificación:** 8 tests nuevos en `test_fijos_versionado.py` (alta,
+herencia, cambio explícito, limpieza, no-op, validación) + fixtures de
+`forms.test.mjs` actualizadas. Suite completa: 76/76 Node, 662/662 Python
+(13 skipped preexistentes), sin regresiones.
+**Siguiente:** filtros/orden en la vista de gastos del fondo (#5 de la lista
+ordenada) — ese ítem pide diseño del CTO antes de implementar.
+
 ### [2026-11-05] - Mejora #3 Juan: cotización dólar oficial para gastos en USD
 **Objetivo:** siguiente ítem de la lista ordenada tras #1 (coma/punto). Juan: "no
 te veo siguiendo" tras el primer cierre — se retoma en el mismo hilo sin volver
