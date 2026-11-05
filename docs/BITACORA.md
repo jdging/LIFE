@@ -1,5 +1,39 @@
 # Bitácora del Proyecto
 
+### [2026-11-05] - Mejora #4 Juan (en curso): CLI de lectura de facturas gas/EPE/internet
+**Lo que Juan mandó:** 3 PDFs reales al bot de Telegram del perfil
+`lasso` (Litoral Gas, EPE Santa Fe, Telecom/internet).
+**Hallazgo al leerlas:** los 3 gastos fijos ya cargados (`Gas`, `Epe`,
+`Internet`) tenían montos casi idénticos a estas facturas (diferencia de
+1 centavo por redondeo) con `vigente_desde` de hoy/ayer -- Juan ya las
+había cargado a mano antes de mandarlas. No hizo falta tocar nada en la
+base real; esta ronda fue para construir y validar el parseo contra
+texto real, no para corregir un monto desactualizado.
+**Construido (commit `437db0f`, `main`, sin tocar `api.py`/`db.py` ni el
+backend desplegado):** `lab/facturas_fijas.py`, CLI nuevo con el mismo
+patrón que `telegram_ingesta.py` (nunca abre SQLite directo, todo por
+`/api/*`). `extraer` detecta proveedor y monto por regex (Litoral Gas:
+"TOTAL A PAGAR hasta el..."; EPE: cuotas 1/2 con su importe y
+vencimiento; Telecom: "saldo total es de... y vence el día...").
+`actualizar` hace `PATCH /api/fixed/<id>` y exige `--confirmado`.
+**Pendiente de decidir con Juan:** EPE factura el bimestre en 2 cuotas
+mensuales distintas -- hoy el CLI usa siempre la Cuota 1 como monto
+representativo del fijo mensual; falta confirmar si eso está bien o
+prefiere la Cuota 2 o un promedio.
+**Lección registrada en el skill:** `vigente_desde` de una actualización
+tiene que ser hoy (o la fecha de emisión), nunca la fecha de
+vencimiento -- `GET /api/fixed` muestra la versión vigente A HOY, una
+con fecha futura queda "programada" y no se ve todavía (me hizo fallar
+un test hasta notarlo).
+**Verificación:** 11 tests nuevos en `test_facturas_fijas.py` (los 3
+formatos reales + CLI + PATCH contra la app WSGI real con historial).
+Suite completa 691/691 Python, 81/81 Node.
+**Siguiente:** el flujo real todavía no corre solo -- cuando llegue una
+factura nueva por Telegram, el agente que atiende ese chat lee el PDF
+directo (extracción nativa, sin pasar por este CLI para la lectura) y
+usa esta lógica/CLI para proponer+confirmar+aplicar. Falta decidir cuota
+EPE y, más adelante, sumar más proveedores si aparecen.
+
 ### [2026-11-05] - Mejora #3 Juan (cerrada): Supermercado sin "orden" manual + alta inline
 **Pedido:** "sacar lo de ingresar el orden de las categorías... que sea
 alfabético. Darle una vuelta de tuerca a la configuración, un + para
