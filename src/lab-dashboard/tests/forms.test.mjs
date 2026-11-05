@@ -35,6 +35,14 @@ const reply = (path, status, body) => {
 const fetch = async (path, options = {}) => {
   calls.push({ path, options });
   const next = replies.get(path)?.shift();
+  // Default silencioso para vencimientos de tarjeta (mejora #6 lista de
+  // mejoras): ningún test de este archivo es sobre esa feature, así que no
+  // tiene sentido obligar a mockear este endpoint en cada reply manual de
+  // loadLive -- se comporta como "sin vencimientos" salvo que un test
+  // puntual encole su propia respuesta (shift tiene prioridad).
+  if (!next && path === '/api/tarjeta-vencimientos') {
+    return { ok: true, status: 200, json: async () => ({ vencimientos: [] }) };
+  }
   if (!next) throw new Error(`Mock sin respuesta: ${path}`);
   if (next.status === 0) throw new Error('Sin red en prueba sintética');
   return { ok: next.status >= 200 && next.status < 300, status: next.status,
@@ -118,6 +126,7 @@ const liveReplies = (monthSummary = summary) => {
   reply('/api/fixed/versions', 200, { versions: [fixed] });
   reply('/api/summary', 200, { months: [monthSummary] });
   reply('/api/summary?month=2026-10', 200, monthSummary);
+  reply('/api/tarjeta-vencimientos', 200, { vencimientos: [] });
 };
 
 reply('/api/health', 401, { error: 'sin sesión' });

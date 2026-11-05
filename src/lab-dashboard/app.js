@@ -133,7 +133,7 @@ function getDebtRows() {
 const DATA = {
   gastos: [], ingresos: [], fijos: [], resumen: [], deudaPendiente: null,
   loadErrors: {}, compras: null, comprasError: null, recetas: null, recetasError: null,
-  inventario: [],
+  inventario: [], tarjetaVencimientos: [],
 };
 const charts = {};
 let period = null;
@@ -293,11 +293,12 @@ async function loadLive() {
   // conserva la vigencia histórica y `summary` los porcentajes mensuales.
   // La serie de 1–24 meses se calcula localmente con estas respuestas completas:
   // consultar sólo el mes del período global ocultaría los meses anteriores.
-  const [expenses, income, inventory, versions, summary, currentSummary] = await Promise.all([
+  const [expenses, income, inventory, versions, summary, currentSummary, tarjetaVencimientos] = await Promise.all([
     fetchJSON('/api/expenses'), fetchJSON('/api/income'),
     inventoryAvailable ? fetchJSON('/api/inventory') : Promise.resolve(null),
     fetchJSON('/api/fixed/versions'), fetchJSON('/api/summary'),
     fetchJSON(`/api/summary?month=${currentMonth}`),
+    fetchJSON('/api/tarjeta-vencimientos'),
   ]);
   const months = requireList(summary, 'months').map(adaptSummary);
   const current = adaptSummary(currentSummary);
@@ -314,6 +315,7 @@ async function loadLive() {
     inventario: inventoryAvailable ? requireList(inventory, 'inventory').map(adaptLiveInventario) : [],
     fijos: requireList(versions, 'versions').map(adaptLiveFixed),
     resumen: months,
+    tarjetaVencimientos: requireList(tarjetaVencimientos, 'vencimientos'),
   };
   Object.assign(DATA, next, { loadErrors: {}, deudaPendiente: current.debt_pending_through_month });
   liveMode = true;
@@ -800,6 +802,36 @@ function creditFixedItems() {
   return fixedMonths().flatMap((month) => fijosVigentes(DATA.fijos, fixedMonthCutoff(month))
     .filter((row) => row.medio_pago === 'Crédito' && fixedAmount(row, month, personaFiltro) !== null)
     .map((row) => ({ row, month })));
+}
+
+// Ciclos de crédito entre vencimientos de tarjeta (mejora Juan 2026-11-05,
+// #6 lista de mejoras): una sola tarjeta, Juan ingresa el vencimiento real
+// mes a mes (no siempre el mismo día). Un ciclo va desde el día siguiente
+// al vencimiento ANTERIOR (exclusive) hasta el vencimiento que lo cierra
+// (inclusive); el primer ciclo registrado no tiene piso (`from: null`) así
+// que también agrupa toda la carga histórica previa a cargar el primer
+// vencimiento, en vez de perderla. Sin ningún vencimiento registrado
+// devuelve `[]` -- quien llama debe caer al agrupado plano de siempre
+// (compatibilidad total con bases que todavía no usan esta mejora).
+function creditCycles() {
+  return [...(DATA.tarjetaVencimientos || [])]
+    .sort((a, b) => a.vencimiento.localeCompare(b.vencimiento))
+    .map((v, i, sorted) => ({
+      label: v.vencimiento,
+      from: i === 0 ? null : sorted[i - 1].vencimiento,
+      to: v.vencimiento,
+    }));
+}
+
+// `null` = posterior al último vencimiento registrado: ciclo abierto, sin
+// fecha de cierre todavía (se muestra agrupado aparte, no se descarta).
+function creditCycleForDate(fecha, cycles) {
+  const dia = String(fecha || '').slice(0, 10);
+  if (!dia) return null;
+  for (const cycle of cycles) {
+    if ((cycle.from === null || dia > cycle.from) && dia <= cycle.to) return cycle.label;
+  }
+  return null;
 }
 
 function fixedAllocation(row, month) {
@@ -2666,18 +2698,111 @@ function renderCuotasDetail() {
     </table>`;
 }
 
+// Panel de administración de vencimientos (mejora Juan 2026-11-05, #6 lista
+// de mejoras): siempre visible arriba del detalle de crédito, incluso sin
+// cargos todavía, para que Juan pueda ir registrando los vencimientos mes a
+// mes de la única tarjeta en uso.
+function renderVencimientosAdmin() {
+  const vencimientos = [...DATA.tarjetaVencimientos].sort((a, b) => a.mes.localeCompare(b.mes));
+  return `
+    <div class="credito-vencimientos">
+      <p class="form-help">Vencimientos de la tarjeta (un ciclo = desde el día
+        siguiente al vencimiento anterior hasta éste). Agregalos mes a mes;
+        sin ninguno cargado, la carga de crédito se ve agrupada por período
+        como siempre.</p>
+      ${vencimientos.length ? `<ul class="credito-vencimientos-list">
+        ${vencimientos.map((v) => `<li>
+          <span>${escapeHtml(v.mes)}: vence ${escapeHtml(v.vencimiento)}</span>
+          <button type="button" class="fijos-secondary" onclick="handleVencimientoDelete(${Number(v.id)})"
+            ${!liveMode || writePending ? 'disabled' : ''}>Borrar</button>
+        </li>`).join('')}
+      </ul>` : ''}
+      <form id="vencimiento-form" class="super-form" onsubmit="handleVencimientoFormSubmit(event); return false;">
+        <label>Mes <input type="month" id="vencimiento-mes" required ${!liveMode || writePending ? 'disabled' : ''}></label>
+        <label>Vence <input type="date" id="vencimiento-fecha" required ${!liveMode || writePending ? 'disabled' : ''}></label>
+        <button type="submit" class="btn-print" ${!liveMode || writePending ? 'disabled' : ''}>Guardar vencimiento</button>
+      </form>
+      <p class="field-error" id="vencimiento-form-error" role="alert"></p>
+    </div>`;
+}
+
+async function saveTarjetaVencimiento(mes, vencimiento) {
+  const response = await fetch('/api/tarjeta-vencimientos', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mes, vencimiento }),
+  });
+  let result = null;
+  try { result = await response.json(); } catch { /* respuesta sin cuerpo JSON válido */ }
+  if (!response.ok) throw new Error(result?.error || `HTTP ${response.status}: no se pudo guardar.`);
+  return result?.vencimiento;
+}
+
+async function deleteTarjetaVencimientoRequest(id) {
+  const response = await fetch(`/api/tarjeta-vencimientos/${encodeURIComponent(id)}`, {
+    method: 'DELETE', credentials: 'same-origin',
+  });
+  if (!response.ok) {
+    let result = null;
+    try { result = await response.json(); } catch { /* sin cuerpo */ }
+    throw new Error(result?.error || `HTTP ${response.status}: no se pudo borrar.`);
+  }
+}
+
+async function handleVencimientoFormSubmit(event) {
+  event.preventDefault();
+  if (!liveMode || writePending) return;
+  const mes = document.getElementById('vencimiento-mes').value;
+  const vencimiento = document.getElementById('vencimiento-fecha').value;
+  const errorBox = document.getElementById('vencimiento-form-error');
+  errorBox.textContent = '';
+  if (!/^\d{4}-\d{2}$/.test(mes) || !/^\d{4}-\d{2}-\d{2}$/.test(vencimiento)) {
+    errorBox.textContent = 'Completá mes y fecha de vencimiento válidos.';
+    return;
+  }
+  writePending = true;
+  try {
+    await saveTarjetaVencimiento(mes, vencimiento);
+    await loadLive();
+    renderCreditoDetail();
+  } catch (error) {
+    document.getElementById('vencimiento-form-error').textContent = error.message || 'No se pudo guardar el vencimiento.';
+  } finally {
+    writePending = false;
+  }
+}
+
+async function handleVencimientoDelete(id) {
+  if (!liveMode || writePending) return;
+  writePending = true;
+  try {
+    await deleteTarjetaVencimientoRequest(id);
+    await loadLive();
+    renderCreditoDetail();
+  } catch (error) {
+    document.getElementById('vencimiento-form-error').textContent = error.message || 'No se pudo borrar el vencimiento.';
+  } finally {
+    writePending = false;
+  }
+}
+
 function renderCreditoDetail() {
   const inner = document.getElementById('credito-detail-inner');
   const rows = applyPersonaFiltro(filterGastosPeriod(period.from, period.to).filter((r) => r.medio_pago === 'Crédito'));
   const fixedItems = creditFixedItems();
+  const admin = renderVencimientosAdmin();
   if (!rows.length && !fixedItems.length) {
-    inner.innerHTML = '<div class="empty-state">Sin cargos en crédito en este período.</div>';
+    inner.innerHTML = `${admin}<div class="empty-state">Sin cargos en crédito en este período.</div>`;
     return;
   }
-  const total = rows.reduce((value, row) => value + expenseAmount(row), 0)
-    + fixedItems.reduce((value, item) => value + fixedAmount(item.row, item.month, personaFiltro), 0);
-  const items = [...rows].sort((a, b) => expenseAmount(b) - expenseAmount(a));
-  inner.innerHTML = `
+  const cycles = creditCycles();
+  // Sin vencimientos registrados: el agrupado plano de siempre (sin cambios
+  // de comportamiento para quien no usa esta mejora todavía).
+  if (!cycles.length) {
+    const total = rows.reduce((value, row) => value + expenseAmount(row), 0)
+      + fixedItems.reduce((value, item) => value + fixedAmount(item.row, item.month, personaFiltro), 0);
+    const items = [...rows].sort((a, b) => expenseAmount(b) - expenseAmount(a));
+    inner.innerHTML = `${admin}
       <table>
         <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th style="text-align:right">Monto</th></tr></thead>
         <tbody>
@@ -2695,6 +2820,51 @@ function renderCreditoDetail() {
           </tr>`).join('')}
         </tbody>
       </table><div class="credito-tarjeta-header">Total crédito · ${fmtARS(total)}</div>`;
+    return;
+  }
+  // Con vencimientos registrados: agrupado por ciclo (entre vencimientos
+  // consecutivos), más un bloque "Ciclo abierto" para lo posterior al
+  // último vencimiento cargado (brief #6: "que se muestre entre
+  // vencimientos de tarjeta").
+  const buckets = new Map();
+  const bucketFor = (label) => {
+    if (!buckets.has(label)) buckets.set(label, { rows: [], fixedItems: [] });
+    return buckets.get(label);
+  };
+  rows.forEach((r) => bucketFor(creditCycleForDate(r.fecha, cycles) ?? 'abierto').rows.push(r));
+  fixedItems.forEach((item) => bucketFor(creditCycleForDate(`${item.month}-01`, cycles) ?? 'abierto').fixedItems.push(item));
+  const orderedLabels = [...cycles.map((c) => c.label), 'abierto'].filter((label) => buckets.has(label));
+  const total = rows.reduce((value, row) => value + expenseAmount(row), 0)
+    + fixedItems.reduce((value, item) => value + fixedAmount(item.row, item.month, personaFiltro), 0);
+  inner.innerHTML = `${admin}
+    ${orderedLabels.map((label) => {
+      const bucket = buckets.get(label);
+      const items = [...bucket.rows].sort((a, b) => expenseAmount(b) - expenseAmount(a));
+      const subtotal = bucket.rows.reduce((value, row) => value + expenseAmount(row), 0)
+        + bucket.fixedItems.reduce((value, item) => value + fixedAmount(item.row, item.month, personaFiltro), 0);
+      const titulo = label === 'abierto' ? 'Ciclo abierto (sin vencimiento cargado todavía)' : `Vence ${escapeHtml(label)}`;
+      return `<div class="credito-ciclo">
+        <div class="credito-tarjeta-header">${titulo} · ${fmtARS(subtotal)}</div>
+        <table>
+          <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th style="text-align:right">Monto</th></tr></thead>
+          <tbody>
+            ${items.map((r) => `<tr>
+              <td class="td-muted">${r.fecha || '—'}</td>
+              <td>${escapeHtml(r.descripcion_original)}</td>
+              <td class="td-muted">${escapeHtml(r.categoria)}</td>
+              <td class="td-amount td-accent">${expenseAmountLabel(r)}</td>
+            </tr>`).join('')}
+            ${bucket.fixedItems.map(({ row, month }) => `<tr>
+              <td class="td-muted">${escapeHtml(month)}</td>
+              <td>${escapeHtml(row.nombre)} · fijo</td>
+              <td class="td-muted">${escapeHtml(row.categoria)}</td>
+              <td class="td-amount td-accent">${fixedAmountLabel(row, month, personaFiltro)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    }).join('')}
+    <div class="credito-tarjeta-header">Total crédito · ${fmtARS(total)}</div>`;
 }
 
 // Detalle de deuda: composición gasto a gasto del saldo pendiente actual

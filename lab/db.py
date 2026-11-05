@@ -60,6 +60,7 @@ rechazan cualquier intento de insertar un registro que no venga marcado como
 
 import json
 import math
+import re
 import sqlite3
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
@@ -296,6 +297,23 @@ CREATE TABLE IF NOT EXISTS avisos_credito (
     detectado_en TEXT NOT NULL,
     enviado_en TEXT,
     PRIMARY KEY (mes, umbral)
+);
+
+-- Vencimientos de la (única) tarjeta de crédito en uso (mejora Juan
+-- 2026-11-05, #6 lista de mejoras): el día de cierre/vencimiento del banco
+-- no es un día fijo del mes (se mueve con fines de semana/feriados), así
+-- que Juan lo ingresa mes a mes a mano en vez de un `dia_vencimiento` fijo
+-- como tenía la vieja tabla `tarjetas` (retirada del flujo real por F2,
+-- CORRECCIONES-JUAN-20261027 punto 8 -- esta tabla es independiente de esa,
+-- no la revive). `mes` es la etiqueta del ciclo que ese vencimiento cierra
+-- ('YYYY-MM', clave de upsert); `vencimiento` es la fecha real ('YYYY-MM-DD',
+-- puede caer en el mes siguiente). La carga de crédito agrupa gastos entre
+-- vencimientos consecutivos (ver `creditCycles` en el dashboard).
+CREATE TABLE IF NOT EXISTS tarjeta_vencimientos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mes TEXT NOT NULL UNIQUE,
+    vencimiento TEXT NOT NULL,
+    created_at TEXT NOT NULL
 );
 """
 
@@ -3549,3 +3567,68 @@ def marcar_avisos_credito_enviados(conn: sqlite3.Connection, items: list) -> lis
             actualizados.append({"mes": mes, "umbral": umbral})
     conn.commit()
     return actualizados
+
+
+_FORMATO_MES = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+def get_tarjeta_vencimientos(conn: sqlite3.Connection) -> list:
+    """Vencimientos de la única tarjeta de crédito en uso, ordenados por mes.
+
+    `mes` es la etiqueta del ciclo ('YYYY-MM'); `vencimiento` es la fecha
+    real que puede caer en el mes siguiente. El dashboard arma los ciclos
+    de crédito agrupando gastos entre vencimientos consecutivos.
+    """
+    rows = conn.execute(
+        "SELECT * FROM tarjeta_vencimientos ORDER BY mes"
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def set_tarjeta_vencimiento(conn: sqlite3.Connection, mes: str, vencimiento: str) -> dict:
+    """Crea o reemplaza (upsert por `mes`) el vencimiento de un ciclo.
+
+    Un mismo `mes` corregido más de una vez (p.ej. el banco movió la fecha)
+    simplemente actualiza la fila existente -- a diferencia de los fijos,
+    no hace falta histórico de vencimientos pasados, es sólo la agenda de
+    ciclos de crédito.
+    """
+    if not isinstance(mes, str) or not _FORMATO_MES.match(mes):
+        raise ValueError("mes debe ser 'YYYY-MM'.")
+    try:
+        fecha = date.fromisoformat(vencimiento)
+        if fecha.isoformat() != vencimiento:
+            raise ValueError
+    except (TypeError, ValueError):
+        raise ValueError("vencimiento debe ser una fecha ISO 'YYYY-MM-DD' válida.") from None
+
+    existente = conn.execute(
+        "SELECT id FROM tarjeta_vencimientos WHERE mes = ?", (mes,)
+    ).fetchone()
+    if existente is not None:
+        conn.execute(
+            "UPDATE tarjeta_vencimientos SET vencimiento = ? WHERE mes = ?",
+            (vencimiento, mes),
+        )
+        nuevo_id = existente["id"]
+    else:
+        cursor = conn.execute(
+            "INSERT INTO tarjeta_vencimientos (mes, vencimiento, created_at) VALUES (?, ?, ?)",
+            (mes, vencimiento, _now()),
+        )
+        nuevo_id = cursor.lastrowid
+    conn.commit()
+    fila = conn.execute(
+        "SELECT * FROM tarjeta_vencimientos WHERE id = ?", (nuevo_id,)
+    ).fetchone()
+    return dict(fila)
+
+
+def eliminar_tarjeta_vencimiento(conn: sqlite3.Connection, vencimiento_id: int) -> bool:
+    """Borra un vencimiento. `True` si existía, `False` si no (idempotente,
+    sin error -- Lasso puede reintentar un borrado sin chequear primero)."""
+    cursor = conn.execute(
+        "DELETE FROM tarjeta_vencimientos WHERE id = ?", (vencimiento_id,)
+    )
+    conn.commit()
+    return cursor.rowcount == 1
