@@ -1,5 +1,32 @@
 # Bitácora del Proyecto
 
+### [2026-11-05] - Mejora #6 Juan (cerrada): rediseño UI vencimientos de tarjeta
+**Pedido:** "no está muy didáctica" + revisar con UX/UI, CPO, CTO y
+front-end-developer.
+**Causa real (informe del equipo, `/home/ai-os/informe-vencimientos-
+tarjeta-UX.md`):** el form pedía 2 campos (Mes + Vence) para un solo
+concepto -- Juan solo tiene la fecha de vencimiento en la cabeza, "mes"
+era metadata interna disfrazada de decisión del usuario. Además la lista
+mostraba la fecha de cierre pero nunca el RANGO que generaba: no se veía
+el efecto de cargar el dato, solo su definición algebraica en prosa.
+**Cambios (commit `6fa6024`, `main`, desplegado, frontend-only):**
+- Un solo input (fecha); "mes" se deriva en JS antes del POST.
+- La lista reusa `creditCycles()` (ya existía) para mostrar el rango
+  completo por ciclo, no solo la fecha de cierre.
+- Estado vacío con ejemplo numérico concreto.
+- Mes duplicado: mensaje específico citando el vencimiento existente.
+- `confirm()` antes de borrar un vencimiento que no es el más reciente.
+- Deliberadamente no implementado: bloquear fecha "retrógrada" -- sin
+  beneficio real de corrección (`creditCycles()` reordena solo), reduce
+  flexibilidad de backfill sin necesidad.
+**Verificación:** 6 tests nuevos (`tarjeta-vencimientos.test.mjs`).
+Suite completa 87/87 Node, 694/694 Python.
+**Estado de la lista de 7 mejoras de Juan:** las 7 cerradas. "Recetas/
+inventario Fase 3" (kanban viejo) ya estaba construido al revisarlo
+(pestañas completas en el dashboard nuevo). Quedan sin alcance definido:
+bot conversacional, sync a Sheets, "LIFE v2" -- a la espera de que Juan
+priorice/aclare antes de construir algo ahí.
+
 ### [2026-11-05] - Mejora #4 Juan (en curso): CLI de lectura de facturas gas/EPE/internet
 **Lo que Juan mandó:** 3 PDFs reales al bot de Telegram del perfil
 `lasso` (Litoral Gas, EPE Santa Fe, Telecom/internet).
