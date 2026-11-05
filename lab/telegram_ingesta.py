@@ -237,6 +237,15 @@ class ApiClient:
     def borrador_clear(self, chat, usuario=None):
         return self._request("DELETE", "/api/telegram/borrador", query={"chat": chat, "usuario": usuario})
 
+    def list_fixed(self):
+        return self._request("GET", "/api/fixed")["fixed"]
+
+    def update_fixed(self, fixed_id, monto_estimado, vigente_desde):
+        return self._request(
+            "PATCH", f"/api/fixed/{fixed_id}",
+            json_body={"monto_estimado": monto_estimado, "vigente_desde": vigente_desde},
+        )
+
 
 # --- Parseo determinista de montos AR ---------------------------------------
 
