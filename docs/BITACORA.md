@@ -1,5 +1,34 @@
 # Bitácora del Proyecto
 
+### [2026-11-05] - Mejora #5 Juan: vencimientos de tarjeta y crédito por ciclo
+**Objetivo:** quinto ítem de la lista ordenada (vencimientos de tarjeta, una
+sola tarjeta en uso).
+**Cambios (commit `03219bb`, `lab/reinvencion`, sin push a main):** tabla
+nueva `tarjeta_vencimientos` (mes→fecha real de vencimiento, upsert por mes)
++ endpoints `GET/POST/DELETE /api/tarjeta-vencimientos`. En el dashboard, un
+panel de alta/baja de vencimientos siempre visible en "Carga en crédito"
+(incluso sin cargos todavía); con al menos un vencimiento cargado,
+`creditCycles()`/`creditCycleForDate()` agrupan gastos y fijos en crédito
+por CICLO entre vencimientos consecutivos (no por mes calendario), con un
+bloque "Ciclo abierto" para lo posterior al último vencimiento. Sin ningún
+vencimiento cargado el comportamiento es exactamente el de antes
+(compatibilidad total).
+**Verificación:** 17 tests nuevos (`test_tarjeta_vencimientos.py`) + 1 nuevo
+en `test_api.py` (CRUD/validaciones/auth por HTTP) + fixtures de
+`forms.test.mjs` actualizadas. Suite completa: 76/76 Node, 680/680 Python
+(13 skipped preexistentes), sin regresiones.
+**En curso en paralelo:** consulta de rol CPO (proceso en background,
+`proc_9977b412dcc6`) sobre el ítem #4 de la lista ordenada ("filtros/orden
+de los gastos del fondo") — hallazgo del coordinador: no existe ninguna
+pantalla llamada "fondo"; la hipótesis más fuerte es la pestaña
+"Inversiones", que hoy es sólo un placeholder vacío sin construir. Es una
+ampliación de alcance real vs. lo que Juan pidió literalmente (agregar
+filtros a algo que no existe todavía), así que se consulta al CPO para
+una propuesta concreta antes de construir nada, en vez de asumir el alcance.
+**Siguiente:** sync opcional a Google Sheets (pendiente del kanban) y/o
+rediseño de configuración de Supermercado (#7 original de Juan), mientras
+se espera el resultado del CPO para el ítem de "fondo".
+
 ### [2026-11-05] - Mejora #4 Juan: tarjeta de crédito en gastos fijos
 **Objetivo:** tercer ítem de la lista ordenada. Juan insistió en seguir sin
 pausar ("tenés que seguir solo siempre") — se retoma de inmediato sin pedir
