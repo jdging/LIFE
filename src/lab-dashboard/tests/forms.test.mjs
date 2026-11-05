@@ -417,7 +417,7 @@ ${slice('const MAX_SQLITE_ID = ', 'function adaptLiveMovement(')}
 const P1 = 'JD', P2 = 'Pinki';
 ${slice('function getRowPct(', '// ── FILTROS DE DATOS')}
 const TABLE_KEY_MAP = { monto_total: 'monto_propio', pago: 'pagado_por' };
-let tableFiltroCat = '', sortState = { key: 'fecha', dir: 'desc' }, personaFiltro = 'comun';
+let tableFiltroCat = '', tableFiltroMedioPago = '', sortState = { key: 'fecha', dir: 'desc' }, personaFiltro = 'comun';
 let gastosTableRows = [{ ...expenseRow, id: bigId, categoria: '<img src=x onerror=alert(1)>',
   descripcion_original: '<svg onload=alert(2)>', monto_propio: expenseRow.monto }];
 let liveMode = true, writePending = false, reloadPending = false, reloadFailed = false;
@@ -430,6 +430,67 @@ ${slice('function renderGastosTable()', "document.querySelectorAll('#tabla-gasto
 expenseTableApi.renderGastosTable();
 const expenseTableHtml = element('tabla-body').innerHTML;
 assert.match(expenseTableHtml, new RegExp(`data-id="${largeId}"`));
+
+// Mejora Juan 2026-11-05 (#4 lista de mejoras, "gastos del fondo"): filtro
+// de medio de pago en la tabla "Detalle de gastos", mismo patrón que el
+// filtro de categoría ya existente (opciones derivadas de los datos del
+// período, combina con AND con los demás filtros activos).
+const medioPagoFilterElements = new Map();
+const medioPagoFilterElement = (id) => {
+  if (!medioPagoFilterElements.has(id)) medioPagoFilterElements.set(id, {
+    innerHTML: '', value: '', onchange: null,
+    querySelectorAll() { return []; },
+  });
+  return medioPagoFilterElements.get(id);
+};
+const medioPagoFilterDocument = { getElementById: medioPagoFilterElement, querySelectorAll: () => [] };
+const medioPagoFilterRows = [
+  { ...expense, id: 1, categoria: 'Hogar', medio_pago: 'Efectivo', monto_propio: 100 },
+  { ...expense, id: 2, categoria: 'Hogar', medio_pago: 'Crédito', monto_propio: 200 },
+  { ...expense, id: 3, categoria: 'Comida', medio_pago: 'Débito', monto_propio: 300 },
+];
+const medioPagoFilterApi = runInNewContext(`
+${slice('const escapeHtml = ', 'const fmtARS = ')}
+${slice('const MAX_SQLITE_ID = ', 'function adaptLiveMovement(')}
+const P1 = 'JD', P2 = 'Pinki';
+${slice('function getRowPct(', '// ── FILTROS DE DATOS')}
+const TABLE_KEY_MAP = { monto_total: 'monto_propio', pago: 'pagado_por' };
+let tableFiltroCat = '', tableFiltroMedioPago = '', sortState = { key: 'fecha', dir: 'desc' }, personaFiltro = 'comun';
+let gastosTableRows = rows;
+let liveMode = true, writePending = false, reloadPending = false, reloadFailed = false;
+function iconFor() { return '🔸'; }
+function fmtARS(value) { return '$' + value; }
+function pillClassFor() { return 'pill-jd'; }
+function cuotaLabel() { return '1/1'; }
+${slice('function setupTablaMedioPagoSelect(', "document.querySelectorAll('#tabla-gastos thead th[data-key]')")}
+({ setupTablaMedioPagoSelect, renderGastosTable,
+   setFiltroMedioPago(value) { tableFiltroMedioPago = value; },
+   setFiltroCat(value) { tableFiltroCat = value; } })`,
+  { document: medioPagoFilterDocument, rows: medioPagoFilterRows, DATA: { resumen: [] } });
+
+medioPagoFilterApi.setupTablaMedioPagoSelect(medioPagoFilterRows);
+assert.equal(medioPagoFilterElement('filtro-medio-pago-tabla').innerHTML,
+  '<option value="">Todos</option><option value="Crédito">Crédito</option>'
+  + '<option value="Débito">Débito</option><option value="Efectivo">Efectivo</option>',
+  'Opciones del select de medio de pago: únicas, ordenadas y con "Todos" primero');
+
+medioPagoFilterApi.renderGastosTable();
+assert.equal(medioPagoFilterElement('tabla-count').textContent, '3 de 3 gastos');
+
+medioPagoFilterApi.setFiltroMedioPago('Crédito');
+medioPagoFilterApi.renderGastosTable();
+assert.equal(medioPagoFilterElement('tabla-count').textContent, '1 de 3 gastos',
+  'Filtrar por medio de pago reduce la tabla a las filas que coinciden');
+
+medioPagoFilterApi.setFiltroCat('Hogar');
+medioPagoFilterApi.renderGastosTable();
+assert.equal(medioPagoFilterElement('tabla-count').textContent, '1 de 3 gastos',
+  'Categoría Hogar + medio Crédito siguen coincidiendo en la fila #2 (AND, no se excluyen entre sí)');
+
+medioPagoFilterApi.setFiltroCat('Comida');
+medioPagoFilterApi.renderGastosTable();
+assert.equal(medioPagoFilterElement('tabla-count').textContent, '0 de 3 gastos',
+  'Comida + Crédito no coinciden en ninguna fila: el AND de ambos filtros vacía la tabla');
 assert.match(expenseTableHtml, /openForm\('expense-edit', this\.dataset\.id\)/, 'la tabla de Gastos debe ofrecer un botón Editar por fila (t_b5c6e680)');
 assert.match(expenseTableHtml, /openForm\('expense-delete', this\.dataset\.id\)/);
 assert.doesNotMatch(expenseTableHtml, /<img/i);
@@ -458,7 +519,7 @@ const P1 = 'JD', P2 = 'Pinki';
 ${slice('function getMonthProportion(', 'function getDebtRows(')}
 ${slice('function getRowPct(', 'function setPersonaFiltro(')}
 const TABLE_KEY_MAP = { monto_total: 'monto_propio', pago: 'pagado_por' };
-let tableFiltroCat = '', sortState = { key: 'fecha', dir: 'desc' }, personaFiltro = 'comun';
+let tableFiltroCat = '', tableFiltroMedioPago = '', sortState = { key: 'fecha', dir: 'desc' }, personaFiltro = 'comun';
 let liveMode = true, writePending = false, reloadPending = false, reloadFailed = false;
 let gastosTableRows = [];
 function iconFor() { return '🔸'; }

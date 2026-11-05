@@ -158,6 +158,7 @@ let activeCat = null;
 let categPieCache = [];
 let gastosTableRows = [];
 let tableFiltroCat = '';
+let tableFiltroMedioPago = '';
 let sortState = { key: 'fecha', dir: 'desc' };
 let fijosMode = 'vigentes';
 let fijosSelectedGroup = null;
@@ -2075,6 +2076,7 @@ function renderGastosView() {
   if (activeCat) renderSubcatChart(activeCat);
 
   setupTablaCategSelect(rows);
+  setupTablaMedioPagoSelect(rows);
   // monto_propio conserva el monto ORIGINAL del gasto (antes de applyPersonaMonto
   // recortarlo a la porción de la persona filtrada): la columna de reparto de la
   // tabla siempre usa el % y el monto propios del gasto, nunca el filtro activo.
@@ -2542,8 +2544,25 @@ function setupTablaCategSelect(periodRows) {
   select.onchange = () => { tableFiltroCat = select.value; renderGastosTable(); };
 }
 
+// Mejora Juan 2026-11-05 (#4 lista de mejoras, "gastos del fondo"): mismo
+// patrón que el filtro de categoría -- opciones derivadas de los datos del
+// período actual, no una lista fija, así nunca queda un medio de pago
+// vacío/inexistente seleccionable.
+function setupTablaMedioPagoSelect(periodRows) {
+  const select = document.getElementById('filtro-medio-pago-tabla');
+  const medios = [...new Set(periodRows.map((r) => r.medio_pago).filter(Boolean))].sort();
+  const prev = tableFiltroMedioPago;
+  select.innerHTML = '<option value="">Todos</option>' +
+    medios.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+  select.value = medios.includes(prev) ? prev : '';
+  tableFiltroMedioPago = select.value;
+  select.onchange = () => { tableFiltroMedioPago = select.value; renderGastosTable(); };
+}
+
 function renderGastosTable() {
-  const data = tableFiltroCat ? gastosTableRows.filter((r) => r.categoria === tableFiltroCat) : gastosTableRows;
+  const data = gastosTableRows
+    .filter((r) => !tableFiltroCat || r.categoria === tableFiltroCat)
+    .filter((r) => !tableFiltroMedioPago || r.medio_pago === tableFiltroMedioPago);
   const key = TABLE_KEY_MAP[sortState.key] || sortState.key;
   const sorted = [...data].sort((a, b) => {
     const va = a[key], vb = b[key];
