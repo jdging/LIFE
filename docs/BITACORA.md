@@ -1,5 +1,33 @@
 # Bitácora del Proyecto
 
+### [2026-11-05] - FIX CRÍTICO: proxy de Vercel bloqueaba /api/tarjeta-vencimientos
+**Síntoma de Juan:** "Finanzas y otros módulos · los datos live no se
+pudieron verificar. Snapshot de solo lectura..." en el dashboard en vivo,
+y "no tengo los gastos de noviembre cargados".
+**Causa raíz real (no era pérdida de datos):** `middleware.js` (el proxy de
+Vercel hacia el backend real) tiene un whitelist explícito de rutas
+permitidas (`PROXY_ROUTES`) separado del whitelist del propio backend
+(`api.py`). Al agregar `/api/tarjeta-vencimientos` (mejora #5) sólo quedó
+permitida en el backend, nunca en este whitelist del proxy. `loadLive()`
+pide esa ruta dentro de un único `Promise.all()` junto con expenses/income/
+fixed/summary: al rechazarla el proxy, TODO el `Promise.all` fallaba y la
+app caía a `loadSnapshot()` (modo solo lectura con los `data/*.json`
+viejos del repo, sin las cargas de noviembre) — de ahí el banner y los
+"gastos faltantes". La base de datos real nunca se tocó ni perdió nada
+(verificado en el incidente anterior: 244 gastos, 223 activos, intactos).
+**Fix (commit `6f53911`, `main`, desplegado):** agregadas `GET/POST
+/api/tarjeta-vencimientos` y `DELETE /api/tarjeta-vencimientos/:id` a
+`PROXY_ROUTES`. 3 tests nuevos en `proxy.test.mjs` (mismo caso
+parametrizado que cubre todas las demás rutas). Suite completa 76/76 Node.
+**Lección para la próxima ruta nueva:** agregar un endpoint nuevo a
+`api.py` (backend) NO alcanza para que funcione en producción — también
+hay que agregarlo al whitelist de `middleware.js` (proxy de Vercel). Dos
+listas separadas, dos lugares para tocar.
+**Verificación:** desplegado y re-aliaseado; `/api/tarjeta-vencimientos`
+ahora responde 401 sin sesión igual que `/api/health`/`/api/expenses`
+(antes probablemente devolvía un 404/403 distinto por no estar en el
+whitelist). Falta confirmación de Juan mirando el dashboard real.
+
 ### [2026-11-05] - Mejora #4 Juan (cerrada): filtro de medio de pago en "el fondo"
 **Aclaración de Juan:** "los gastos del fondo" = la tabla de abajo de la
 pestaña Gastos (`#tabla-gastos`), no Inversiones. Esa tabla YA tenía filtro
