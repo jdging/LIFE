@@ -1,5 +1,30 @@
 # Bitácora del Proyecto
 
+### [2026-11-05] - Mejora #1 Juan: coma y punto válidos para ingresar montos
+**Objetivo:** Juan trajo una lista de 7 mejoras + se confirmó que ítem previo de
+CRUD web general ya estaba cerrado. Se ordenó la lista de más rápida a más
+larga/difícil (mezclando lo pendiente del kanban: bot conversacional, recetas/
+inventario Fase 3, sync Sheets, LIFE v2) y Juan autorizó avanzar sin consultar,
+llamando al CTO si hace falta desbloqueo, sin parar.
+**Cambios (commit `3c07225`, `lab/reinvencion`, sin push a main):** los inputs de
+monto (gasto, ingreso, fijo, inventario: `monto`, `monto_estimado`,
+`valor_estimado`, `precio_ars`, `cotizacion_usd_compra`, `precio_usd_compra`,
+`precio_venta_estimado_usd`) eran `type="number"`, cuyo separador decimal
+aceptado depende del locale del dispositivo — tipear el que el input no
+esperaba dejaba el campo vacío/inválido sin aviso claro. Pasaron a
+`type="text" inputmode="decimal"` y se agregó `normalizeDecimalInput()` en
+`src/lab-dashboard/app.js`, que acepta tanto `,` como `.` como separador
+decimal (no separador de miles) antes de validar (`validMoney`/
+`validMoneyOptional`) o convertir a `Number` en el payload.
+**Verificación:** suite completa de `src/lab-dashboard/tests` (69/69 Node)
+corrida por mí en `lab/reinvencion` tras el fast-forward a `32a8872`, sin
+regresiones. No se tocó `main`, API/DB real, ni infraestructura.
+**Siguiente:** continuar con el resto de la lista ordenada (dólar oficial,
+tarjeta en gastos fijos, filtros de fondo con CTO, vencimientos de tarjeta,
+sync Sheets, config Supermercado inline, recetas/inventario, lectura de
+facturas por Telegram/Gmail, bot conversacional, LIFE v2) sin pausar salvo
+bloqueo real.
+
 ### [2026-10-30] - F4 QA3: integración de stock y PDF, trazabilidad corregida
 **Alcance:** en `lab/f4-qa3-integracion`, sobre `85a08183e908c8c4826006d2215a2a425e62707f`, quedaron integrados el paso de stock de **una unidad** por botón/flecha con fracciones manuales preservadas y el PDF A4 de Supermercado con columnas centradas por página y estética LIFE existente. Guías: `docs/F4-QA3-STOCK.md` y `docs/F4-QA3-PDF.md`. El manifiesto `evidencia/qa3-manifest.json` registra las 11 rutas integradas; esta corrección documental actualiza únicamente las dos rutas de contexto.
 **Verificación del coordinador sobre el integrado:** `evidencia/node-integracion.log`: 69/69; `evidencia/pytest-integracion.log`: 666 aprobadas, 1 omitida, 52.961 subtests aprobados y un warning de `fitz`; `evidencia/browser-qa3-final.log`: Chromium real aprobó `+1` conservando fracciones, un solo PATCH al pulsar `+` tras edición manual, decimales manuales y de formulario, límites 0/máximo, conservación de nodos y foco, 409/401, cuatro anchos móviles/escritorio (320/390/768/1280), descarga PDF y cero errores de página. El coordinador generó cinco PDF demo y sus PNG; `evidencia/pdf-inspeccion.json` registra A4, columnas 1/2/3 y últimas páginas de 1/2 columnas, con error de centrado inferior a 0,01 pt. El revisor PDF `9a5bfb11` dictaminó APTO. Los archivos fuente permanecen sin cambios desde esas pruebas.
