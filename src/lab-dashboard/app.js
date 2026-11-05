@@ -798,30 +798,44 @@ function fixedMonthCutoff(month) {
   return period.to && period.to < lastDay ? period.to : lastDay;
 }
 
-function creditFixedItems() {
+function creditFixedItems(months = null) {
   if (DATA.loadErrors.fijos) return [];
-  return fixedMonths().flatMap((month) => fijosVigentes(DATA.fijos, fixedMonthCutoff(month))
+  return (months || fixedMonths()).flatMap((month) => fijosVigentes(DATA.fijos, months ? fijosLastDay(month) : fixedMonthCutoff(month))
     .filter((row) => row.medio_pago === 'Crédito' && fixedAmount(row, month, personaFiltro) !== null)
     .map((row) => ({ row, month })));
 }
 
-// Ciclos de crédito entre vencimientos de tarjeta (mejora Juan 2026-11-05,
-// #6 lista de mejoras): una sola tarjeta, Juan ingresa el vencimiento real
-// mes a mes (no siempre el mismo día). Un ciclo va desde el día siguiente
-// al vencimiento ANTERIOR (exclusive) hasta el vencimiento que lo cierra
-// (inclusive); el primer ciclo registrado no tiene piso (`from: null`) así
-// que también agrupa toda la carga histórica previa a cargar el primer
-// vencimiento, en vez de perderla. Sin ningún vencimiento registrado
-// devuelve `[]` -- quien llama debe caer al agrupado plano de siempre
-// (compatibilidad total con bases que todavía no usan esta mejora).
+// Only confirmed closes define cycles. Missing previous/monthly boundaries
+// remain unknown until backfilled; payment dates never define membership.
+let creditoCycleSelection = '';
+function creditMonthIndex(mes) {
+  const [year, month] = mes.split('-').map(Number);
+  return year * 12 + month - 1;
+}
+function creditNextDay(iso) {
+  const day = new Date(`${iso}T12:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + 1);
+  return day.toISOString().slice(0, 10);
+}
 function creditCycles() {
-  return [...(DATA.tarjetaVencimientos || [])]
-    .sort((a, b) => a.vencimiento.localeCompare(b.vencimiento))
+  return [...(DATA.tarjetaVencimientos || [])].filter((v) => v.cierre)
+    .sort((a, b) => a.cierre.localeCompare(b.cierre))
     .map((v, i, sorted) => ({
-      label: v.vencimiento,
-      from: i === 0 ? null : sorted[i - 1].vencimiento,
-      to: v.vencimiento,
+      id: v.id, mes: v.mes, label: v.cierre,
+      from: i === 0 ? null : sorted[i - 1].cierre,
+      to: v.cierre,
+      known: i > 0 && creditMonthIndex(v.mes) - creditMonthIndex(sorted[i - 1].mes) === 1,
+      vencimientoPago: v.vencimiento_pago || null,
     }));
+}
+function creditCycleRange(cycle) {
+  if (!cycle.from) return `Inicio desconocido → ${fmtFechaCorta(cycle.to)}`;
+  if (!cycle.known) return `Faltan cierres entre ${fmtFechaCorta(cycle.from)} y ${fmtFechaCorta(cycle.to)}`;
+  return `${fmtFechaCorta(creditNextDay(cycle.from))} → ${fmtFechaCorta(cycle.to)}`;
+}
+function setCreditoCycle(label) {
+  creditoCycleSelection = label;
+  renderCreditoDetail();
 }
 
 // Solo para mostrar (dd/mm/aaaa, como lee cualquier factura argentina); el
@@ -838,13 +852,13 @@ function fmtMesCorto(iso) {
   return d && m ? `${d} ${meses[m - 1].slice(0, 3)}` : '';
 }
 
-// `null` = posterior al último vencimiento registrado: ciclo abierto, sin
-// fecha de cierre todavía (se muestra agrupado aparte, no se descarta).
+// `null` = no confirmed cycle: before the first boundary, inside a gap,
+// after the latest close, or missing date. The view separates open/unassigned.
 function creditCycleForDate(fecha, cycles) {
   const dia = String(fecha || '').slice(0, 10);
   if (!dia) return null;
   for (const cycle of cycles) {
-    if ((cycle.from === null || dia > cycle.from) && dia <= cycle.to) return cycle.label;
+    if (cycle.known && dia > cycle.from && dia <= cycle.to) return cycle.label;
   }
   return null;
 }
@@ -2738,57 +2752,87 @@ function renderCuotasDetail() {
     </table>`;
 }
 
-// Panel de administración de vencimientos (mejora Juan 2026-11-05, #6 lista
-// de mejoras; rediseño 2026-11-05 por pedido explícito de Juan -- "no está
-// muy didáctica" -- con revisión CPO/UX/CTO/front-end, ver
-// docs/BITACORA.md). Siempre visible arriba del detalle de crédito, incluso
-// sin cargos todavía, para que Juan pueda ir registrando los vencimientos
-// mes a mes de la única tarjeta en uso. Un solo campo real (la fecha de
-// vencimiento); "mes" es clave interna derivada, no se le pide a Juan.
-// Reusa `creditCycles()` (única fuente de verdad de la regla de negocio)
-// para pintar el RANGO que cada vencimiento generó, no solo la fecha de
-// cierre -- así se ve el efecto de la acción, no solo su definición.
+// Panel de administración de CIERRES de tarjeta (mejora Juan 2026-11-05,
+// #6 lista de mejoras; rediseño 2026-11-05 x2 -- primero por pedido de
+// Juan "no está muy didáctica" con revisión CPO/UX/CTO/front-end, después
+// por corrección de modelo del propio Juan: "la fecha que importa es el
+// cierre... entre cierres es lo que entra en la tarjeta del mes vigente" --
+// ver docs/BITACORA.md). Siempre visible arriba del detalle de crédito,
+// incluso sin cargos todavía.
+//
+// Primera vez (cero ciclos cargados): Juan necesita DOS fechas para que el
+// ciclo vigente quede bien definido de entrada -- el cierre ANTERIOR (lo
+// previo queda sin asignar si no conocemos su inicio) y el PRÓXIMO cierre.
+// Después alcanza un cierre por vez. "mes" sigue siendo
+// la clave única interna derivada del cierre, nunca se le pide a Juan.
+// "vencimiento_pago" es opcional y NUNCA agrupa -- solo un recordatorio de
+// cuándo hay que pagar ese resumen.
 function renderVencimientosAdmin() {
-  const cycles = creditCycles(); // ya viene ordenado por vencimiento ascendente
+  const cycles = creditCycles(); // ya viene ordenado por cierre ascendente
+  const primeraVez = cycles.length === 0;
+  const disabledAttr = !liveMode || writePending ? 'disabled' : '';
   return `
     <div class="credito-vencimientos">
-      <p class="form-help">¿Cómo funciona? Cada vencimiento que cargás cierra
-        un ciclo: todo lo que gastaste en crédito desde el día siguiente al
-        vencimiento anterior hasta esta fecha, se agrupa en el resumen que
-        vence ese día.</p>
+      <p class="form-help">¿Cómo funciona? Cada CIERRE que cargás define un
+        ciclo: todo lo que gastaste en crédito desde el día siguiente al
+        cierre anterior hasta este cierre, se agrupa en el resumen de ese
+        ciclo (el vencimiento de pago es otro dato, aparte, solo para que no
+        te olvides de pagarlo -- no afecta qué gasto entra en qué resumen).</p>
       ${cycles.length ? `<ul class="credito-vencimientos-list">
         ${[...cycles].reverse().map((c) => `<li>
           <div class="credito-ciclo-rango">
-            <strong>${c.from === null ? 'Desde siempre' : fmtMesCorto(c.from)} → ${fmtMesCorto(c.to)} ${c.to.slice(0, 4)}</strong>
-            <span>Vence el <time datetime="${escapeHtml(c.to)}">${fmtFechaCorta(c.to)}</time></span>
+            <strong>${creditCycleRange(c)}</strong>
+            <span>Cierra el <time datetime="${escapeHtml(c.to)}">${fmtFechaCorta(c.to)}</time>${c.vencimientoPago ? ` · se paga el ${fmtFechaCorta(c.vencimientoPago)}` : ''}</span>
           </div>
-          <button type="button" class="fijos-secondary" onclick="handleVencimientoDelete(${Number(DATA.tarjetaVencimientos.find((v) => v.vencimiento === c.to).id)})"
-            ${!liveMode || writePending ? 'disabled' : ''}>Borrar</button>
+          <button type="button" class="fijos-secondary" onclick="handleVencimientoDelete(${Number(DATA.tarjetaVencimientos.find((v) => v.cierre === c.to).id)})"
+            ${disabledAttr}>Borrar</button>
         </li>`).join('')}
       </ul>` : `<div class="credito-vencimientos-empty">
-        <p>Todavía no cargaste ningún vencimiento — por ahora tus gastos en
+        <p>Todavía no cargaste ningún cierre — por ahora tus gastos en
           crédito se agrupan por mes calendario, no por ciclo real de resumen.</p>
-        <p class="credito-vencimientos-ejemplo">Ejemplo: si tu tarjeta venció
-          el <strong>24/10</strong> y el próximo resumen vence el
+        <p class="credito-vencimientos-ejemplo">Ejemplo: si tu tarjeta cerró
+          el <strong>24/10</strong> y el próximo cierre es el
           <strong>24/11</strong>, todo lo que compres en crédito entre el
-          <strong>25/10 y el 24/11</strong> va a aparecer agrupado como
-          "ciclo que vence 24/11" en vez de mezclarse entre octubre y
-          noviembre.</p>
+          <strong>25/10 y el 24/11</strong> va a aparecer agrupado como el
+          ciclo que cierra el 24/11 en vez de mezclarse entre octubre y
+          noviembre. Por eso para arrancar hace falta cargar ESE cierre
+          anterior además del próximo.</p>
       </div>`}
+      ${(DATA.tarjetaVencimientos || []).some((v) => !v.cierre) ? `<p class="form-help">Hay fechas de pago antiguas sin confirmar su cierre. No definen ciclos: cargá los cierres reales (la fecha de pago conservada se muestra abajo).</p>
+        <ul>${DATA.tarjetaVencimientos.filter((v) => !v.cierre).map((v) => `<li>${escapeHtml(v.mes)} · pago ${fmtFechaCorta(v.vencimiento_pago)} · cierre pendiente de confirmar <button type="button" onclick="handleVencimientoDelete(${Number(v.id)})" ${disabledAttr}>Borrar</button></li>`).join('')}</ul>` : ''}
+      ${primeraVez ? `
+      <form id="vencimiento-form-inicial" class="super-form" onsubmit="handleVencimientoFormInicialSubmit(event); return false;">
+        <label>Cierre ANTERIOR (el que ya pasó)
+          <input type="date" id="vencimiento-cierre-anterior" required ${disabledAttr}></label>
+        <label>PRÓXIMO cierre (el que define tu mes vigente)
+          <input type="date" id="vencimiento-cierre-proximo" required ${disabledAttr}></label>
+        <label>¿Cuándo se paga ese próximo resumen? (opcional)
+          <input type="date" id="vencimiento-pago-inicial" ${disabledAttr}></label>
+        <button type="submit" class="btn-print" ${disabledAttr}>Guardar los dos cierres</button>
+      </form>` : `
       <form id="vencimiento-form" class="super-form" onsubmit="handleVencimientoFormSubmit(event); return false;">
-        <label>¿Cuándo vence el próximo resumen?
-          <input type="date" id="vencimiento-fecha" required ${!liveMode || writePending ? 'disabled' : ''}></label>
-        <button type="submit" class="btn-print" ${!liveMode || writePending ? 'disabled' : ''}>Guardar vencimiento</button>
+        <label>Próximo cierre
+          <input type="date" id="vencimiento-fecha" required ${disabledAttr}></label>
+        <label>¿Cuándo se paga? (opcional)
+          <input type="date" id="vencimiento-pago-fecha" ${disabledAttr}></label>
+        <button type="submit" class="btn-print" ${disabledAttr}>Guardar cierre</button>
       </form>
+      <p class="form-help">¿Te olvidaste de cargar el cierre de un mes
+        anterior? Lo podés agregar en cualquier momento con su fecha real
+        -- los ciclos se reordenan solos.</p>`}
       <p class="field-error" id="vencimiento-form-error" role="alert"></p>
     </div>`;
 }
 
-async function saveTarjetaVencimiento(mes, vencimiento) {
+async function saveTarjetaVencimiento(mes, cierre, vencimientoPago) {
+  const payload = { mes, cierre };
+  const legacy = (DATA.tarjetaVencimientos || []).find((v) => v.mes === mes && !v.cierre);
+  const pago = vencimientoPago || legacy?.vencimiento_pago;
+  if (pago) payload.vencimiento_pago = pago;
   const response = await fetch('/api/tarjeta-vencimientos', {
     method: 'POST', credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mes, vencimiento }),
+    body: JSON.stringify(payload),
   });
   let result = null;
   try { result = await response.json(); } catch { /* respuesta sin cuerpo JSON válido */ }
@@ -2807,138 +2851,152 @@ async function deleteTarjetaVencimientoRequest(id) {
   }
 }
 
+// Duplicado = dos cierres que caen en el mismo mes calendario derivado
+// (una sola tarjeta, un resumen por mes) -- mensaje específico citando el
+// cierre existente, en vez de un error genérico del backend.
+function validarCierreNoDuplicado(cierre, errorBox) {
+  const mes = cierre.slice(0, 7);
+  const existente = (DATA.tarjetaVencimientos || []).find((v) => v.mes === mes);
+  if (existente && existente.cierre) {
+    errorBox.textContent = `Ya hay un cierre cargado para ese mes (${fmtFechaCorta(existente.cierre)}). Si lo cargaste mal, borralo primero.`;
+    return null;
+  }
+  return mes;
+}
+
+async function runTarjetaWrite(work, recoveryHint = '') {
+  writePending = true;
+  updateAvailability();
+  let message = '';
+  // Disable the existing controls without replacing the form or its values.
+  document.querySelectorAll('.credito-vencimientos input, .credito-vencimientos button').forEach((el) => { el.disabled = true; });
+  try {
+    await work();
+    await loadLive();
+  } catch (error) {
+    message = `${error.message || 'No se pudo completar la operación.'} `;
+    // A failed response may have committed. Read back before offering retry;
+    // both POSTs are upserts, so retrying the initial pair is safe as well.
+    try {
+      DATA.tarjetaVencimientos = requireList(await fetchJSON('/api/tarjeta-vencimientos'), 'vencimientos');
+      message += `Revisá los cierres guardados y completá el faltante. ${recoveryHint}`;
+    } catch {
+      message += 'No se pudo verificar qué quedó guardado. Recargá antes de reintentar; repetir las mismas fechas no duplica cierres.';
+    }
+  } finally {
+    writePending = false;
+    updateAvailability();
+    renderCreditoDetail();
+    document.getElementById('vencimiento-form-error').textContent = message;
+  }
+}
+
 async function handleVencimientoFormSubmit(event) {
   event.preventDefault();
   if (!liveMode || writePending) return;
-  const vencimiento = document.getElementById('vencimiento-fecha').value;
+  const cierre = document.getElementById('vencimiento-fecha').value;
+  const vencimientoPago = document.getElementById('vencimiento-pago-fecha').value || null;
   const errorBox = document.getElementById('vencimiento-form-error');
   errorBox.textContent = '';
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(vencimiento)) {
-    errorBox.textContent = 'Completá una fecha de vencimiento válida.';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cierre)) {
+    errorBox.textContent = 'Completá una fecha de cierre válida.';
     return;
   }
-  // "mes" sigue siendo la clave única interna que pide el backend, pero ya
-  // no se le pide a Juan: se deriva de la fecha real que sí tiene en la
-  // cabeza. Duplicado = dos vencimientos que caen en el mismo mes
-  // calendario (una sola tarjeta, un resumen por mes).
-  const mes = vencimiento.slice(0, 7);
-  const existente = (DATA.tarjetaVencimientos || []).find((v) => v.mes === mes);
-  if (existente) {
-    errorBox.textContent = `Ya hay un vencimiento cargado para ese mes (${fmtFechaCorta(existente.vencimiento)}). Si lo cargaste mal, borralo primero.`;
+  const mes = validarCierreNoDuplicado(cierre, errorBox);
+  if (!mes) return;
+  await runTarjetaWrite(() => saveTarjetaVencimiento(mes, cierre, vencimientoPago), `Cierre solicitado: ${fmtFechaCorta(cierre)}.`);
+}
+
+// Primera carga (sin ningún ciclo todavía): dos cierres de una sola vez
+// (anterior + próximo) para que el ciclo vigente quede bien definido desde
+// el arranque, en vez de depender de "Desde siempre" como único piso.
+async function handleVencimientoFormInicialSubmit(event) {
+  event.preventDefault();
+  if (!liveMode || writePending) return;
+  const anterior = document.getElementById('vencimiento-cierre-anterior').value;
+  const proximo = document.getElementById('vencimiento-cierre-proximo').value;
+  const vencimientoPago = document.getElementById('vencimiento-pago-inicial').value || null;
+  const errorBox = document.getElementById('vencimiento-form-error');
+  errorBox.textContent = '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(anterior) || !/^\d{4}-\d{2}-\d{2}$/.test(proximo)) {
+    errorBox.textContent = 'Completá las dos fechas de cierre.';
     return;
   }
-  writePending = true;
-  try {
-    await saveTarjetaVencimiento(mes, vencimiento);
-    await loadLive();
-    renderCreditoDetail();
-  } catch (error) {
-    document.getElementById('vencimiento-form-error').textContent = error.message || 'No se pudo guardar el vencimiento.';
-  } finally {
-    writePending = false;
+  if (anterior >= proximo) {
+    errorBox.textContent = 'El cierre anterior tiene que ser antes que el próximo cierre.';
+    return;
   }
+  if (anterior.slice(0, 7) === proximo.slice(0, 7)) {
+    errorBox.textContent = 'Los dos cierres caen en el mismo mes calendario -- revisá las fechas.';
+    return;
+  }
+  await runTarjetaWrite(async () => {
+    await saveTarjetaVencimiento(anterior.slice(0, 7), anterior, null);
+    await saveTarjetaVencimiento(proximo.slice(0, 7), proximo, vencimientoPago);
+  }, `Cierres solicitados: ${fmtFechaCorta(anterior)} y ${fmtFechaCorta(proximo)}.`);
 }
 
 async function handleVencimientoDelete(id) {
   if (!liveMode || writePending) return;
-  // Borrar un vencimiento que no es el más reciente recalcula el rango de
+  // Borrar un cierre que no es el más reciente recalcula el rango de
   // TODOS los posteriores (creditCycles() reordena por fecha, no por
   // referencia fija) -- confirmación explícita antes de un borrado que
   // puede resimular agrupaciones que Juan ya daba por "cerradas".
-  const ordenados = [...(DATA.tarjetaVencimientos || [])].sort((a, b) => a.vencimiento.localeCompare(b.vencimiento));
+  const ordenados = [...(DATA.tarjetaVencimientos || [])].filter((v) => v.cierre).sort((a, b) => a.cierre.localeCompare(b.cierre));
   const esElUltimo = ordenados.length && ordenados[ordenados.length - 1].id === id;
-  if (!esElUltimo && !confirm('Esto va a cambiar el ciclo de los vencimientos posteriores. ¿Confirmás?')) return;
-  writePending = true;
-  try {
-    await deleteTarjetaVencimientoRequest(id);
-    await loadLive();
-    renderCreditoDetail();
-  } catch (error) {
-    document.getElementById('vencimiento-form-error').textContent = error.message || 'No se pudo borrar el vencimiento.';
-  } finally {
-    writePending = false;
-  }
+  if (!esElUltimo && !confirm('Esto va a cambiar el ciclo de los cierres posteriores. ¿Confirmás?')) return;
+  await runTarjetaWrite(() => deleteTarjetaVencimientoRequest(id));
 }
 
 function renderCreditoDetail() {
   const inner = document.getElementById('credito-detail-inner');
-  const rows = applyPersonaFiltro(filterGastosPeriod(period.from, period.to).filter((r) => r.medio_pago === 'Crédito'));
-  const fixedItems = creditFixedItems();
-  const admin = renderVencimientosAdmin();
-  if (!rows.length && !fixedItems.length) {
-    inner.innerHTML = `${admin}<div class="empty-state">Sin cargos en crédito en este período.</div>`;
-    return;
-  }
   const cycles = creditCycles();
-  // Sin vencimientos registrados: el agrupado plano de siempre (sin cambios
-  // de comportamiento para quien no usa esta mejora todavía).
+  const admin = renderVencimientosAdmin();
+  let rows, fixedItems, selector = '', note = '', title;
   if (!cycles.length) {
-    const total = rows.reduce((value, row) => value + expenseAmount(row), 0)
-      + fixedItems.reduce((value, item) => value + fixedAmount(item.row, item.month, personaFiltro), 0);
-    const items = [...rows].sort((a, b) => expenseAmount(b) - expenseAmount(a));
-    inner.innerHTML = `${admin}
-      <table>
-        <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th style="text-align:right">Monto</th></tr></thead>
-        <tbody>
-          ${items.map((r) => `<tr>
-            <td class="td-muted">${r.fecha || '—'}</td>
-            <td>${escapeHtml(r.descripcion_original)}</td>
-            <td class="td-muted">${escapeHtml(r.categoria)}</td>
-            <td class="td-amount td-accent">${expenseAmountLabel(r)}</td>
-          </tr>`).join('')}
-          ${fixedItems.map(({ row, month }) => `<tr>
-            <td class="td-muted">${escapeHtml(month)}</td>
-            <td>${escapeHtml(row.nombre)} · fijo</td>
-            <td class="td-muted">${escapeHtml(row.categoria)}</td>
-            <td class="td-amount td-accent">${fixedAmountLabel(row, month, personaFiltro)}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table><div class="credito-tarjeta-header">Total crédito · ${fmtARS(total)}</div>`;
-    return;
+    rows = applyPersonaFiltro(filterGastosPeriod(period.from, period.to).filter((r) => r.medio_pago === 'Crédito'));
+    fixedItems = creditFixedItems();
+    title = 'Total fechado del período calendario';
+    note = 'Sin cierres confirmados: vista del calendario global, no de un resumen bancario.';
+  } else {
+    const choices = [...cycles.map((c) => ({ value: c.label, text: `${c.mes} · cierra ${fmtFechaCorta(c.to)}${c.known ? '' : ' · incompleto'}` })),
+      { value: 'abierto', text: 'Ciclo abierto · falta próximo cierre' },
+      { value: 'sin-asignar', text: 'Sin asignar · límites desconocidos / meses faltantes' }];
+    if (!choices.some((c) => c.value === creditoCycleSelection)) {
+      creditoCycleSelection = cycles.find((c) => c.to >= todayLocalISO())?.label || 'abierto';
+    }
+    const selected = cycles.find((c) => c.label === creditoCycleSelection);
+    selector = `<label for="credito-cycle-select">Resumen / ciclo (actual e históricos)</label>
+      <select id="credito-cycle-select" onchange="setCreditoCycle(this.value)">${choices.map((c) => `<option value="${escapeHtml(c.value)}" ${c.value === creditoCycleSelection ? 'selected' : ''}>${escapeHtml(c.text)}</option>`).join('')}</select>`;
+    rows = applyPersonaFiltro(DATA.gastos.filter((r) => r.medio_pago === 'Crédito')).filter((r) => {
+      const assigned = creditCycleForDate(r.fecha, cycles);
+      const label = assigned || (r.fecha && r.fecha.slice(0, 10) > cycles[cycles.length - 1].to ? 'abierto' : 'sin-asignar');
+      return label === creditoCycleSelection;
+    });
+    // Fixed rows have no actual charge dates. Show monthly reference estimates
+    // separately, never invent a charge on day 1 or assign them to a statement.
+    const months = selected ? [selected.to.slice(0, 7)] : [todayLocalISO().slice(0, 7)];
+    fixedItems = creditFixedItems(months);
+    title = selected ? `Total fechado del ciclo ${selected.mes}` : 'Total fechado sin ciclo confirmado';
+    note = `Vista de ciclo independiente del calendario global; conserva el filtro de persona. La tarjeta principal muestra el total del período calendario e incluye estimaciones de fijos, no este ciclo. `
+      + (selected ? `${creditCycleRange(selected)}.${selected.vencimientoPago ? ` Se paga el ${fmtFechaCorta(selected.vencimientoPago)}.` : ' Vencimiento de pago no informado.'}`
+        : creditoCycleSelection === 'abierto' ? 'Ciclo abierto: falta registrar el próximo cierre.' : 'Cargos sin asignar: faltan cierres o el inicio es desconocido.')
+      + (selected && !selected.known ? ' No se asignan cargos a este ciclo hasta completar los cierres faltantes; consultá Sin asignar.' : '');
   }
-  // Con vencimientos registrados: agrupado por ciclo (entre vencimientos
-  // consecutivos), más un bloque "Ciclo abierto" para lo posterior al
-  // último vencimiento cargado (brief #6: "que se muestre entre
-  // vencimientos de tarjeta").
-  const buckets = new Map();
-  const bucketFor = (label) => {
-    if (!buckets.has(label)) buckets.set(label, { rows: [], fixedItems: [] });
-    return buckets.get(label);
-  };
-  rows.forEach((r) => bucketFor(creditCycleForDate(r.fecha, cycles) ?? 'abierto').rows.push(r));
-  fixedItems.forEach((item) => bucketFor(creditCycleForDate(`${item.month}-01`, cycles) ?? 'abierto').fixedItems.push(item));
-  const orderedLabels = [...cycles.map((c) => c.label), 'abierto'].filter((label) => buckets.has(label));
-  const total = rows.reduce((value, row) => value + expenseAmount(row), 0)
-    + fixedItems.reduce((value, item) => value + fixedAmount(item.row, item.month, personaFiltro), 0);
-  inner.innerHTML = `${admin}
-    ${orderedLabels.map((label) => {
-      const bucket = buckets.get(label);
-      const items = [...bucket.rows].sort((a, b) => expenseAmount(b) - expenseAmount(a));
-      const subtotal = bucket.rows.reduce((value, row) => value + expenseAmount(row), 0)
-        + bucket.fixedItems.reduce((value, item) => value + fixedAmount(item.row, item.month, personaFiltro), 0);
-      const titulo = label === 'abierto' ? 'Ciclo abierto (sin vencimiento cargado todavía)' : `Vence ${escapeHtml(label)}`;
-      return `<div class="credito-ciclo">
-        <div class="credito-tarjeta-header">${titulo} · ${fmtARS(subtotal)}</div>
-        <table>
-          <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th style="text-align:right">Monto</th></tr></thead>
-          <tbody>
-            ${items.map((r) => `<tr>
-              <td class="td-muted">${r.fecha || '—'}</td>
-              <td>${escapeHtml(r.descripcion_original)}</td>
-              <td class="td-muted">${escapeHtml(r.categoria)}</td>
-              <td class="td-amount td-accent">${expenseAmountLabel(r)}</td>
-            </tr>`).join('')}
-            ${bucket.fixedItems.map(({ row, month }) => `<tr>
-              <td class="td-muted">${escapeHtml(month)}</td>
-              <td>${escapeHtml(row.nombre)} · fijo</td>
-              <td class="td-muted">${escapeHtml(row.categoria)}</td>
-              <td class="td-amount td-accent">${fixedAmountLabel(row, month, personaFiltro)}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
-    }).join('')}
-    <div class="credito-tarjeta-header">Total crédito · ${fmtARS(total)}</div>`;
+  const total = rows.reduce((value, row) => value + expenseAmount(row), 0);
+  inner.innerHTML = `${admin}${selector}<p class="form-help">${escapeHtml(note)}</p>
+    ${DATA.loadErrors.gastos ? '<p role="alert">Gastos no disponibles: total parcial, no conciliable.</p>' : ''}
+    ${rows.length ? `<table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Monto</th></tr></thead><tbody>
+      ${rows.sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || ''))).map((r) => `<tr>
+        <td class="td-muted">${escapeHtml(r.fecha || 'Sin fecha')}</td><td>${escapeHtml(r.descripcion_original)}</td>
+        <td class="td-muted">${escapeHtml(r.categoria)}</td><td class="td-amount td-accent">${expenseAmountLabel(r)}</td>
+      </tr>`).join('')}</tbody></table>` : '<div class="empty-state">Sin cargos fechados en esta selección.</div>'}
+    <div class="credito-tarjeta-header">${escapeHtml(title)} · ${DATA.loadErrors.gastos ? 'No disponible' : fmtARS(total)}</div>
+    <p class="form-help">Fijos estimados / sin asignar: sin fecha real de cargo. Referencia mensual, excluida del total fechado; no es una conciliación exacta del resumen bancario. No se suman meses ni se inventan fechas de débito.</p>
+    ${DATA.loadErrors.fijos ? '<p role="alert">Fijos no disponibles.</p>' : ''}
+    ${fixedItems.length ? `<table><thead><tr><th>Mes de referencia (no fecha de cargo)</th><th>Fijo estimado</th><th>Monto estimado</th></tr></thead><tbody>
+      ${fixedItems.map(({ row, month }) => `<tr><td>${escapeHtml(month)}</td><td>${escapeHtml(row.nombre)} · fijo estimado / sin asignar</td>
+        <td class="td-amount">${fixedAmountLabel(row, month, personaFiltro)}</td></tr>`).join('')}</tbody></table>` : ''}`;
 }
 
 // Detalle de deuda: composición gasto a gasto del saldo pendiente actual

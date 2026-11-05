@@ -1,5 +1,11 @@
 # Contexto Actual - LIFE
 
+## Crédito por cierres reales — candidato local en lab/reinvencion (2026-11-05)
+
+Completado localmente el cambio en curso de mejora #6: API y SQLite separan `cierre` obligatorio de `vencimiento_pago` opcional. Migración legacy conserva pagos y sus originales sin reinterpretarlos como cierres, deja límites desconocidos hasta confirmación y repara columnas faltantes al repetir init. Onboarding anterior/próximo cierre; cargas históricas posteriores admitidas. El detalle tiene selector propio actual/históricos sin truncamiento por el calendario global, con rango desde el día siguiente al cierre anterior hasta el actual inclusive. Primer ciclo y meses omitidos quedan incompletos; cargos correspondientes visibles en Sin asignar hasta completar límites. Fijos recurrentes sin fecha real de cargo quedan como referencia mensual estimada, separados del total fechado; el detalle explica su diferencia con la tarjeta principal calendario. Escrituras con bloqueo contra doble envío, render/controles desbloqueados al finalizar y lectura posterior/reintento idempotente ante fallos parciales de los dos POST iniciales.
+
+Verificación ejecutada: Node **96/96**; Python **705 aprobadas, 13 omitidas, 52.961 subtests aprobados** usando `/tmp/life-test-venv`, sólo SQLite efímera. Omisiones por fixture real ausente y PyMuPDF opcional no instalado. Revisión visual/manual pendiente. Sin commit, push, deploy, servicios ni DB real; la corrección todavía NO está publicada y no promete conciliación exacta de fijos sin fecha real de cargo.
+
 ## F4 QA3 stock y PDF — integrado en LAB (2026-10-30)
 
 El candidato `lab/f4-qa3-integracion` integra ambas mejoras sobre `85a08183e908c8c4826006d2215a2a425e62707f`: los controles de stock avanzan o retroceden una unidad exacta sin perder fracciones manuales de hasta seis decimales, y el PDF de Supermercado conserva datos/orden canónicos en A4, centra las columnas ocupadas en cada página y usa la estética LIFE existente. Detalles y límites en `docs/F4-QA3-STOCK.md` y `docs/F4-QA3-PDF.md`. `evidencia/qa3-manifest.json` registra las 11 rutas integradas; esta actualización modifica solamente los dos documentos de contexto.

@@ -1283,7 +1283,7 @@ class _App:
 
     # --- Vencimientos de tarjeta (mejora Juan 2026-11-05, #6 lista de
     # mejoras): agenda mínima para que el dashboard agrupe la carga de
-    # crédito por ciclo (entre vencimientos) en vez de por mes calendario.
+    # crédito por ciclo (entre cierres) en vez de por mes calendario.
     # Una sola tarjeta en uso -- no hay selector de tarjeta ni tarjeta_id.
 
     def list_tarjeta_vencimientos(self, ctx, conn, start_response):
@@ -1294,17 +1294,20 @@ class _App:
         data, err = self._parse_json(ctx, start_response)
         if err is not None:
             return err
-        unknown = self._unknown_fields(data.keys(), {"mes", "vencimiento"})
+        unknown = self._unknown_fields(data.keys(), {"mes", "cierre", "vencimiento_pago"})
         if unknown:
             return self._error(start_response, 400, "campos desconocidos.")
         mes = data.get("mes")
-        vencimiento = data.get("vencimiento")
+        cierre = data.get("cierre")
+        vencimiento_pago = data.get("vencimiento_pago")
         if not isinstance(mes, str) or not re.match(r"^\d{4}-(0[1-9]|1[0-2])$", mes):
             return self._error(start_response, 400, "mes es obligatorio y debe ser 'YYYY-MM'.")
-        if not _is_iso_date(vencimiento):
-            return self._error(start_response, 400, "vencimiento es obligatorio y debe ser 'YYYY-MM-DD' válida.")
+        if not _is_iso_date(cierre):
+            return self._error(start_response, 400, "cierre es obligatorio y debe ser 'YYYY-MM-DD' válida.")
+        if vencimiento_pago is not None and not _is_iso_date(vencimiento_pago):
+            return self._error(start_response, 400, "vencimiento_pago debe ser 'YYYY-MM-DD' válida si se incluye.")
         try:
-            fila = db.set_tarjeta_vencimiento(conn, mes, vencimiento)
+            fila = db.set_tarjeta_vencimiento(conn, mes, cierre, vencimiento_pago)
         except ValueError as exc:
             return self._error(start_response, 400, str(exc))
         return self._json(start_response, 201, {"vencimiento": fila})

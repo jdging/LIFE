@@ -300,19 +300,25 @@ CREATE TABLE IF NOT EXISTS avisos_credito (
 );
 
 -- Vencimientos de la (única) tarjeta de crédito en uso (mejora Juan
--- 2026-11-05, #6 lista de mejoras): el día de cierre/vencimiento del banco
+-- 2026-11-05, #6 lista de mejoras; corrección de modelo 2026-11-05 mismo
+-- día -- Juan: "la fecha que importa es el cierre... entre cierres es lo
+-- que entra en la tarjeta del mes vigente"). El día de CIERRE del banco
 -- no es un día fijo del mes (se mueve con fines de semana/feriados), así
 -- que Juan lo ingresa mes a mes a mano en vez de un `dia_vencimiento` fijo
 -- como tenía la vieja tabla `tarjetas` (retirada del flujo real por F2,
 -- CORRECCIONES-JUAN-20261027 punto 8 -- esta tabla es independiente de esa,
--- no la revive). `mes` es la etiqueta del ciclo que ese vencimiento cierra
--- ('YYYY-MM', clave de upsert); `vencimiento` es la fecha real ('YYYY-MM-DD',
--- puede caer en el mes siguiente). La carga de crédito agrupa gastos entre
--- vencimientos consecutivos (ver `creditCycles` en el dashboard).
+-- no la revive). `mes` es la etiqueta del ciclo que ese cierre cierra
+-- ('YYYY-MM', clave de upsert); `cierre` es la fecha real de cierre
+-- ('YYYY-MM-DD', puede caer en el mes siguiente) -- es el límite que agrupa
+-- los gastos (ver `creditCycles` en el dashboard), NO la fecha de pago.
+-- `vencimiento_pago` es la fecha en que hay que pagar ese resumen
+-- (informativa/recordatorio, nunca define agrupación) -- opcional porque
+-- un ciclo viejo puede cargarse sin ese dato a mano.
 CREATE TABLE IF NOT EXISTS tarjeta_vencimientos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     mes TEXT NOT NULL UNIQUE,
-    vencimiento TEXT NOT NULL,
+    cierre TEXT NOT NULL,
+    vencimiento_pago TEXT,
     created_at TEXT NOT NULL
 );
 """
@@ -488,6 +494,48 @@ def init_db(conn: sqlite3.Connection) -> None:
     _migrar_columnas_inventario_bienes(conn)
     _migrar_columnas_comprobantes_telegram(conn)
     _migrar_estado_conversacional(conn)
+    _migrar_columnas_tarjeta_vencimientos(conn)
+
+
+def _migrar_columnas_tarjeta_vencimientos(conn: sqlite3.Connection) -> None:
+    """Preserva pagos legacy sin convertirlos en cierres confirmados.
+
+    Las filas legacy quedan con cierre NULL hasta confirmación explícita.
+    La reconstrucción elimina el NOT NULL viejo de vencimiento: un cierre
+    nuevo puede guardarse sin fecha de pago. También repara la migración
+    incompleta (cierre existente, vencimiento_pago ausente) en cada arranque.
+    """
+    existentes = _column_names(conn, "tarjeta_vencimientos")
+    if not existentes:
+        return
+    if "vencimiento" in existentes:
+        # Keep the original legacy value as well as the separate payment date,
+        # including mixed/partially migrated schemas. Never guess a close.
+        cierre = "cierre" if "cierre" in existentes else "NULL"
+        pago = "COALESCE(vencimiento_pago, vencimiento)" if "vencimiento_pago" in existentes else "vencimiento"
+        conn.execute("SAVEPOINT migrar_cierres")
+        try:
+            conn.execute("""CREATE TABLE tarjeta_vencimientos_migrando (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, mes TEXT NOT NULL UNIQUE,
+                cierre TEXT, vencimiento_pago TEXT, vencimiento_legacy TEXT,
+                created_at TEXT NOT NULL)""")
+            conn.execute(f"""INSERT INTO tarjeta_vencimientos_migrando
+                (id, mes, cierre, vencimiento_pago, vencimiento_legacy, created_at)
+                SELECT id, mes, {cierre}, {pago}, vencimiento, created_at
+                FROM tarjeta_vencimientos""")
+            conn.execute("DROP TABLE tarjeta_vencimientos")
+            conn.execute("ALTER TABLE tarjeta_vencimientos_migrando RENAME TO tarjeta_vencimientos")
+        except Exception:
+            conn.execute("ROLLBACK TO migrar_cierres")
+            raise
+        finally:
+            conn.execute("RELEASE migrar_cierres")
+    else:
+        if "cierre" not in existentes:
+            conn.execute("ALTER TABLE tarjeta_vencimientos ADD COLUMN cierre TEXT")
+        if "vencimiento_pago" not in existentes:
+            conn.execute("ALTER TABLE tarjeta_vencimientos ADD COLUMN vencimiento_pago TEXT")
+    conn.commit()
 
 
 def _migrar_columnas_lista_compras(conn: sqlite3.Connection) -> None:
@@ -3585,36 +3633,51 @@ def get_tarjeta_vencimientos(conn: sqlite3.Connection) -> list:
     return [dict(row) for row in rows]
 
 
-def set_tarjeta_vencimiento(conn: sqlite3.Connection, mes: str, vencimiento: str) -> dict:
-    """Crea o reemplaza (upsert por `mes`) el vencimiento de un ciclo.
+def set_tarjeta_vencimiento(conn: sqlite3.Connection, mes: str, cierre: str, vencimiento_pago: Optional[str] = None) -> dict:
+    """Crea o reemplaza (upsert por `mes`) el cierre -- y opcionalmente el
+    vencimiento de pago -- de un ciclo.
+
+    `cierre` es la fecha real que define el límite del ciclo (agrupa los
+    gastos); `vencimiento_pago` es solo informativo/recordatorio de cuándo
+    hay que pagar ese resumen, nunca afecta la agrupación. Puede quedar en
+    `None` (ciclos viejos que se cargan sin ese dato a mano).
 
     Un mismo `mes` corregido más de una vez (p.ej. el banco movió la fecha)
     simplemente actualiza la fila existente -- a diferencia de los fijos,
-    no hace falta histórico de vencimientos pasados, es sólo la agenda de
-    ciclos de crédito.
+    no hace falta histórico de cierres pasados, es sólo la agenda de
+    ciclos de crédito. Cargar un `mes` anterior a uno ya existente (Juan se
+    olvidó un mes y lo completa después) es válido sin restricción de
+    orden -- los ciclos se recalculan siempre ordenando por `cierre`.
     """
     if not isinstance(mes, str) or not _FORMATO_MES.match(mes):
         raise ValueError("mes debe ser 'YYYY-MM'.")
     try:
-        fecha = date.fromisoformat(vencimiento)
-        if fecha.isoformat() != vencimiento:
+        fecha = date.fromisoformat(cierre)
+        if fecha.isoformat() != cierre:
             raise ValueError
     except (TypeError, ValueError):
-        raise ValueError("vencimiento debe ser una fecha ISO 'YYYY-MM-DD' válida.") from None
+        raise ValueError("cierre debe ser una fecha ISO 'YYYY-MM-DD' válida.") from None
+    if vencimiento_pago is not None:
+        try:
+            fecha_pago = date.fromisoformat(vencimiento_pago)
+            if fecha_pago.isoformat() != vencimiento_pago:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ValueError("vencimiento_pago debe ser una fecha ISO 'YYYY-MM-DD' válida o ausente.") from None
 
     existente = conn.execute(
         "SELECT id FROM tarjeta_vencimientos WHERE mes = ?", (mes,)
     ).fetchone()
     if existente is not None:
         conn.execute(
-            "UPDATE tarjeta_vencimientos SET vencimiento = ? WHERE mes = ?",
-            (vencimiento, mes),
+            "UPDATE tarjeta_vencimientos SET cierre = ?, vencimiento_pago = ? WHERE mes = ?",
+            (cierre, vencimiento_pago, mes),
         )
         nuevo_id = existente["id"]
     else:
         cursor = conn.execute(
-            "INSERT INTO tarjeta_vencimientos (mes, vencimiento, created_at) VALUES (?, ?, ?)",
-            (mes, vencimiento, _now()),
+            "INSERT INTO tarjeta_vencimientos (mes, cierre, vencimiento_pago, created_at) VALUES (?, ?, ?, ?)",
+            (mes, cierre, vencimiento_pago, _now()),
         )
         nuevo_id = cursor.lastrowid
     conn.commit()

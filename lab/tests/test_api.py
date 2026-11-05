@@ -1086,43 +1086,78 @@ class ApiTest(WsgiApiTestCase):
         # Auth por el mismo header que todas las rutas.
         self.assertEqual(self.request("GET", "/api/categories?tipo=Gasto", auth=False)[0], 401)
 
+    def test_credit_closes_legacy_readback_confirmation_and_historical_retry(self):
+        self.app.close()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DROP TABLE tarjeta_vencimientos")
+            conn.execute("CREATE TABLE tarjeta_vencimientos (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                         "mes TEXT NOT NULL UNIQUE, vencimiento TEXT NOT NULL, created_at TEXT NOT NULL)")
+            conn.execute("INSERT INTO tarjeta_vencimientos VALUES (7, '2026-10', '2026-11-04', 'original')")
+        self.app = create_app(self.db_path, TEST_SECRET)
+        status, body, _ = self.request("GET", "/api/tarjeta-vencimientos")
+        self.assertEqual(status, 200)
+        legacy = body["vencimientos"][0]
+        self.assertIsNone(legacy["cierre"])
+        self.assertEqual(legacy["vencimiento_pago"], "2026-11-04")
+        self.assertEqual(legacy["vencimiento_legacy"], "2026-11-04")
+        # Register later close, then backfill/confirm earlier close twice.
+        self.assertEqual(self.request("POST", "/api/tarjeta-vencimientos",
+                         {"mes": "2026-11", "cierre": "2026-11-24"})[0], 201)
+        for _ in range(2):
+            status, body, _ = self.request("POST", "/api/tarjeta-vencimientos",
+                {"mes": "2026-10", "cierre": "2026-10-24", "vencimiento_pago": "2026-11-04"})
+            self.assertEqual(status, 201)
+            self.assertEqual(body["vencimiento"]["id"], 7)
+        _, body, _ = self.request("GET", "/api/tarjeta-vencimientos")
+        self.assertEqual(len(body["vencimientos"]), 2)
+        self.assertEqual([r["cierre"] for r in body["vencimientos"]], ["2026-10-24", "2026-11-24"])
+        self.assertIsNone(body["vencimientos"][1]["vencimiento_pago"])
+        self.assertEqual(self.request("POST", "/api/tarjeta-vencimientos",
+                         {"mes": "2026-12", "vencimiento": "2026-12-04"})[0], 400)
+
     def test_tarjeta_vencimientos_crud_y_upsert_por_mes(self):
-        # Mejora Juan 2026-11-05 (#6 lista de mejoras): agenda de vencimientos
-        # de la única tarjeta de crédito en uso, para agrupar la carga de
-        # crédito por ciclo en vez de mes calendario.
+        # Mejora Juan 2026-11-05 (#6 lista de mejoras; corrección de modelo
+        # el mismo día): agenda de CIERRES de la única tarjeta de crédito
+        # en uso (agrupa la carga por ciclo), + vencimiento_pago opcional
+        # (solo recordatorio de cuándo pagar, nunca agrupa).
         status, body, _ = self.request("GET", "/api/tarjeta-vencimientos")
         self.assertEqual(status, 200)
         self.assertEqual(body, {"vencimientos": []})
 
         status, body, _ = self.request(
-            "POST", "/api/tarjeta-vencimientos", {"mes": "2026-11", "vencimiento": "2026-11-10"}
+            "POST", "/api/tarjeta-vencimientos", {"mes": "2026-11", "cierre": "2026-11-10"}
         )
         self.assertEqual(status, 201)
         self.assertEqual(body["vencimiento"]["mes"], "2026-11")
-        self.assertEqual(body["vencimiento"]["vencimiento"], "2026-11-10")
+        self.assertEqual(body["vencimiento"]["cierre"], "2026-11-10")
+        self.assertIsNone(body["vencimiento"]["vencimiento_pago"])
         primer_id = body["vencimiento"]["id"]
 
         # Upsert: corregir el mismo mes reemplaza la fila, no crea otra.
+        # También prueba vencimiento_pago opcional.
         status, body, _ = self.request(
-            "POST", "/api/tarjeta-vencimientos", {"mes": "2026-11", "vencimiento": "2026-11-12"}
+            "POST", "/api/tarjeta-vencimientos",
+            {"mes": "2026-11", "cierre": "2026-11-12", "vencimiento_pago": "2026-11-22"},
         )
         self.assertEqual(status, 201)
         self.assertEqual(body["vencimiento"]["id"], primer_id)
-        self.assertEqual(body["vencimiento"]["vencimiento"], "2026-11-12")
+        self.assertEqual(body["vencimiento"]["cierre"], "2026-11-12")
+        self.assertEqual(body["vencimiento"]["vencimiento_pago"], "2026-11-22")
 
-        self.request("POST", "/api/tarjeta-vencimientos", {"mes": "2026-12", "vencimiento": "2026-12-10"})
+        self.request("POST", "/api/tarjeta-vencimientos", {"mes": "2026-12", "cierre": "2026-12-10"})
         status, body, _ = self.request("GET", "/api/tarjeta-vencimientos")
         self.assertEqual(status, 200)
         self.assertEqual([v["mes"] for v in body["vencimientos"]], ["2026-11", "2026-12"])
 
         # Validaciones.
         for payload in (
-            {"mes": "2026-13", "vencimiento": "2026-11-10"},
-            {"mes": "noviembre", "vencimiento": "2026-11-10"},
-            {"mes": "2026-11", "vencimiento": "no-es-fecha"},
+            {"mes": "2026-13", "cierre": "2026-11-10"},
+            {"mes": "noviembre", "cierre": "2026-11-10"},
+            {"mes": "2026-11", "cierre": "no-es-fecha"},
+            {"mes": "2026-11", "cierre": "2026-11-10", "vencimiento_pago": "no-es-fecha"},
             {"mes": "2026-11"},
-            {"vencimiento": "2026-11-10"},
-            {"mes": "2026-11", "vencimiento": "2026-11-10", "extra": 1},
+            {"cierre": "2026-11-10"},
+            {"mes": "2026-11", "cierre": "2026-11-10", "extra": 1},
         ):
             self.assertEqual(self.request("POST", "/api/tarjeta-vencimientos", payload)[0], 400)
 
@@ -1136,7 +1171,7 @@ class ApiTest(WsgiApiTestCase):
         # Auth por el mismo header que todas las rutas.
         self.assertEqual(self.request("GET", "/api/tarjeta-vencimientos", auth=False)[0], 401)
         self.assertEqual(self.request(
-            "POST", "/api/tarjeta-vencimientos", {"mes": "2027-01", "vencimiento": "2027-01-10"}, auth=False
+            "POST", "/api/tarjeta-vencimientos", {"mes": "2027-01", "cierre": "2027-01-10"}, auth=False
         )[0], 401)
 
     def test_local_http_roundtrip(self):
