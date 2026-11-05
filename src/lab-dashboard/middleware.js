@@ -150,6 +150,8 @@ const PROXY_ROUTES = [
   { pattern: /^\/api\/fixed\/[1-9]\d*$/, methods: ['PATCH', 'DELETE'], query: {} },
   { pattern: /^\/api\/summary$/, methods: ['GET'], query: { GET: { month: 'month' } } },
   { pattern: /^\/api\/categories$/, methods: ['GET'], query: { GET: { tipo: 'tipo' } } },
+  { pattern: /^\/api\/tarjeta-vencimientos$/, methods: ['GET', 'POST'], query: {} },
+  { pattern: /^\/api\/tarjeta-vencimientos\/[1-9]\d*$/, methods: ['DELETE'], query: {} },
 ];
 
 const PROXY_SAFE_UPSTREAM_STATUSES = new Set([

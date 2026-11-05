@@ -164,6 +164,9 @@ test('every contracted method forwards the exact path and query to the configure
     ['DELETE', '/api/fixed/3', '{"fecha_baja":"2026-10-17"}'],
     ['GET', '/api/summary?month=2026-10'],
     ['GET', '/api/categories?tipo=Gasto'],
+    ['GET', '/api/tarjeta-vencimientos'],
+    ['POST', '/api/tarjeta-vencimientos', '{}'],
+    ['DELETE', '/api/tarjeta-vencimientos/4'],
   ];
   let calls = 0;
   await withHarness(async () => {
