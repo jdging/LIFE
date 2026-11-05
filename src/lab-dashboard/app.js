@@ -1235,7 +1235,9 @@ function formMarkup(kind, row, categoriesCatalog) {
     const proporcionJd = tipoProporcion === 'custom' && row?.proporcion_jd != null ? row.proporcion_jd : '50';
     const proporcionPinki = tipoProporcion === 'custom' && row?.proporcion_pinki != null ? row.proporcion_pinki : '50';
     return `${isEdit ? `<p class="form-help">Esta edición aplica solo a esta fila (cuota ${escapeHtml(cuotaLabel(row))} de ${escapeHtml(String(row.cuotas_total))}); las demás cuotas de este gasto no cambian. La cantidad de cuotas no se puede editar desde aquí.</p>` : ''}
-      ${formField('monto', 'Monto total (ARS)', row?.monto ?? '', 'text', 'required inputmode="decimal" min="0.01" max="1000000000000" step="0.01"')}
+      ${formSelect('moneda_ingreso', 'Moneda', ['ARS', 'USD'], 'ARS')}
+      ${formField('monto', 'Monto total (ARS)', row?.monto ?? '', 'text', 'required inputmode="decimal" min="0.01" max="1000000000000" step="0.01" oninput="updateExpenseMonedaHint()"')}
+      <p class="form-help" id="expense-moneda-hint" aria-live="polite"></p>
       ${formField('fecha', 'Fecha', row?.fecha || todayLocalISO(), 'date', 'required')}
       ${categoryFields}
       ${formField('descripcion_original', 'Descripción', row?.descripcion_original || '')}
@@ -1519,6 +1521,56 @@ function validMoneyOptional(raw) {
   return Number.isFinite(value) && value >= 0 && value <= 1e12;
 }
 
+// Mejora Juan 2026-11-05 (#3 lista de mejoras): cotización del dólar oficial
+// (dolarapi.com, sin API key) para poder cargar un gasto en USD y que el
+// sistema lo convierta a ARS solo (único que agregan totales/gráficos
+// existentes), mostrando siempre la otra moneda en chiquito como referencia.
+// Cache simple en memoria -- no hace falta persistir entre sesiones, y evita
+// pegarle a la API en cada tecla.
+const DOLAR_CACHE_MS = 10 * 60 * 1000;
+let DOLAR_OFICIAL_CACHE = { venta: null, fetchedAt: 0 };
+
+async function fetchDolarOficialVenta() {
+  const now = Date.now();
+  if (DOLAR_OFICIAL_CACHE.venta && (now - DOLAR_OFICIAL_CACHE.fetchedAt) < DOLAR_CACHE_MS) {
+    return DOLAR_OFICIAL_CACHE.venta;
+  }
+  try {
+    const res = await fetch('https://dolarapi.com/v1/dolares/oficial');
+    if (!res.ok) throw new Error(`dolarapi status ${res.status}`);
+    const data = await res.json();
+    const venta = Number(data?.venta);
+    if (!Number.isFinite(venta) || venta <= 0) throw new Error('cotización inválida');
+    DOLAR_OFICIAL_CACHE = { venta, fetchedAt: now };
+    return venta;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Muestra siempre la moneda "chica" complementaria a la elegida (USD si se
+// tipeó en ARS, ARS si se tipeó en USD) -- pedido explícito de Juan de ver
+// ambas, sin bloquear la carga si la API externa falla (se avisa y se puede
+// seguir en pesos).
+async function updateExpenseMonedaHint() {
+  const hint = document.getElementById('expense-moneda-hint');
+  const monedaField = document.getElementById('field-moneda_ingreso');
+  const montoField = document.getElementById('field-monto');
+  if (!hint || !monedaField || !montoField) return;
+  const rawMonto = normalizeDecimalInput(montoField.value || '');
+  const monto = Number(rawMonto);
+  if (!rawMonto || !Number.isFinite(monto) || monto <= 0) { hint.textContent = ''; return; }
+  hint.textContent = 'Buscando cotización oficial…';
+  const venta = await fetchDolarOficialVenta();
+  if (!venta) {
+    hint.textContent = 'No se pudo obtener la cotización oficial ahora; se puede seguir cargando en pesos.';
+    return;
+  }
+  hint.textContent = monedaField.value === 'USD'
+    ? `≈ ${fmtARSExact(monto * venta)} (dólar oficial venta ${fmtARSExact(venta)})`
+    : `≈ ${fmtUSD(monto / venta)} (dólar oficial venta ${fmtARSExact(venta)})`;
+}
+
 function validDate(raw) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return false;
   const date = new Date(`${raw}T00:00:00Z`);
@@ -1593,11 +1645,32 @@ function collectForm(kind, row, values) {
   if (kind.endsWith('delete')) return { payload: kind === 'fixed-delete' ? { fecha_baja: values.fecha_baja } : null, errors };
   const moneyKey = kind.startsWith('fixed') ? 'monto_estimado' : 'monto';
   if (!validMoney(values[moneyKey])) errors[moneyKey] = 'Ingresá un monto positivo, finito, de hasta 2 decimales y máximo 1 billón.';
+  // Mejora Juan 2026-11-05 (#3 lista de mejoras): si el gasto se tipeó en
+  // USD, el monto que viaja al backend sigue siendo ARS (único que agregan
+  // los totales/gráficos existentes) -- se convierte acá con la cotización
+  // oficial ya cacheada por updateExpenseMonedaHint(). Si no hay cotización
+  // fresca todavía (usuario tipeó rápido sin esperar el fetch), se bloquea
+  // el envío en vez de guardar un monto a medio convertir.
+  if ((kind === 'expense' || kind === 'expense-edit') && values.moneda_ingreso === 'USD' && !errors[moneyKey]) {
+    const venta = DOLAR_OFICIAL_CACHE.venta && (Date.now() - DOLAR_OFICIAL_CACHE.fetchedAt) < DOLAR_CACHE_MS
+      ? DOLAR_OFICIAL_CACHE.venta : null;
+    if (!venta) {
+      errors.monto = 'No se pudo confirmar la cotización oficial todavía; esperá un instante y volvé a tocar el monto.';
+    } else {
+      values.monto_usd_original = values.monto;
+      values.monto = String(Math.round(Number(values.monto) * venta * 100) / 100);
+      values.dolar_oficial_venta = String(venta);
+    }
+  }
   if (kind === 'expense' || kind === 'expense-edit') {
     const isEdit = kind === 'expense-edit';
     if (!values.categoria?.trim()) errors.categoria = 'Ingresá una categoría.';
+    const descripcionBase = values.descripcion_original.trim();
+    const descripcionFinal = values.monto_usd_original
+      ? `${descripcionBase}${descripcionBase ? ' ' : ''}[USD ${values.monto_usd_original} @ $${values.dolar_oficial_venta} oficial]`
+      : descripcionBase;
     const payload = { fecha: values.fecha, monto: Number(values.monto), categoria: values.categoria.trim(),
-      subcategoria: values.subcategoria.trim(), descripcion_original: values.descripcion_original.trim(),
+      subcategoria: values.subcategoria.trim(), descripcion_original: descripcionFinal,
       medio_pago: values.medio_pago, pagado_por: values.pagado_por, tipo_proporcion: values.tipo_proporcion };
     if (!isEdit) {
       const cuotas = Number(values.cuotas_total);
@@ -1908,6 +1981,7 @@ document.getElementById('form-fields').addEventListener('change', syncCustomProp
 document.getElementById('form-fields').addEventListener('input', syncCustomProportion);
 document.getElementById('form-fields').addEventListener('change', (event) => {
   if (event.target?.id === 'field-categoria') onExpenseCategoriaChange();
+  if (event.target?.id === 'field-moneda_ingreso') updateExpenseMonedaHint();
 });
 document.getElementById('form-modal').addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !writePending) { event.preventDefault(); closeForm(); return; }
