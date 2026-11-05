@@ -1,5 +1,24 @@
 # Bitácora del Proyecto
 
+### [2026-11-05] - Mejora #3 Juan: cotización dólar oficial para gastos en USD
+**Objetivo:** siguiente ítem de la lista ordenada tras #1 (coma/punto). Juan: "no
+te veo siguiendo" tras el primer cierre — se retoma en el mismo hilo sin volver
+a consultarle, según autorización ya dada.
+**Cambios (commit `f2f592a`, `lab/reinvencion`, sin push a main):** toggle de
+moneda ARS/USD en el alta/edición de gasto (`src/lab-dashboard/app.js`). Con
+USD, `updateExpenseMonedaHint()` busca la cotización oficial en
+`dolarapi.com/v1/dolares/oficial` (cacheada 10' en memoria, sin API key) y
+muestra siempre la otra moneda en chiquito como referencia (ARS→USD o
+USD→ARS). Al enviar, `collectForm()` convierte el monto tipeado en USD a ARS
+con esa cotización (los totales/gráficos existentes sólo agregan ARS); si no
+hay cotización fresca, bloquea el envío con error claro en vez de guardar a
+mitad de convertir. La descripción guarda `[USD X @ $Y oficial]` como
+trazabilidad del monto original.
+**Verificación:** 7 tests nuevos (`tests/dolar-oficial.test.mjs`, fetch
+mockeado, sin llamados reales a la API) + suite completa 76/76 Node sin
+regresiones.
+**Siguiente:** tarjeta de crédito en gastos fijos (#4 de la lista ordenada).
+
 ### [2026-11-05] - Mejora #1 Juan: coma y punto válidos para ingresar montos
 **Objetivo:** Juan trajo una lista de 7 mejoras + se confirmó que ítem previo de
 CRUD web general ya estaba cerrado. Se ordenó la lista de más rápida a más
