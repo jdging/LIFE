@@ -1,5 +1,31 @@
 # Bitácora del Proyecto
 
+### [2026-11-05] - Mejora #4 Juan (cerrada): filtro de medio de pago en "el fondo"
+**Aclaración de Juan:** "los gastos del fondo" = la tabla de abajo de la
+pestaña Gastos (`#tabla-gastos`), no Inversiones. Esa tabla YA tenía filtro
+de persona, filtro de categoría y orden por click en columna con flechita
+indicadora (`sortState`/`.arrow`, ya existía en el código). La segunda
+consulta CPO (con el target corregido) confirmó que el único gap real era
+un filtro por medio de pago.
+**Cambios (commit `e51d93d`, `main`, pusheado y desplegado):** select
+"Medio de pago" junto a los filtros existentes, mismo patrón que categoría
+(opciones derivadas de los datos del período, AND con los demás filtros
+activos). Sin cambios de backend ni de datos.
+**Verificación:** 1 bloque de test nuevo en `forms.test.mjs`. Suite
+completa 76/76 Node, 680/680 Python. Deploy: Vercel nuevo build de
+Production, alias `life-jdg7.vercel.app` re-apuntado y confirmado estable.
+**Incidente paralelo:** Juan reportó no ver sus gastos de siempre después
+del primer pase a producción. Verificado en el momento: DB real intacta
+(244 gastos, 223 activos, últimas cargas del 4/11 presentes), backend y
+túnel Tailscale sirviendo correctamente los mismos datos. Causa más
+probable: caché de navegador/CDN durante los 3 re-aliases seguidos del
+pase anterior, no pérdida de datos real — ninguna migración de este
+proyecto borra filas, solo agrega tablas/columnas nuevas vacías.
+**Siguiente:** queda pendiente (no pedida todavía por Juan en esta sesión,
+filtro de fecha) como posible segunda vuelta si lo necesita; por ahora se
+sigue con el resto de la lista ordenada: sync a Sheets y config de
+Supermercado.
+
 ### [2026-11-05] - Pase a producción real (main + backend) y aclaración "fondo"
 **Pedido de Juan:** no veía cambios en https://life-jdg7.vercel.app/ — todo
 el trabajo de hoy estaba en `lab/reinvencion`, nunca había llegado a `main`
