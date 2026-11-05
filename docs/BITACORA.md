@@ -1,5 +1,31 @@
 # Bitácora del Proyecto
 
+### [2026-11-05] - Mejora #3 Juan (cerrada): Supermercado sin "orden" manual + alta inline
+**Pedido:** "sacar lo de ingresar el orden de las categorías... que sea
+alfabético. Darle una vuelta de tuerca a la configuración, un + para
+agregar categoría y un + para agregar artículo en cada categoría, así
+sacamos la parte del final de configuración."
+**Cambios (commit `3ffca62`, `main`, desplegado):**
+- Campo "Orden" sacado del formulario de categoría. Toda visualización
+  (grupos de productos, lista de categorías, select) ahora ordena
+  alfabéticamente (`localeCompare` es-AR), ignorando el valor guardado.
+- Backend sin tocar: `orden` sigue NOT NULL en `supermercado_categorias`,
+  pero el frontend lo autocompleta solo (alta = siguiente entero, edición
+  = conserva el existente) sin pedírselo a Juan.
+- Se eliminó el `<details id="supermercado-admin">` del pie de la
+  pestaña. En su lugar: franja "+ Agregar categoría" / "+ Agregar
+  producto" arriba de la lista, y un botón "+" redondo en cada
+  encabezado de grupo que abre el alta de producto con la categoría ya
+  preseleccionada (`addSuperProductToCategory`).
+**Verificación:** 2 tests nuevos + 1 ajustado en `supermercado.test.mjs`
+(orden alfabético con fixture `orden` desordenado a propósito; botón +
+de grupo). Suite completa 81/81 Node, 680/680 Python. No pude ver la
+build logueado como Juan (Vercel exige SSO del equipo en la URL cruda y
+no tengo el DASHBOARD_PASSWORD de la app) — queda pendiente que Juan
+confirme visualmente.
+**Siguiente:** sync opcional a Google Sheets (pendiente del kanban
+original, sin pedido explícito reciente de Juan).
+
 ### [2026-11-05] - FIX CRÍTICO: proxy de Vercel bloqueaba /api/tarjeta-vencimientos
 **Síntoma de Juan:** "Finanzas y otros módulos · los datos live no se
 pudieron verificar. Snapshot de solo lectura..." en el dashboard en vivo,
