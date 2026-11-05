@@ -119,3 +119,42 @@ test('updateExpenseMonedaHint avisa sin bloquear si la cotización no está disp
   await ctx.updateExpenseMonedaHint();
   assert.match(hint.textContent, /No se pudo obtener la cotización oficial/);
 });
+
+// Ampliación 2026-11-05: Juan pidió explícitamente que la carga en USD
+// también estuviera disponible para gastos FIJOS, no sólo variables.
+test('collectForm convierte USD a ARS también en gastos fijos (monto_estimado)', async () => {
+  const ctx = buildContext({ fetchImpl: async () => ({ ok: true, json: async () => ({ venta: 1000 }) }) });
+  await ctx.fetchDolarOficialVenta();
+  const values = {
+    nombre: 'Netflix', monto_estimado: '10', moneda_ingreso: 'USD',
+    periodicidad: 'mensual', responsable: 'Común', medio_pago: 'Crédito',
+    fixed_tipo_proporcion: 'dinamica', vigente_desde: '2026-11-05',
+  };
+  const { payload, errors } = ctx.collectForm('fixed', null, values);
+  assert.equal(Object.keys(errors).length, 0);
+  assert.equal(payload.monto_estimado, 10000, 'USD 10 a cotización 1000 debe guardarse como ARS 10000');
+});
+
+test('collectForm bloquea un fijo en USD sin cotización oficial fresca', () => {
+  const ctx = buildContext();
+  const values = {
+    nombre: 'Netflix', monto_estimado: '10', moneda_ingreso: 'USD',
+    periodicidad: 'mensual', responsable: 'Común', medio_pago: 'Crédito',
+    fixed_tipo_proporcion: 'dinamica', vigente_desde: '2026-11-05',
+  };
+  const { payload, errors } = ctx.collectForm('fixed', null, values);
+  assert.ok(errors.monto_estimado, 'Sin cotización fresca debe marcar error en monto_estimado');
+  assert.equal(payload.monto_estimado, 10, 'No debe convertirse a ciegas sin cotización válida');
+});
+
+test('collectForm en ARS (fijo, moneda por defecto) no toca monto_estimado ni pide cotización', () => {
+  const ctx = buildContext();
+  const values = {
+    nombre: 'Netflix', monto_estimado: '5000', moneda_ingreso: 'ARS',
+    periodicidad: 'mensual', responsable: 'Común', medio_pago: 'Efectivo',
+    fixed_tipo_proporcion: 'dinamica', vigente_desde: '2026-11-05',
+  };
+  const { payload, errors } = ctx.collectForm('fixed', null, values);
+  assert.equal(Object.keys(errors).length, 0);
+  assert.equal(payload.monto_estimado, 5000);
+});

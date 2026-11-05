@@ -1297,7 +1297,9 @@ function formMarkup(kind, row, categoriesCatalog) {
   const fixedCategoryFields = categoriesCatalog ? formFixedCategorySelects(categoriesCatalog, row) : formFixedCategoryText(row);
   return `${formField('nombre', 'Descripción', row?.nombre || '', 'text', 'required')}
     ${fixedCategoryFields}
-    ${formField('monto_estimado', 'Monto bruto (ARS)', row?.monto_estimado ?? '', 'text', 'required inputmode="decimal" min="0.01" max="1000000000000" step="0.01"')}
+    ${formSelect('moneda_ingreso', 'Moneda', ['ARS', 'USD'], 'ARS')}
+    ${formField('monto_estimado', 'Monto bruto (ARS)', row?.monto_estimado ?? '', 'text', 'required inputmode="decimal" min="0.01" max="1000000000000" step="0.01" oninput="updateExpenseMonedaHint()"')}
+    <p class="form-help" id="expense-moneda-hint" aria-live="polite"></p>
     ${formSelect('periodicidad', 'Periodicidad', ['mensual', 'bimestral'], row?.periodicidad || 'mensual')}
     ${formSelect('medio_pago', 'Medio de pago', ['Efectivo', 'Transferencia', 'Débito', 'Crédito'], row?.medio_pago || 'Efectivo')}
     ${formSelect('responsable', 'Responsable', ['Común', 'JD', 'Pinki'], row?.responsable || 'Común')}
@@ -1585,11 +1587,14 @@ async function fetchDolarOficialVenta() {
 // Muestra siempre la moneda "chica" complementaria a la elegida (USD si se
 // tipeó en ARS, ARS si se tipeó en USD) -- pedido explícito de Juan de ver
 // ambas, sin bloquear la carga si la API externa falla (se avisa y se puede
-// seguir en pesos).
+// seguir en pesos). Generalizada a "monto" (gasto variable) y
+// "monto_estimado" (gasto fijo, mejora 2026-11-05 ampliando #3 de la
+// lista): el id del input de monto activo en el form se detecta solo,
+// así una sola función/hint sirve para ambos formularios.
 async function updateExpenseMonedaHint() {
   const hint = document.getElementById('expense-moneda-hint');
   const monedaField = document.getElementById('field-moneda_ingreso');
-  const montoField = document.getElementById('field-monto');
+  const montoField = document.getElementById('field-monto') || document.getElementById('field-monto_estimado');
   if (!hint || !monedaField || !montoField) return;
   const rawMonto = normalizeDecimalInput(montoField.value || '');
   const monto = Number(rawMonto);
@@ -1679,20 +1684,22 @@ function collectForm(kind, row, values) {
   if (kind.endsWith('delete')) return { payload: kind === 'fixed-delete' ? { fecha_baja: values.fecha_baja } : null, errors };
   const moneyKey = kind.startsWith('fixed') ? 'monto_estimado' : 'monto';
   if (!validMoney(values[moneyKey])) errors[moneyKey] = 'Ingresá un monto positivo, finito, de hasta 2 decimales y máximo 1 billón.';
-  // Mejora Juan 2026-11-05 (#3 lista de mejoras): si el gasto se tipeó en
-  // USD, el monto que viaja al backend sigue siendo ARS (único que agregan
-  // los totales/gráficos existentes) -- se convierte acá con la cotización
-  // oficial ya cacheada por updateExpenseMonedaHint(). Si no hay cotización
-  // fresca todavía (usuario tipeó rápido sin esperar el fetch), se bloquea
-  // el envío en vez de guardar un monto a medio convertir.
-  if ((kind === 'expense' || kind === 'expense-edit') && values.moneda_ingreso === 'USD' && !errors[moneyKey]) {
+  // Mejora Juan 2026-11-05 (#3 lista de mejoras, ampliada a gastos fijos):
+  // si el monto se tipeó en USD (gasto variable o fijo), el que viaja al
+  // backend sigue siendo ARS (único que agregan los totales/gráficos
+  // existentes) -- se convierte acá con la cotización oficial ya cacheada
+  // por updateExpenseMonedaHint(). Si no hay cotización fresca todavía
+  // (usuario tipeó rápido sin esperar el fetch), se bloquea el envío en
+  // vez de guardar un monto a medio convertir.
+  const monedaAplica = kind === 'expense' || kind === 'expense-edit' || kind === 'fixed' || kind === 'fixed-edit';
+  if (monedaAplica && values.moneda_ingreso === 'USD' && !errors[moneyKey]) {
     const venta = DOLAR_OFICIAL_CACHE.venta && (Date.now() - DOLAR_OFICIAL_CACHE.fetchedAt) < DOLAR_CACHE_MS
       ? DOLAR_OFICIAL_CACHE.venta : null;
     if (!venta) {
-      errors.monto = 'No se pudo confirmar la cotización oficial todavía; esperá un instante y volvé a tocar el monto.';
+      errors[moneyKey] = 'No se pudo confirmar la cotización oficial todavía; esperá un instante y volvé a tocar el monto.';
     } else {
-      values.monto_usd_original = values.monto;
-      values.monto = String(Math.round(Number(values.monto) * venta * 100) / 100);
+      values[`${moneyKey}_usd_original`] = values[moneyKey];
+      values[moneyKey] = String(Math.round(Number(values[moneyKey]) * venta * 100) / 100);
       values.dolar_oficial_venta = String(venta);
     }
   }
