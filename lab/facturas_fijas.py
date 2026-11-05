@@ -83,23 +83,36 @@ def _parsear_gas(texto):
 
 def _parsear_epe(texto):
     # EPE factura un bimestre en 2 cuotas mensuales ("Cuota 1"/"Cuota 2"),
-    # cada una con su propio vencimiento e importe. Se usa siempre la
-    # Cuota 1 (la de vencimiento más próximo) como monto representativo del
-    # gasto fijo mensual -- la Cuota 2 queda en "detalle" por si Juan
-    # prefiere promediarlas a mano.
+    # cada una con su propio vencimiento e importe. Juan (2026-11-05): usar
+    # "la correspondiente con el mes vigente" -- se interpreta como la cuota
+    # cuyo vencimiento cae en el mes calendario de HOY; si ninguna cae en el
+    # mes actual, se usa la próxima por vencer (la más cercana hacia
+    # adelante); si las dos ya vencieron, se usa la más reciente. Siempre
+    # determinista (reloj del sistema, nunca una inferencia de IA).
     cuota1 = re.search(r"Cuota 1\s+(\d{2}/\d{2}/\d{4})\s+\$\s*([\d.,]+)", texto)
     cuota2 = re.search(r"Cuota 2\s+(\d{2}/\d{2}/\d{4})\s+\$\s*([\d.,]+)", texto)
-    if not cuota1:
+    candidatas = []
+    for m in (cuota1, cuota2):
+        if m:
+            vencimiento_iso = _fecha_ddmmyyyy_a_iso(m.group(1))
+            if vencimiento_iso:
+                candidatas.append((date.fromisoformat(vencimiento_iso), _parse_monto_es(m.group(2))))
+    if not candidatas:
         return None, None, None
-    monto = _parse_monto_es(cuota1.group(2))
-    vencimiento = _fecha_ddmmyyyy_a_iso(cuota1.group(1))
-    detalle_cuota2 = None
-    if cuota2:
-        detalle_cuota2 = {
-            "monto": _parse_monto_es(cuota2.group(2)),
-            "vencimiento": _fecha_ddmmyyyy_a_iso(cuota2.group(1)),
-        }
-    return monto, vencimiento, detalle_cuota2
+
+    hoy = date.today()
+    del_mes_actual = [c for c in candidatas if (c[0].year, c[0].month) == (hoy.year, hoy.month)]
+    if del_mes_actual:
+        elegida = del_mes_actual[0]
+    else:
+        futuras = sorted((c for c in candidatas if c[0] >= hoy), key=lambda c: c[0])
+        elegida = futuras[0] if futuras else max(candidatas, key=lambda c: c[0])
+
+    detalle = None
+    otras = [c for c in candidatas if c != elegida]
+    if otras:
+        detalle = {"monto": otras[0][1], "vencimiento": otras[0][0].isoformat()}
+    return elegida[1], elegida[0].isoformat(), detalle
 
 
 def _parsear_internet(texto):

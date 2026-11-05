@@ -13,6 +13,7 @@ import os
 import tempfile
 import threading
 import unittest
+import datetime as _dt
 from pathlib import Path
 from wsgiref.simple_server import make_server
 
@@ -43,19 +44,57 @@ Tu saldo total es de $ 22.965,01 y vence el día 11/11/2026
 TEXTO_DESCONOCIDO = "Factura de un proveedor que no reconocemos todavía."
 
 
+class _FakeDate(_dt.date):
+    """Congela `date.today()` para que el test no dependa del reloj real
+    (la cuota EPE elegida depende del mes vigente)."""
+    _hoy = _dt.date(2026, 11, 5)
+
+    @classmethod
+    def today(cls):
+        return cls._hoy
+
+
+@pytest.fixture
+def congelar_hoy(monkeypatch):
+    def _congelar(hoy_iso):
+        _FakeDate._hoy = _dt.date.fromisoformat(hoy_iso)
+        monkeypatch.setattr(facturas_fijas, "date", _FakeDate)
+    return _congelar
+
+
 class TestDeteccionYParseo:
     def test_detecta_gas_y_extrae_monto_y_vencimiento(self):
         resultado = facturas_fijas.extraer_factura(TEXTO_GAS)
         assert resultado == {"proveedor": "gas", "monto": 158277.32,
             "vencimiento": "2026-11-10", "detalle": None, "formato_desconocido": False}
 
-    def test_detecta_epe_usa_cuota_1_y_guarda_cuota_2_en_detalle(self):
+    def test_epe_usa_la_cuota_del_mes_vigente_si_hay_una_en_el_mes_actual(self, congelar_hoy):
+        congelar_hoy("2026-11-05")  # cuota 1 vence en noviembre: mes vigente
         resultado = facturas_fijas.extraer_factura(TEXTO_EPE)
         assert resultado["proveedor"] == "epe"
         assert resultado["monto"] == 115997.55
         assert resultado["vencimiento"] == "2026-11-24"
         assert resultado["detalle"] == {"monto": 115997.54, "vencimiento": "2026-12-28"}
         assert resultado["formato_desconocido"] is False
+
+    def test_epe_usa_la_otra_cuota_cuando_el_mes_vigente_es_el_de_esa_cuota(self, congelar_hoy):
+        congelar_hoy("2026-12-10")  # cuota 2 vence en diciembre: mes vigente
+        resultado = facturas_fijas.extraer_factura(TEXTO_EPE)
+        assert resultado["monto"] == 115997.54
+        assert resultado["vencimiento"] == "2026-12-28"
+        assert resultado["detalle"] == {"monto": 115997.55, "vencimiento": "2026-11-24"}
+
+    def test_epe_sin_coincidencia_de_mes_usa_la_proxima_por_vencer(self, congelar_hoy):
+        congelar_hoy("2026-09-01")  # ninguna cuota vence en septiembre: usa la próxima (cuota 1)
+        resultado = facturas_fijas.extraer_factura(TEXTO_EPE)
+        assert resultado["monto"] == 115997.55
+        assert resultado["vencimiento"] == "2026-11-24"
+
+    def test_epe_con_ambas_cuotas_vencidas_usa_la_mas_reciente(self, congelar_hoy):
+        congelar_hoy("2027-02-01")  # ambas cuotas ya vencieron: usa la más reciente (cuota 2)
+        resultado = facturas_fijas.extraer_factura(TEXTO_EPE)
+        assert resultado["monto"] == 115997.54
+        assert resultado["vencimiento"] == "2026-12-28"
 
     def test_detecta_internet_telecom(self):
         resultado = facturas_fijas.extraer_factura(TEXTO_INTERNET)
