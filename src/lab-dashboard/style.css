@@ -435,6 +435,35 @@ button.card:active {
   gap: 8px;
   font-size: 13px;
 }
+.credito-ciclo-rango {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.credito-ciclo-rango strong {
+  font-family: 'Fraunces', serif;
+  font-size: 14px;
+}
+.credito-ciclo-rango span {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+.credito-vencimientos-empty {
+  margin: 6px 0 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--paper-deep);
+}
+.credito-vencimientos-empty p {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.credito-vencimientos-ejemplo {
+  color: var(--ink-soft);
+  font-size: 12px;
+  margin-bottom: 0 !important;
+}
 .credito-ciclo + .credito-ciclo {
   border-top: 1px solid var(--line-soft, rgba(255, 255, 255, 0.08));
 }

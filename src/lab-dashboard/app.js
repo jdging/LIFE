@@ -824,6 +824,20 @@ function creditCycles() {
     }));
 }
 
+// Solo para mostrar (dd/mm/aaaa, como lee cualquier factura argentina); el
+// valor que viaja al backend sigue siendo el ISO nativo del <input date>.
+function fmtFechaCorta(iso) {
+  const [y, m, d] = String(iso || '').slice(0, 10).split('-');
+  return y && m && d ? `${d}/${m}/${y}` : '';
+}
+
+function fmtMesCorto(iso) {
+  const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+    'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const [y, m, d] = String(iso || '').slice(0, 10).split('-').map(Number);
+  return d && m ? `${d} ${meses[m - 1].slice(0, 3)}` : '';
+}
+
 // `null` = posterior al último vencimiento registrado: ciclo abierto, sin
 // fecha de cierre todavía (se muestra agrupado aparte, no se descarta).
 function creditCycleForDate(fecha, cycles) {
@@ -2725,27 +2739,45 @@ function renderCuotasDetail() {
 }
 
 // Panel de administración de vencimientos (mejora Juan 2026-11-05, #6 lista
-// de mejoras): siempre visible arriba del detalle de crédito, incluso sin
-// cargos todavía, para que Juan pueda ir registrando los vencimientos mes a
-// mes de la única tarjeta en uso.
+// de mejoras; rediseño 2026-11-05 por pedido explícito de Juan -- "no está
+// muy didáctica" -- con revisión CPO/UX/CTO/front-end, ver
+// docs/BITACORA.md). Siempre visible arriba del detalle de crédito, incluso
+// sin cargos todavía, para que Juan pueda ir registrando los vencimientos
+// mes a mes de la única tarjeta en uso. Un solo campo real (la fecha de
+// vencimiento); "mes" es clave interna derivada, no se le pide a Juan.
+// Reusa `creditCycles()` (única fuente de verdad de la regla de negocio)
+// para pintar el RANGO que cada vencimiento generó, no solo la fecha de
+// cierre -- así se ve el efecto de la acción, no solo su definición.
 function renderVencimientosAdmin() {
-  const vencimientos = [...DATA.tarjetaVencimientos].sort((a, b) => a.mes.localeCompare(b.mes));
+  const cycles = creditCycles(); // ya viene ordenado por vencimiento ascendente
   return `
     <div class="credito-vencimientos">
-      <p class="form-help">Vencimientos de la tarjeta (un ciclo = desde el día
-        siguiente al vencimiento anterior hasta éste). Agregalos mes a mes;
-        sin ninguno cargado, la carga de crédito se ve agrupada por período
-        como siempre.</p>
-      ${vencimientos.length ? `<ul class="credito-vencimientos-list">
-        ${vencimientos.map((v) => `<li>
-          <span>${escapeHtml(v.mes)}: vence ${escapeHtml(v.vencimiento)}</span>
-          <button type="button" class="fijos-secondary" onclick="handleVencimientoDelete(${Number(v.id)})"
+      <p class="form-help">¿Cómo funciona? Cada vencimiento que cargás cierra
+        un ciclo: todo lo que gastaste en crédito desde el día siguiente al
+        vencimiento anterior hasta esta fecha, se agrupa en el resumen que
+        vence ese día.</p>
+      ${cycles.length ? `<ul class="credito-vencimientos-list">
+        ${[...cycles].reverse().map((c) => `<li>
+          <div class="credito-ciclo-rango">
+            <strong>${c.from === null ? 'Desde siempre' : fmtMesCorto(c.from)} → ${fmtMesCorto(c.to)} ${c.to.slice(0, 4)}</strong>
+            <span>Vence el <time datetime="${escapeHtml(c.to)}">${fmtFechaCorta(c.to)}</time></span>
+          </div>
+          <button type="button" class="fijos-secondary" onclick="handleVencimientoDelete(${Number(DATA.tarjetaVencimientos.find((v) => v.vencimiento === c.to).id)})"
             ${!liveMode || writePending ? 'disabled' : ''}>Borrar</button>
         </li>`).join('')}
-      </ul>` : ''}
+      </ul>` : `<div class="credito-vencimientos-empty">
+        <p>Todavía no cargaste ningún vencimiento — por ahora tus gastos en
+          crédito se agrupan por mes calendario, no por ciclo real de resumen.</p>
+        <p class="credito-vencimientos-ejemplo">Ejemplo: si tu tarjeta venció
+          el <strong>24/10</strong> y el próximo resumen vence el
+          <strong>24/11</strong>, todo lo que compres en crédito entre el
+          <strong>25/10 y el 24/11</strong> va a aparecer agrupado como
+          "ciclo que vence 24/11" en vez de mezclarse entre octubre y
+          noviembre.</p>
+      </div>`}
       <form id="vencimiento-form" class="super-form" onsubmit="handleVencimientoFormSubmit(event); return false;">
-        <label>Mes <input type="month" id="vencimiento-mes" required ${!liveMode || writePending ? 'disabled' : ''}></label>
-        <label>Vence <input type="date" id="vencimiento-fecha" required ${!liveMode || writePending ? 'disabled' : ''}></label>
+        <label>¿Cuándo vence el próximo resumen?
+          <input type="date" id="vencimiento-fecha" required ${!liveMode || writePending ? 'disabled' : ''}></label>
         <button type="submit" class="btn-print" ${!liveMode || writePending ? 'disabled' : ''}>Guardar vencimiento</button>
       </form>
       <p class="field-error" id="vencimiento-form-error" role="alert"></p>
@@ -2778,12 +2810,21 @@ async function deleteTarjetaVencimientoRequest(id) {
 async function handleVencimientoFormSubmit(event) {
   event.preventDefault();
   if (!liveMode || writePending) return;
-  const mes = document.getElementById('vencimiento-mes').value;
   const vencimiento = document.getElementById('vencimiento-fecha').value;
   const errorBox = document.getElementById('vencimiento-form-error');
   errorBox.textContent = '';
-  if (!/^\d{4}-\d{2}$/.test(mes) || !/^\d{4}-\d{2}-\d{2}$/.test(vencimiento)) {
-    errorBox.textContent = 'Completá mes y fecha de vencimiento válidos.';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(vencimiento)) {
+    errorBox.textContent = 'Completá una fecha de vencimiento válida.';
+    return;
+  }
+  // "mes" sigue siendo la clave única interna que pide el backend, pero ya
+  // no se le pide a Juan: se deriva de la fecha real que sí tiene en la
+  // cabeza. Duplicado = dos vencimientos que caen en el mismo mes
+  // calendario (una sola tarjeta, un resumen por mes).
+  const mes = vencimiento.slice(0, 7);
+  const existente = (DATA.tarjetaVencimientos || []).find((v) => v.mes === mes);
+  if (existente) {
+    errorBox.textContent = `Ya hay un vencimiento cargado para ese mes (${fmtFechaCorta(existente.vencimiento)}). Si lo cargaste mal, borralo primero.`;
     return;
   }
   writePending = true;
@@ -2800,6 +2841,13 @@ async function handleVencimientoFormSubmit(event) {
 
 async function handleVencimientoDelete(id) {
   if (!liveMode || writePending) return;
+  // Borrar un vencimiento que no es el más reciente recalcula el rango de
+  // TODOS los posteriores (creditCycles() reordena por fecha, no por
+  // referencia fija) -- confirmación explícita antes de un borrado que
+  // puede resimular agrupaciones que Juan ya daba por "cerradas".
+  const ordenados = [...(DATA.tarjetaVencimientos || [])].sort((a, b) => a.vencimiento.localeCompare(b.vencimiento));
+  const esElUltimo = ordenados.length && ordenados[ordenados.length - 1].id === id;
+  if (!esElUltimo && !confirm('Esto va a cambiar el ciclo de los vencimientos posteriores. ¿Confirmás?')) return;
   writePending = true;
   try {
     await deleteTarjetaVencimientoRequest(id);
