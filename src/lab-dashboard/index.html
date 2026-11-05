@@ -347,21 +347,18 @@
       <p id="supermercado-availability" role="status" aria-live="polite">Supermercado en solo lectura/no disponible · comprobando conexión.</p>
       <p id="supermercado-status" role="status" aria-live="polite">Cargando…</p>
       <div id="supermercado-summary" class="super-summary"></div>
-      <section class="panel super-stock-panel" aria-labelledby="super-products-title">
-        <div class="panel-title-row"><h3 id="super-products-title">Productos y stock</h3>
-          <button id="supermercado-pdf" type="button" onclick="downloadSupermercadoPdf()">Descargar lista PDF A4</button></div>
-        <div id="supermercado-content">Cargando…</div>
-      </section>
-      <section class="panel super-overview" aria-labelledby="super-overview-title">
-        <h3 id="super-overview-title">Estado general</h3>
-        <div id="supermercado-general-chart"></div>
-        <div id="supermercado-category-summary" class="super-category-summary"></div>
-      </section>
-      <details id="supermercado-admin" class="panel super-admin">
-        <summary>Administrar productos y categorías</summary>
-        <p class="super-admin-help">Las altas y ediciones se confirman con el botón de cada formulario. Los cambios de stock actual se guardan desde cada producto.</p>
+      <div class="super-quick-add">
+        <details id="supermercado-category-editor" class="super-editor">
+          <summary>+ Agregar categoría</summary>
+          <div id="supermercado-categories"></div>
+          <form id="supermercado-category-form" class="super-form">
+            <input type="hidden" name="id">
+            <label>Nombre <input name="nombre" required maxlength="120" data-super-write disabled></label>
+            <div class="super-form-actions"><button type="submit" data-super-write disabled>Guardar categoría</button><button type="reset">Cancelar</button></div>
+          </form>
+        </details>
         <details id="supermercado-product-editor" class="super-editor">
-          <summary>Agregar o editar producto</summary>
+          <summary>+ Agregar producto</summary>
           <form id="supermercado-product-form" class="super-form">
             <input type="hidden" name="id">
             <label>Categoría <select name="categoria_id" id="supermercado-category-select" data-super-write disabled><option value="">Sin categoría</option></select></label>
@@ -372,17 +369,17 @@
             <div class="super-form-actions"><button type="submit" data-super-write disabled>Guardar producto</button><button type="reset">Cancelar</button></div>
           </form>
         </details>
-        <details id="supermercado-category-editor" class="super-editor">
-          <summary>Administrar categorías</summary>
-          <div id="supermercado-categories"></div>
-          <form id="supermercado-category-form" class="super-form">
-            <input type="hidden" name="id">
-            <label>Nombre <input name="nombre" required maxlength="120" data-super-write disabled></label>
-            <label>Orden <input name="orden" type="number" min="0" max="1000000" step="1" required data-super-write disabled></label>
-            <div class="super-form-actions"><button type="submit" data-super-write disabled>Guardar categoría</button><button type="reset">Cancelar</button></div>
-          </form>
-        </details>
-      </details>
+      </div>
+      <section class="panel super-stock-panel" aria-labelledby="super-products-title">
+        <div class="panel-title-row"><h3 id="super-products-title">Productos y stock</h3>
+          <button id="supermercado-pdf" type="button" onclick="downloadSupermercadoPdf()">Descargar lista PDF A4</button></div>
+        <div id="supermercado-content">Cargando…</div>
+      </section>
+      <section class="panel super-overview" aria-labelledby="super-overview-title">
+        <h3 id="super-overview-title">Estado general</h3>
+        <div id="supermercado-general-chart"></div>
+        <div id="supermercado-category-summary" class="super-category-summary"></div>
+      </section>
       <dialog id="supermercado-history" class="super-history" aria-labelledby="super-history-title">
         <div class="super-history-head"><h3 id="super-history-title">Historial</h3><button type="button" id="super-history-x" aria-label="Cerrar historial">×</button></div>
         <p id="super-history-status" role="status" aria-live="polite"></p>

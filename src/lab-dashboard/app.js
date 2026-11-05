@@ -3340,27 +3340,29 @@ function renderSupermercadoList() {
   document.getElementById('supermercado-general-chart').innerHTML = superCountChart(global, 'Estado general', productos);
   document.getElementById('supermercado-category-summary').innerHTML = resumen.categorias.filter(cat => cat.productos).map(cat =>
     `<div><strong>${escapeHtml(cat.nombre)}</strong>${superCountChart(cat, cat.nombre, productos.filter(row => row.categoria_id === cat.id))}</div>`).join('') || '<p class="empty-state">Todavía no hay productos por categoría.</p>';
-  const categoriesMarkup = categorias.length ? categorias.map(cat => `
-    <div class="super-category"><span>${escapeHtml(cat.nombre)} · orden ${cat.orden}</span>
+  const alpha = (a, b) => a.nombre.localeCompare(b.nombre, 'es-AR');
+  const categoriasAlpha = [...categorias].sort(alpha);
+  const categoriesMarkup = categoriasAlpha.length ? categoriasAlpha.map(cat => `
+    <div class="super-category"><span>${escapeHtml(cat.nombre)}</span>
     <button type="button" data-super-write onclick="editSuperCategory(${cat.id})" aria-label="Editar categoría ${escapeHtml(cat.nombre)}">Editar</button>
     <button type="button" data-super-write onclick="deleteSuperCategory(${cat.id})" aria-label="Dar de baja categoría ${escapeHtml(cat.nombre)}">Dar de baja</button></div>`).join('') : '<p class="empty-state">Todavía no hay categorías.</p>';
   const categoryList = document.getElementById('supermercado-categories');
   if (categoryList.innerHTML !== categoriesMarkup) categoryList.innerHTML = categoriesMarkup;
   const select = document.getElementById('supermercado-category-select');
   const previous = select.value;
-  const optionsMarkup = '<option value="">Sin categoría</option>' + categorias.map(cat => `<option value="${cat.id}">${escapeHtml(cat.nombre)}</option>`).join('');
+  const optionsMarkup = '<option value="">Sin categoría</option>' + categoriasAlpha.map(cat => `<option value="${cat.id}">${escapeHtml(cat.nombre)}</option>`).join('');
   if (select.innerHTML !== optionsMarkup) { select.innerHTML = optionsMarkup; select.value = previous; }
   const query = document.getElementById('supermercado-search').value.trim().toLocaleLowerCase('es-AR');
   const shown = productos.filter(row => row.producto.toLocaleLowerCase('es-AR').includes(query));
   const content = document.getElementById('supermercado-content');
   const orphanDrafts = [...superStockDrafts].filter(([id, draft]) => draft.dirty && !productos.some(row => row.id === id)).map(([id, draft]) => `<p class="super-orphan" data-super-orphan-id="${id}">El producto #${id} ya no está disponible. Borrador conservado: ${escapeHtml(draft.value)}. <button type="button" onclick="discardSuperStock(${id})">Descartar borrador</button></p>`).join('');
-  if (!productos.length) { content.innerHTML = orphanDrafts + '<p class="empty-state">No hay productos. Abrí «Administrar productos y categorías» para cargar el primero.</p>'; return; }
+  if (!productos.length) { content.innerHTML = orphanDrafts + '<p class="empty-state">No hay productos. Usá los botones «+ Agregar categoría» / «+ Agregar producto» de arriba para cargar el primero.</p>'; return; }
   if (!shown.length) { content.innerHTML = orphanDrafts + '<p class="empty-state">No hay productos que coincidan.</p>'; return; }
-  const groups = resumen.categorias.filter(cat => shown.some(row => row.categoria_id === cat.id));
+  const groups = resumen.categorias.filter(cat => shown.some(row => row.categoria_id === cat.id)).sort(alpha);
   if (!groups.length && shown.length) groups.push({ id: null, nombre: 'Sin categoría' });
   const markup = orphanDrafts + groups.map(cat => {
     const rows = shown.filter(row => row.categoria_id === cat.id);
-    return `<section class="super-group" data-super-category-id="${cat.id ?? 'none'}" aria-labelledby="super-group-${cat.id ?? 'none'}"><header class="super-group-head"><h4 id="super-group-${cat.id ?? 'none'}">${escapeHtml(cat.nombre)}</h4><span>${rows.length} producto${rows.length === 1 ? '' : 's'} · ${rows.filter(row => row.a_comprar > 0).length} a comprar</span></header>
+    return `<section class="super-group" data-super-category-id="${cat.id ?? 'none'}" aria-labelledby="super-group-${cat.id ?? 'none'}"><header class="super-group-head"><h4 id="super-group-${cat.id ?? 'none'}">${escapeHtml(cat.nombre)}</h4><span>${rows.length} producto${rows.length === 1 ? '' : 's'} · ${rows.filter(row => row.a_comprar > 0).length} a comprar</span><button type="button" data-super-write class="super-group-add" onclick="addSuperProductToCategory(${cat.id ?? 'null'})" aria-label="Agregar producto en ${escapeHtml(cat.nombre)}">+</button></header>
       <div class="super-group-items">${rows.map(row => {
         const coverage = superCoverage(row);
         const draft = superStockDrafts.get(row.id);
@@ -3411,19 +3413,24 @@ function editSuperCategory(id) {
   if (!requireSuperWrite()) return;
   const row = supermercadoData?.categorias.find(item => item.id === id);
   if (!row) return;
-  document.getElementById('supermercado-admin').open = true;
   document.getElementById('supermercado-category-editor').open = true;
   const form = document.getElementById('supermercado-category-form');
   form.elements.id.value = row.id;
   form.elements.nombre.value = row.nombre;
-  form.elements.orden.value = row.orden;
   form.elements.nombre.focus();
+}
+function addSuperProductToCategory(categoriaId) {
+  if (!requireSuperWrite()) return;
+  document.getElementById('supermercado-product-editor').open = true;
+  const form = document.getElementById('supermercado-product-form');
+  form.reset();
+  form.elements.categoria_id.value = categoriaId === null ? '' : String(categoriaId);
+  form.elements.producto.focus();
 }
 function editSuperProduct(id) {
   if (!requireSuperWrite()) return;
   const row = supermercadoData?.productos.find(item => item.id === id);
   if (!row) return;
-  document.getElementById('supermercado-admin').open = true;
   document.getElementById('supermercado-product-editor').open = true;
   const form = document.getElementById('supermercado-product-form');
   for (const key of ['id', 'producto', 'unidad', 'stock_deseado', 'stock_actual']) form.elements[key].value = row[key];
@@ -3837,8 +3844,17 @@ document.getElementById('supermercado-category-form')?.addEventListener('submit'
   if (!form.reportValidity()) return;
   const id = form.elements.id.value;
   const nombre = form.elements.nombre.value.trim();
-  const orden = Number(form.elements.orden.value);
-  if (!nombre || !/^\d+$/.test(form.elements.orden.value) || orden > 1000000) { superStatus('Revisá nombre y orden.', true); return; }
+  if (!nombre) { superStatus('Ingresá un nombre de categoría.', true); return; }
+  // Mejora Juan 2026-11-05 (#3 lista de mejoras): "orden" dejó de ser un
+  // campo que el usuario completa -- el orden de VISUALIZACIÓN siempre es
+  // alfabético (ver groups/categoriesMarkup en renderSupermercadoList).
+  // El backend todavía exige la columna NOT NULL (supermercado.py), así
+  // que se autocompleta sin mostrarla: en alta, siguiente entero disponible;
+  // en edición, se conserva el valor existente sin pedirlo de nuevo.
+  const existentes = (supermercadoData?.categorias || []).map(cat => cat.orden);
+  const orden = id
+    ? supermercadoData?.categorias.find(cat => cat.id === Number(id))?.orden ?? 0
+    : (existentes.length ? Math.max(...existentes) + 1 : 0);
   if (await superMutate(id ? 'PATCH' : 'POST', `/api/supermercado/categorias${id ? '/' + id : ''}`,
     { nombre, orden }, 'Categoría guardada.')) form.reset();
 });

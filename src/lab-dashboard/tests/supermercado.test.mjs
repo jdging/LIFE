@@ -336,7 +336,7 @@ test('product delete uses the read version and form edit keeps optimistic versio
   context.superMutate = async (...args) => { writes.push(args); return true; };
   vm.runInContext('editSuperProduct(7)', context);
   assert.equal(form.dataset.version, '3');
-  assert.equal(element('supermercado-admin').open, true);
+  assert.equal(element('supermercado-product-editor').open, true);
   await vm.runInContext('deleteSuperProduct(7)', context);
   assert.equal(writes[0][2].expected_version, 3);
   assert.match(superScript, /payload\.expected_version = Number\(form\.dataset\.version\)/);
@@ -370,4 +370,59 @@ test('F4 proxy rejects unauthenticated and cross-origin writes, malformed and ov
     globalThis.fetch = originalFetch;
     for (const name of names) old[name] === undefined ? delete process.env[name] : process.env[name] = old[name];
   }
+});
+
+// Ampliación 2026-11-05 (mejora #3 de Juan): sacar la carga manual de
+// "orden" y mostrar siempre alfabético; botón "+" inline por categoría.
+function renderHarness(snapshot) {
+  const elements = new Map();
+  const element = id => {
+    if (!elements.has(id)) elements.set(id, { textContent: '', innerHTML: '', value: '', hidden: false, dataset: {},
+      classList: { toggle() {} }, addEventListener() {}, focus() {}, open: false });
+    return elements.get(id);
+  };
+  element('supermercado-search'); // value '' por defecto
+  const context = vm.createContext({ document: { getElementById: element, querySelectorAll: () => [] },
+    Intl, Number, Error, confirm: () => true, escapeHtml: String,
+    fetchJSON: async () => snapshot, fetch: async () => { throw new Error('unexpected fetch'); } });
+  vm.runInContext(superScript, context);
+  vm.runInContext(`supermercadoData = ${JSON.stringify(snapshot)}; supermercadoWriteAvailable = true`, context);
+  vm.runInContext('renderSupermercadoList()', context);
+  return { context, element };
+}
+
+test('las categorías se listan y se agrupan siempre en orden alfabético, no por "orden" guardado', () => {
+  const snapshot = {
+    categorias: [{ id: 1, nombre: 'Zapatillas', orden: 0 }, { id: 2, nombre: 'Almacén', orden: 5 }, { id: 3, nombre: 'Limpieza', orden: 1 }],
+    productos: [
+      { id: 10, producto: 'Fideos', unidad: 'kg', stock_actual: 1, stock_deseado: 2, categoria_id: 2, estado: 'OK', a_comprar: 0, version: 1 },
+      { id: 11, producto: 'Lavandina', unidad: 'L', stock_actual: 1, stock_deseado: 1, categoria_id: 3, estado: 'OK', a_comprar: 0, version: 1 },
+      { id: 12, producto: 'Zapatillas de running', unidad: 'u', stock_actual: 1, stock_deseado: 1, categoria_id: 1, estado: 'OK', a_comprar: 0, version: 1 },
+    ],
+    resumen: { global: { productos: 3, a_reponer: 0, vacios: 0, reponer: 0, ok: 3, porcentaje_vacio: 0, porcentaje_lleno: 100 },
+      categorias: [{ id: 1, nombre: 'Zapatillas', productos: 1 }, { id: 2, nombre: 'Almacén', productos: 1 }, { id: 3, nombre: 'Limpieza', productos: 1 }, { id: null, nombre: 'Sin categoría', productos: 0 }] } };
+  const { element } = renderHarness(snapshot);
+  const groupOrder = [...element('supermercado-content').innerHTML.matchAll(/<h4[^>]*>([^<]+)<\/h4>/g)].map(m => m[1]);
+  assert.deepEqual(groupOrder, ['Almacén', 'Limpieza', 'Zapatillas'], 'grupos del listado en orden alfabético, ignorando orden=0/5/1');
+  const adminOrder = [...element('supermercado-categories').innerHTML.matchAll(/<span>([^<]+)<\/span>/g)].map(m => m[1]);
+  assert.deepEqual(adminOrder, ['Almacén', 'Limpieza', 'Zapatillas'], 'lista de categorías del panel de alta también alfabética');
+  assert.doesNotMatch(element('supermercado-categories').innerHTML, /orden/i, 'ya no se muestra el número de orden al usuario');
+  const selectOrder = [...element('supermercado-category-select').innerHTML.matchAll(/<option value="\d+">([^<]+)<\/option>/g)].map(m => m[1]);
+  assert.deepEqual(selectOrder, ['Almacén', 'Limpieza', 'Zapatillas']);
+});
+
+test('cada grupo de categoría tiene un botón "+" que abre el alta de producto con la categoría ya elegida', () => {
+  const snapshot = {
+    categorias: [{ id: 2, nombre: 'Almacén', orden: 0 }],
+    productos: [{ id: 10, producto: 'Fideos', unidad: 'kg', stock_actual: 1, stock_deseado: 2, categoria_id: 2, estado: 'OK', a_comprar: 0, version: 1 }],
+    resumen: { global: { productos: 1, a_reponer: 1, vacios: 0, reponer: 1, ok: 0, porcentaje_vacio: 0, porcentaje_lleno: 100 },
+      categorias: [{ id: 2, nombre: 'Almacén', productos: 1 }, { id: null, nombre: 'Sin categoría', productos: 0 }] } };
+  const { context, element } = renderHarness(snapshot);
+  assert.match(element('supermercado-content').innerHTML, /addSuperProductToCategory\(2\)/);
+  const form = element('supermercado-product-form');
+  form.elements = { categoria_id: { value: '' }, producto: { focus() {} } };
+  form.reset = () => {};
+  vm.runInContext('addSuperProductToCategory(2)', context);
+  assert.equal(element('supermercado-product-editor').open, true);
+  assert.equal(form.elements.categoria_id.value, '2', 'la categoría queda preseleccionada al tocar el + del grupo');
 });
