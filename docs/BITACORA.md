@@ -1,5 +1,40 @@
 # Bitácora del Proyecto
 
+### [2026-11-05] - Pase a producción real (main + backend) y aclaración "fondo"
+**Pedido de Juan:** no veía cambios en https://life-jdg7.vercel.app/ — todo
+el trabajo de hoy estaba en `lab/reinvencion`, nunca había llegado a `main`
+ni al backend real. Autorización explícita en el momento: "hacé lo
+necesario con Vercel y GitHub para levantar lo último, tenés acceso
+completo a ambos". También aclaró que "los gastos del fondo" (mejora
+pendiente) se refiere al fondo/abajo de la pantalla de Gastos, no a
+Inversiones/FCI — era la hipótesis A del CPO, descartada.
+**GitHub:** merge de `lab/reinvencion` a `main` (`310a2d0`, sin conflictos,
+sólo divergía en un commit de docs); 76/76 Node + 680/680 Python corridos
+sobre `main` antes de pushear. `git push origin main:main`.
+**Vercel:** nuevo deployment de Production autodisparado por el push
+(`life-noxjqfe19-jdg7.vercel.app`, build desde `main` vía
+`life-git-main-jdg7.vercel.app`). El alias `life-jdg7.vercel.app` estaba
+pineado a un deployment de 3 días — re-aliaseado al nuevo. Se agregó el
+dominio al proyecto (`vercel domains add`) para que siga automáticamente
+los próximos pushes a `main` sin tener que re-aliasear a mano cada vez.
+**Backend real (`life-api.service`, puerto 8765):** backup previo en
+`/home/ai-os/hermes/backups/life-api-deploy-20261105T125526Z/` (api.py,
+db.py, validaciones.py + copia de `lasso.sqlite`). Se copiaron los 3
+archivos actualizados desde `main` (NO se tocó `supermercado.py` ni
+`models.py`: tienen una diferencia de 80 líneas contra git de un parche
+sin commitear de la ronda F4, fuera de alcance de hoy). Reinicio del
+servicio: ~1 segundo de caída. Verificado post-deploy: `/api/health` OK,
+`/api/tarjeta-vencimientos` nuevo responde, `/api/expenses` y `/api/fixed`
+sin cambios (mismo tamaño de respuesta que antes del reinicio). DB real
+intacta: 244 gastos, 48 gastos_fijos (43 con `medio_pago` ya seteado de
+antes), tabla `tarjeta_vencimientos` nueva creada vacía.
+**Siguiente:** segunda consulta CPO en curso (`proc_63d4be190c57`) para la
+mejora #4 de la lista ordenada, ahora apuntada correctamente a la tabla
+"Detalle de gastos" (`#tabla-gastos`) al final de la pestaña Gastos — esa
+tabla YA tiene filtro de persona/categoría y columnas ordenables por click;
+falta precisar qué le falta exactamente (fecha/medio de pago, visibilidad
+del orden) antes de tocar código.
+
 ### [2026-11-05] - Mejora #5 Juan: vencimientos de tarjeta y crédito por ciclo
 **Objetivo:** quinto ítem de la lista ordenada (vencimientos de tarjeta, una
 sola tarjeta en uso).
