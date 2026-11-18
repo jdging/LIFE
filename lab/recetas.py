@@ -3,6 +3,7 @@
 import math
 
 SECTIONS = {"titulo", "ingredientes", "pasos"}
+EDIT_FIELDS = SECTIONS | {"porciones"}
 
 
 def _text(value, limit):
@@ -11,18 +12,24 @@ def _text(value, limit):
 
 
 def validate(data, *, create):
-    allowed = SECTIONS | ({"clave_ingesta", "allow_duplicado"} if create else {"version"})
-    if set(data) - allowed:
-        raise ValueError("campos de receta desconocidos.")
-    if create and not SECTIONS <= data.keys():
-        raise ValueError("se requieren titulo, ingredientes y pasos.")
     if not create:
         version = data.get("version")
         if type(version) is not int or not 1 <= version <= 2**63 - 1:
             raise ValueError("se requiere una versión válida.")
-        if not SECTIONS.intersection(data):
-            raise ValueError("se requiere al menos una sección para editar.")
+        if "activa" in data:
+            if set(data) != {"version", "activa"} or type(data["activa"]) is not bool:
+                raise ValueError("para archivar o restaurar, enviá solo versión y activa (booleano).")
+            return dict(data)
+    allowed = EDIT_FIELDS | ({"clave_ingesta", "allow_duplicado"} if create else {"version"})
+    if set(data) - allowed:
+        raise ValueError("campos de receta desconocidos.")
+    if create and not SECTIONS <= data.keys():
+        raise ValueError("se requieren titulo, ingredientes y pasos.")
+    if not create and not EDIT_FIELDS.intersection(data):
+        raise ValueError("se requiere al menos una sección para editar.")
     result = dict(data)
+    if "porciones" in data and (type(data["porciones"]) is not int or not 1 <= data["porciones"] <= 9999):
+        raise ValueError("porciones debe ser un entero entre 1 y 9999.")
     if "titulo" in data:
         if not _text(data["titulo"], 200):
             raise ValueError("titulo inválido.")

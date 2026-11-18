@@ -347,6 +347,7 @@ class _App:
         ("DELETE", re.compile(r"^/api/income/(?P<id>\d+)$"), "delete_income"),
         ("GET", re.compile(r"^/api/recetas$"), "list_recetas"),
         ("POST", re.compile(r"^/api/recetas$"), "create_receta"),
+        ("GET", re.compile(r"^/api/recetas/archivadas$"), "list_recetas_archivadas"),
         ("GET", re.compile(r"^/api/recetas/(?P<id>[0-9]+)$"), "get_receta"),
         ("PATCH", re.compile(r"^/api/recetas/(?P<id>[0-9]+)$"), "update_receta"),
         ("GET", re.compile(r"^/api/inventory$"), "list_inventory"),
@@ -856,6 +857,9 @@ class _App:
     def list_recetas(self, ctx, conn, start_response):
         return self._json(start_response, 200, {"recetas": db.get_recetas_publicas(conn)})
 
+    def list_recetas_archivadas(self, ctx, conn, start_response):
+        return self._json(start_response, 200, {"recetas": db.get_recetas_archivadas(conn)})
+
     def get_receta(self, ctx, conn, start_response):
         rows = db.get_recetas_publicas(conn, int(ctx.path_params["id"]))
         if not rows:
@@ -886,7 +890,11 @@ class _App:
             return err
         try:
             data = recetas.validate(data, create=False)
-            recipe = db.update_public_recipe(conn, int(ctx.path_params["id"]), data)
+            recipe_id = int(ctx.path_params["id"])
+            if "activa" in data:
+                recipe = db.set_public_recipe_active(conn, recipe_id, data["version"], data["activa"])
+            else:
+                recipe = db.update_public_recipe(conn, recipe_id, data)
         except ValueError as exc:
             return self._error(start_response, 400, str(exc))
         except db.StaleRecipeError:

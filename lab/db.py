@@ -1462,6 +1462,16 @@ def clear_estado(conn: sqlite3.Connection, chat_id: str, usuario: Optional[str] 
 # --- Recetas -----------------------------------------------------------
 
 
+def get_recetas_archivadas(conn: sqlite3.Connection) -> list:
+    rows = conn.execute("""
+        SELECT id, nombre AS titulo, version, porciones
+        FROM recetas
+        WHERE activa = 0 AND es_real = 1
+        ORDER BY nombre COLLATE NOCASE, id
+    """)
+    return [dict(row) for row in rows]
+
+
 def get_recetas_publicas(conn: sqlite3.Connection, receta_id: Optional[int] = None) -> list:
     # A single statement keeps recipe and children on the same snapshot.
     rows = conn.execute("""
@@ -1518,15 +1528,34 @@ def create_public_recipe(conn, data):
             if any(_recipe_title_key(row["nombre"]) == normalized for row in titles):
                 raise DuplicateRecipeError
         recipe_id = conn.execute("""
-            INSERT INTO recetas (nombre, pasos, es_real, clave_ingesta)
-            VALUES (?, ?, 1, ?)
-        """, (data["titulo"], json.dumps(data["pasos"]), key)).lastrowid
+            INSERT INTO recetas (nombre, pasos, es_real, clave_ingesta, porciones)
+            VALUES (?, ?, 1, ?, ?)
+        """, (data["titulo"], json.dumps(data["pasos"]), key, data.get("porciones", 1))).lastrowid
         _replace_recipe_ingredients(conn, recipe_id, data["ingredientes"])
         return True, get_recetas_publicas(conn, recipe_id)[0]
 
 
 class StaleRecipeError(Exception):
     pass
+
+
+def set_public_recipe_active(conn, recipe_id, version, active):
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT activa, version FROM recetas WHERE id = ? AND es_real = 1",
+                           (recipe_id,)).fetchone()
+        if row is None:
+            return None
+        current_version = row["version"]
+        same_state = row["activa"] == active
+        # A retry after a lost response can acknowledge the already-applied state.
+        if current_version != version and not (same_state and current_version == version + 1):
+            raise StaleRecipeError
+        if not same_state:
+            conn.execute("UPDATE recetas SET activa = ?, version = version + 1 WHERE id = ?",
+                         (active, recipe_id))
+            current_version += 1
+        return {"id": recipe_id, "version": current_version, "activa": active}
 
 
 def update_public_recipe(conn, recipe_id, data):
@@ -1543,9 +1572,10 @@ def update_public_recipe(conn, recipe_id, data):
                 raise ValueError(f"{section} no puede quedar vacío.")
         conn.execute("""
             UPDATE recetas SET nombre = COALESCE(?, nombre),
-                pasos = COALESCE(?, pasos), version = version + 1
+                pasos = COALESCE(?, pasos), porciones = COALESCE(?, porciones), version = version + 1
             WHERE id = ?
-        """, (data.get("titulo"), json.dumps(data["pasos"]) if "pasos" in data else None, recipe_id))
+        """, (data.get("titulo"), json.dumps(data["pasos"]) if "pasos" in data else None,
+              data.get("porciones"), recipe_id))
         if "ingredientes" in data and data["ingredientes"] != original["ingredientes"]:
             _replace_recipe_ingredients(conn, recipe_id, data["ingredientes"])
         return get_recetas_publicas(conn, recipe_id)[0]

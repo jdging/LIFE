@@ -922,6 +922,7 @@ button.card:active {
 
 .recetas-grid {
   display: grid;
+  align-items: start;
   grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
   gap: 16px;
 }
@@ -934,16 +935,21 @@ button.card:active {
   box-shadow: var(--shadow);
 }
 
-.receta-card h3 {
+.receta-card summary {
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.receta-title {
   font-size: 16px;
-  font-style: italic;
-  margin-bottom: 6px;
+  font-weight: 600;
 }
 
 .receta-meta {
+  display: block;
+  padding-inline-start: 17px;
   color: var(--ink-soft);
   font-size: 12px;
-  margin-bottom: 8px;
 }
 
 .receta-ingredientes {
@@ -974,7 +980,13 @@ button.card:active {
 .receta-pasos { padding-inline-start: 22px; font-size: 13px; }
 .receta-pasos li, .receta-notas { white-space: pre-wrap; }
 #view-recetas .section-header { flex-wrap: wrap; }
-#view-recetas button[hidden], #recetas-notice:empty, #receta-feedback:empty { display: none; }
+#view-recetas button[hidden], #recetas-notice:empty, #receta-feedback:empty, #receta-action-status:empty { display: none; }
+.receta-action-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.receta-action-bar:has(#receta-action-status:not(:empty)) { margin-bottom: 10px; }
+.receta-delete { color: var(--danger); }
+.recetas-archived-panel { margin-bottom: 16px; }
+.recetas-archived-list { list-style: none; padding: 0; }
+.recetas-archived-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-block: 4px; }
 .receta-dialog {
   width: min(700px, calc(100% - 24px));
   max-height: 90vh;

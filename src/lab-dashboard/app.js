@@ -4003,9 +4003,32 @@ const RECETAS_PATH = '/api/recetas';
 let recetasMode = 'idle';
 let recetaDraft = null;
 let recetaBusy = false;
+let recetaActionBusy = false;
+let recetaAction = null;
+let recetaUndo = null;
+let recetasArchiveOpen = false;
+let recetasArchiveRows = null;
+let recetasArchiveError = '';
+let recetasArchiveRequest = 0;
+const expandedRecetas = new Set();
+const archivedRecetas = new Map();
+
+function setRecetaExpanded(card) {
+  if (card.isConnected === false) return;
+  if (card.open) expandedRecetas.add(card.dataset.key);
+  else expandedRecetas.delete(card.dataset.key);
+}
+
+async function fetchRecetasList() {
+  const rows = requireList(await fetchJSON(RECETAS_PATH), 'recetas').map((row) => ({ ...row, id: canonicalId(row.id) }));
+  for (const row of rows) {
+    if (row.version > archivedRecetas.get(row.id)) archivedRecetas.delete(row.id);
+  }
+  return rows;
+}
 
 async function ensureRecetasLoaded(force = false) {
-  if (recetasMode === 'loading') return;
+  if (recetasMode === 'loading' || recetaActionBusy) return;
   if (!force && recetasMode === 'live') { renderRecetasList(); return; }
   recetasMode = 'loading';
   DATA.recetas = null;
@@ -4013,8 +4036,7 @@ async function ensureRecetasLoaded(force = false) {
   document.getElementById('recetas-content').textContent = 'Cargando…';
   renderRecetasList();
   try {
-    DATA.recetas = requireList(await fetchJSON(RECETAS_PATH), 'recetas')
-      .map((row) => ({ ...row, id: canonicalId(row.id) }));
+    DATA.recetas = await fetchRecetasList();
     recetasMode = 'live';
     document.getElementById('receta-feedback').textContent = '';
   } catch (error) {
@@ -4022,9 +4044,13 @@ async function ensureRecetasLoaded(force = false) {
     if (error.status !== 401 && error.status !== 403) {
       try {
         const snapshot = await fetchJSON('data/recetas.json');
-        DATA.recetas = requireList({ recetas: snapshot }, 'recetas').map((row) => ({
-          ...row, titulo: row.nombre, ingredientes: (row.ingredientes || []).map((ing) => ({ ...ing, nombre: ing.ingrediente_nombre })),
-        }));
+        DATA.recetas = requireList({ recetas: snapshot }, 'recetas')
+          .map((row, index) => ({
+            ...row, snapshotKey: `snapshot:${row.id ?? index}:${row.nombre}`, titulo: row.nombre,
+            ingredientes: (row.ingredientes || []).map((ing) => ({ ...ing, nombre: ing.ingrediente_nombre })),
+          }))
+          .filter((row) => !archivedRecetas.has(String(row.id)) &&
+            !(recetaAction?.activa === false && recetaAction.id === String(row.id)));
         recetasMode = 'snapshot';
       } catch { /* No readable snapshot. */ }
     }
@@ -4034,6 +4060,7 @@ async function ensureRecetasLoaded(force = false) {
     }
   }
   renderRecetasList();
+  await loadRecetasArchive();
 }
 
 function renderRecetasList() {
@@ -4043,9 +4070,17 @@ function renderRecetasList() {
   document.getElementById('recetas-new').hidden = !editable;
   const refresh = document.getElementById('recetas-retry');
   refresh.hidden = !editable && !['snapshot', 'unavailable'].includes(recetasMode);
+  refresh.disabled = recetaActionBusy;
   refresh.textContent = editable ? 'Actualizar' : 'Reintentar conexión';
   document.getElementById('recetas-notice').textContent = recetasMode === 'snapshot'
     ? 'Copia de solo lectura. No se pudo conectar con el recetario en vivo.' : '';
+  const action = recetaElement('action');
+  action.hidden = !editable || !(recetaAction || recetaUndo);
+  action.disabled = recetaActionBusy;
+  action.textContent = recetaAction ? (recetaAction.accepted ? 'Verificar' : 'Reintentar') : 'Deshacer';
+  const actionTarget = recetaAction || recetaUndo;
+  action.setAttribute('aria-label', actionTarget ? `${action.textContent}: ${actionTarget.titulo}` : action.textContent);
+  renderRecetasArchive();
   if (DATA.recetasError) {
     content.innerHTML = `<div class="empty-state">${escapeHtml(DATA.recetasError)}</div>`;
     return;
@@ -4064,10 +4099,12 @@ function renderRecetasList() {
     return;
   }
 
-  content.innerHTML = `<div class="recetas-grid">${recetas.map((r) => `
-    <article class="receta-card">
-      <h3>${escapeHtml(r.titulo)}</h3>
-      <div class="receta-meta">${[r.porciones && `${escapeHtml(r.porciones)} porciones`, r.tiempo_preparacion_min && `${escapeHtml(r.tiempo_preparacion_min)} min`].filter(Boolean).join(' · ')}</div>
+  content.innerHTML = `<div class="recetas-grid">${recetas.map((r) => {
+    const key = editable ? r.id : r.snapshotKey;
+    return `
+    <details class="receta-card" data-key="${escapeHtml(key)}" ontoggle="setRecetaExpanded(this)"${expandedRecetas.has(key) ? ' open' : ''}>
+      <summary><span class="receta-title">${escapeHtml(r.titulo)}</span>
+        <span class="receta-meta">${[r.porciones ? `${escapeHtml(r.porciones)} ${r.porciones === 1 ? 'porción' : 'porciones'}` : 'Sin porciones indicadas', r.tiempo_preparacion_min && `${escapeHtml(r.tiempo_preparacion_min)} min`].filter(Boolean).join(' · ')}</span></summary>
       <h4>Ingredientes</h4>
       <ol class="receta-ingredientes">
         ${(r.ingredientes || []).map((ing) => `<li>${[ing.cantidad, ing.unidad, ing.nombre].filter((value) => value != null && value !== '').map(escapeHtml).join(' ')}</li>`).join('') || '<li class="td-muted">Sin ingredientes cargados.</li>'}
@@ -4076,11 +4113,165 @@ function renderRecetasList() {
       ${r.pasos?.length ? `<ol class="receta-pasos">${r.pasos.map((paso) => `<li>${escapeHtml(paso)}</li>`).join('')}</ol>` : '<p class="td-muted">Sin pasos cargados.</p>'}
       ${r.notas ? `<h4>Notas</h4><div class="receta-notas">${escapeHtml(r.notas)}</div>` : ''}
       ${editable ? `<button type="button" class="fijos-secondary" data-id="${escapeHtml(r.id)}" onclick="openRecetaEditor(this.dataset.id)">Editar</button>` : ''}
-    </article>`).join('')}</div>`;
+      ${editable ? `<button type="button" class="fijos-secondary receta-delete" data-id="${escapeHtml(r.id)}" onclick="deleteReceta(this.dataset.id)"${recetaAction ? ' disabled' : ''}>Borrar</button>` : ''}
+    </details>`;
+  }).join('')}</div>`;
 }
 
 const recetaElement = (name) => document.getElementById(`receta-${name}`);
 const recetaField = (row, name) => row.querySelector(`[name="${name}"]`);
+
+function renderRecetasArchive() {
+  const live = recetasMode === 'live';
+  const open = live && recetasArchiveOpen;
+  const toggle = document.getElementById('recetas-archived-toggle');
+  toggle.hidden = !live;
+  toggle.disabled = recetaActionBusy;
+  toggle.setAttribute('aria-expanded', String(open));
+  document.getElementById('recetas-archived-panel').hidden = !open;
+  if (!open) return;
+  document.getElementById('recetas-archived-retry').hidden = !recetasArchiveError;
+  document.getElementById('recetas-archived-status').textContent = recetasArchiveError ||
+    (recetasArchiveRows === null ? 'Cargando archivadas…' : recetasArchiveRows.length ? '' : 'No hay recetas archivadas.');
+  document.getElementById('recetas-archived-content').innerHTML = (recetasArchiveRows || []).map(({ id, titulo }) => `
+    <li><span>${escapeHtml(titulo)}</span>
+      <button type="button" class="fijos-secondary" data-id="${escapeHtml(id)}" aria-label="Restaurar: ${escapeHtml(titulo)}"
+        onclick="restoreArchivedReceta(this.dataset.id)"${recetaAction ? ' disabled' : ''}>Restaurar</button>
+    </li>`).join('');
+}
+
+async function toggleRecetasArchive() {
+  if (recetasMode !== 'live' || recetaActionBusy) return;
+  recetasArchiveOpen = !recetasArchiveOpen;
+  if (recetasArchiveOpen) await loadRecetasArchive();
+  else {
+    recetasArchiveRequest++;
+    renderRecetasArchive();
+  }
+}
+
+async function loadRecetasArchive() {
+  if (!recetasArchiveOpen || recetasMode !== 'live' || recetaActionBusy) return;
+  const request = ++recetasArchiveRequest;
+  recetasArchiveRows = null;
+  recetasArchiveError = '';
+  renderRecetasArchive();
+  try {
+    const rows = requireList(await fetchJSON(`${RECETAS_PATH}/archivadas`), 'recetas')
+      .map((row) => ({ ...row, id: canonicalId(row.id) }));
+    if (request !== recetasArchiveRequest) return;
+    recetasArchiveRows = rows;
+  } catch (error) {
+    if (request !== recetasArchiveRequest) return;
+    recetasArchiveError = error.status === 401 ? 'Volvé a iniciar sesión para ver las archivadas.'
+      : error.status === 403 ? 'La sesión no tiene permiso para ver las archivadas.'
+      : 'No se pudieron cargar las recetas archivadas.';
+  }
+  renderRecetasArchive();
+}
+
+async function restoreArchivedReceta(id) {
+  if (recetasMode !== 'live' || !recetasArchiveOpen || recetaAction || recetaActionBusy || recetaBusy || recetaElement('dialog').open) return;
+  const recipe = recetasArchiveRows?.find((row) => row.id === id);
+  if (!recipe || !Number.isSafeInteger(recipe.version) || recipe.version < 1) return;
+  recetaAction = { id, version: recipe.version, titulo: recipe.titulo, activa: true };
+  await applyRecetaAction();
+}
+
+async function deleteReceta(id) {
+  if (recetasMode !== 'live' || recetaAction || recetaActionBusy || recetaBusy || recetaElement('dialog').open) return;
+  const recipe = DATA.recetas.find((row) => row.id === id);
+  if (!recipe || !Number.isSafeInteger(recipe.version) || recipe.version < 1) return;
+  if (!window.confirm(`¿Borrar «${recipe.titulo}» del recetario? Podés restaurarla desde Archivadas.`)) return;
+  recetaAction = { id, version: recipe.version, titulo: recipe.titulo, activa: false };
+  await applyRecetaAction();
+}
+
+async function retryRecetaAction() {
+  if (recetasMode !== 'live' || recetaActionBusy || recetaBusy || recetaElement('dialog').open) return;
+  if (!recetaAction && recetaUndo) {
+    recetaAction = { ...recetaUndo, activa: true };
+    recetaUndo = null;
+  }
+  if (recetaAction) await applyRecetaAction();
+}
+
+async function applyRecetaAction() {
+  const action = recetaAction;
+  const { id, version, titulo, activa } = action;
+  const status = recetaElement('action-status');
+  let refreshList = false;
+  recetaActionBusy = true;
+  status.textContent = action.accepted ? 'Verificando…' : activa ? 'Restaurando…' : 'Borrando…';
+  renderRecetasList();
+  try {
+    if (!action.accepted) {
+      const response = await fetch(`${RECETAS_PATH}/${id}`, {
+        method: 'PATCH', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version, activa }),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        if ((response.status === 409 && error?.code === 'version_desactualizada') || response.status === 404) {
+          recetaAction = null;
+          refreshList = true;
+          status.textContent = 'La receta cambió o ya no está disponible. Revisá la lista actualizada.';
+          return;
+        }
+        if ([400, 401, 403, 405, 413, 415, 422].includes(response.status)) {
+          recetaAction = null;
+          status.textContent = response.status === 401 ? 'La sesión venció. Volvé a iniciar sesión.'
+            : response.status === 403 ? 'La sesión no tiene permiso para realizar esta acción.'
+            : 'El recetario rechazó la acción. Actualizá la lista antes de volver a intentarla.';
+          return;
+        }
+        throw new Error('No se confirmó la escritura');
+      }
+      const returned = await response.json();
+      if (canonicalId(returned?.id) !== id || returned.activa !== activa || returned.version !== version + 1 ||
+          !Number.isSafeInteger(returned.version)) throw new Error('Respuesta inválida');
+      action.accepted = returned.version;
+      if (!activa) archivedRecetas.set(id, returned.version);
+    }
+
+    const rows = await fetchRecetasList();
+    const row = rows.find((item) => item.id === id);
+    const matches = activa ? Number.isSafeInteger(row?.version) && row.version >= action.accepted : !row;
+    if (!matches) {
+      let laterVersion = row?.version;
+      if (activa && !row) {
+        const archived = requireList(await fetchJSON(`${RECETAS_PATH}/archivadas`), 'recetas');
+        laterVersion = archived.find((item) => canonicalId(item.id) === id)?.version;
+      }
+      if (!Number.isSafeInteger(laterVersion) || laterVersion <= action.accepted) {
+        throw new Error('La lista todavía no refleja el cambio');
+      }
+      if (recetaUndo?.id === id) recetaUndo = null;
+      status.textContent = 'La receta volvió a cambiar. Revisá la lista actualizada.';
+    } else {
+      if (!activa) recetaUndo = { id, titulo, version: action.accepted };
+      else if (recetaUndo?.id === id) recetaUndo = null;
+      status.textContent = activa ? `Receta restaurada: ${titulo}.` : `Receta borrada: ${titulo}. Podés restaurarla desde Archivadas.`;
+    }
+    DATA.recetas = rows;
+    recetaAction = null;
+  } catch {
+    status.textContent = action.accepted
+      ? 'No se pudo verificar el cambio en la lista. Volvé a verificar sin reenviar la acción.'
+      : 'No se pudo confirmar la acción. Podés reintentar sin cambiar la versión.';
+  } finally {
+    recetaActionBusy = false;
+    if (refreshList) await ensureRecetasLoaded(true);
+    else {
+      renderRecetasList();
+      if (!recetaAction) await loadRecetasArchive();
+    }
+    const button = recetaElement('action');
+    if (currentView === 'recetas' && [document.body, button].includes(document.activeElement)) {
+      (button.hidden ? document.getElementById('recetas-search') : button).focus();
+    }
+  }
+}
 
 function addRecetaRow(section, value, focus = false) {
   const list = recetaElement(section);
@@ -4097,12 +4288,13 @@ function addRecetaRow(section, value, focus = false) {
 
 async function openRecetaEditor(id = null) {
   const dialog = recetaElement('dialog');
-  if (recetasMode !== 'live' || recetaBusy || dialog.open) return;
+  if (recetasMode !== 'live' || recetaBusy || recetaActionBusy || dialog.open) return;
   recetaDraft = null;
   recetaElement('feedback').textContent = '';
   recetaElement('editor-title').textContent = id == null ? 'Nueva receta' : 'Editar receta';
   recetaElement('error').textContent = '';
   recetaElement('titulo').value = '';
+  recetaElement('porciones').value = '1';
   for (const section of ['ingredientes', 'pasos']) recetaElement(section).replaceChildren();
   recetaElement('save').disabled = true;
   recetaElement('save').textContent = 'Guardar receta';
@@ -4120,6 +4312,7 @@ async function openRecetaEditor(id = null) {
       }
     }
     recetaElement('titulo').value = recipe?.titulo ?? '';
+    recetaElement('porciones').value = String(recipe?.porciones ?? 1);
     for (const section of ['ingredientes', 'pasos']) {
       const values = recipe?.[section] ?? [undefined];
       for (const value of values) addRecetaRow(section, value);
@@ -4140,6 +4333,10 @@ async function openRecetaEditor(id = null) {
 function collectReceta() {
   const titulo = recetaElement('titulo').value.trim();
   if (!titulo || titulo.length > 200) throw new Error('Escribí un título de hasta 200 caracteres.');
+  const porciones = Number(recetaElement('porciones').value);
+  if (!Number.isInteger(porciones) || porciones < 1 || porciones > 9999) {
+    throw new Error('Ingresá un número entero de porciones entre 1 y 9999.');
+  }
   const ingredientes = [...recetaElement('ingredientes').children].map((row, i) => {
     const nombre = recetaField(row, 'nombre').value.trim();
     const unidad = recetaField(row, 'unidad').value.trim();
@@ -4160,7 +4357,7 @@ function collectReceta() {
   if (recetaDraft.id == null && (!ingredientes.length || !pasos.length)) {
     throw new Error('Agregá al menos un ingrediente y un paso de preparación.');
   }
-  return { titulo, ingredientes, pasos };
+  return { titulo, porciones, ingredientes, pasos };
 }
 
 function closeRecetaEditor(event) {
@@ -4172,6 +4369,7 @@ function verifyReceta(recipe, sent, expectedId) {
   const id = canonicalId(recipe?.id);
   if ((expectedId != null && id !== expectedId) ||
       !Number.isSafeInteger(recipe.version) || recipe.version < 1 || recipe.titulo !== sent.titulo ||
+      recipe.porciones !== sent.porciones ||
       !Array.isArray(recipe.ingredientes) || recipe.ingredientes.length !== sent.ingredientes.length ||
       !sent.ingredientes.every((ing, i) => {
         const stored = recipe.ingredientes[i];

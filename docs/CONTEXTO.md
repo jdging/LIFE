@@ -1,5 +1,9 @@
 # Contexto Actual - LIFE
 
+## Recetas v2 — candidato LAB (2026-11-18)
+
+Sobre el commit web de producción `2cbae3a`, `lab/recetas-v2` agrega tarjetas expandibles, porciones editables sin recalcular ingredientes y borrado por archivo con confirmación y Deshacer. Los cambios de estado tienen control de versión y reintento seguro; se mantiene la clave de ingesta. No se cambia el esquema ni se instala Telegram. El acceso del grupo de JD/Pinki con Lasso se trata como piloto separado.
+
 ## Recetas — candidato LAB (2026-11-18)
 
 En `lab/recetas`, Recetas permite crear y editar fichas con título, ingredientes y pasos numerados. La API protegida y SQLite son la fuente de verdad; la copia estática es un respaldo identificado como solo lectura. La migración aditiva conserva recetas, ingredientes, notas y metadatos existentes y no infiere pasos a partir de notas. El adaptador y plugin candidato de Lasso guardan por la misma API, con idempotencia por mensaje y confirmación de duplicados. Ver `lab/hermes/lasso-recetas/README.md` para límites y piloto.

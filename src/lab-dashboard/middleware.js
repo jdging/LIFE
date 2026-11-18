@@ -136,6 +136,7 @@ const PROXY_ROUTES = [
   { pattern: /^\/api\/supermercado\/productos\/[1-9]\d*$/, methods: ['PATCH', 'DELETE'], query: {} },
   { pattern: /^\/api\/health$/, methods: ['GET'], query: {} },
   { pattern: /^\/api\/recetas$/, methods: ['GET', 'POST'], query: {} },
+  { pattern: /^\/api\/recetas\/archivadas$/, methods: ['GET'], query: {} },
   { pattern: /^\/api\/recetas\/[1-9]\d*$/, methods: ['GET', 'PATCH'], query: {} },
   { pattern: /^\/api\/expenses$/, methods: ['GET', 'POST'], query: { GET: { month: 'month' } } },
   { pattern: /^\/api\/expenses\/[1-9]\d*$/, methods: ['PATCH', 'DELETE'], query: {} },

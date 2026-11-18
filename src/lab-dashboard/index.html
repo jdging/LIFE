@@ -397,9 +397,20 @@
         <input type="search" id="recetas-search" class="search-input" placeholder="Buscar receta…" aria-label="Buscar receta" oninput="renderRecetasList()">
         <button type="button" id="recetas-new" class="btn-print" onclick="openRecetaEditor()" hidden>Nueva receta</button>
         <button type="button" id="recetas-retry" class="fijos-secondary" onclick="ensureRecetasLoaded(true)" hidden>Reintentar conexión</button>
+        <button type="button" id="recetas-archived-toggle" class="fijos-secondary" aria-expanded="false" aria-controls="recetas-archived-panel" onclick="toggleRecetasArchive()" hidden>Archivadas</button>
       </div>
       <p class="form-help" id="recetas-notice" role="status"></p>
       <p class="form-help" id="receta-feedback" role="status"></p>
+      <div class="receta-action-bar">
+        <p class="form-help" id="receta-action-status" role="status"></p>
+        <button type="button" id="receta-action" class="fijos-secondary" onclick="retryRecetaAction()" hidden></button>
+      </div>
+      <section class="panel recetas-archived-panel" id="recetas-archived-panel" aria-labelledby="recetas-archived-title" hidden>
+        <h3 id="recetas-archived-title">Recetas archivadas</h3>
+        <p class="form-help" id="recetas-archived-status" role="status"></p>
+        <ul id="recetas-archived-content" class="recetas-archived-list"></ul>
+        <button type="button" id="recetas-archived-retry" class="fijos-secondary" onclick="loadRecetasArchive()" hidden>Reintentar carga</button>
+      </section>
       <div id="recetas-content">Cargando…</div>
       <dialog id="receta-dialog" class="receta-dialog" aria-labelledby="receta-editor-title" oncancel="closeRecetaEditor(event)">
         <h3 id="receta-editor-title">Receta</h3>
@@ -407,6 +418,7 @@
         <form onsubmit="saveReceta(event)">
           <fieldset id="receta-fields">
             <label class="form-field">Título<input id="receta-titulo" maxlength="200" required></label>
+            <label class="form-field">Porciones<input id="receta-porciones" type="number" min="1" max="9999" step="1" inputmode="numeric" required value="1"></label>
             <h4 id="receta-ingredientes-label">Ingredientes</h4>
             <ol id="receta-ingredientes" aria-labelledby="receta-ingredientes-label"></ol>
             <button type="button" class="fijos-secondary" onclick="addRecetaRow('ingredientes', undefined, true)">Agregar ingrediente</button>
