@@ -27,6 +27,7 @@ from uuid import uuid4
 from wsgiref.simple_server import make_server
 
 import db
+import recetas
 import validaciones
 import supermercado
 
@@ -344,6 +345,10 @@ class _App:
         ("POST", re.compile(r"^/api/income$"), "create_income"),
         ("PATCH", re.compile(r"^/api/income/(?P<id>\d+)$"), "update_income"),
         ("DELETE", re.compile(r"^/api/income/(?P<id>\d+)$"), "delete_income"),
+        ("GET", re.compile(r"^/api/recetas$"), "list_recetas"),
+        ("POST", re.compile(r"^/api/recetas$"), "create_receta"),
+        ("GET", re.compile(r"^/api/recetas/(?P<id>[0-9]+)$"), "get_receta"),
+        ("PATCH", re.compile(r"^/api/recetas/(?P<id>[0-9]+)$"), "update_receta"),
         ("GET", re.compile(r"^/api/inventory$"), "list_inventory"),
         ("POST", re.compile(r"^/api/inventory$"), "create_inventory"),
         ("PATCH", re.compile(r"^/api/inventory/(?P<id>\d+)$"), "update_inventory"),
@@ -847,6 +852,51 @@ class _App:
         except ValueError:
             return self._error(start_response, 409, "no se pudo borrar el ingreso.")
         return self._json(start_response, 200, {"deleted": True, "id": income_id})
+
+    def list_recetas(self, ctx, conn, start_response):
+        return self._json(start_response, 200, {"recetas": db.get_recetas_publicas(conn)})
+
+    def get_receta(self, ctx, conn, start_response):
+        rows = db.get_recetas_publicas(conn, int(ctx.path_params["id"]))
+        if not rows:
+            return self._error(start_response, 404, "receta no encontrada.")
+        return self._json(start_response, 200, rows[0])
+
+    def create_receta(self, ctx, conn, start_response):
+        data, err = self._parse_json(ctx, start_response)
+        if err is not None:
+            return err
+        try:
+            data = recetas.validate(data, create=True)
+        except ValueError as exc:
+            return self._error(start_response, 400, str(exc))
+        try:
+            created, recipe = db.create_public_recipe(conn, data)
+        except db.DuplicateRecipeError:
+            return self._json(start_response, 409, {
+                "error": "ya existe una receta con ese título.", "code": "receta_duplicada",
+            })
+        if recipe is None:
+            return self._error(start_response, 404, "receta no disponible.")
+        return self._json(start_response, 201 if created else 200, recipe)
+
+    def update_receta(self, ctx, conn, start_response):
+        data, err = self._parse_json(ctx, start_response)
+        if err is not None:
+            return err
+        try:
+            data = recetas.validate(data, create=False)
+            recipe = db.update_public_recipe(conn, int(ctx.path_params["id"]), data)
+        except ValueError as exc:
+            return self._error(start_response, 400, str(exc))
+        except db.StaleRecipeError:
+            return self._json(start_response, 409, {
+                "error": "la receta cambió; volvé a cargarla antes de editar.",
+                "code": "version_desactualizada",
+            })
+        if recipe is None:
+            return self._error(start_response, 404, "receta no encontrada.")
+        return self._json(start_response, 200, recipe)
 
     # --- inventory ----------------------------------------------------------
 

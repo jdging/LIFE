@@ -395,8 +395,42 @@
       <div class="section-header">
         <h2 class="section-title">Recetas</h2>
         <input type="search" id="recetas-search" class="search-input" placeholder="Buscar receta…" aria-label="Buscar receta" oninput="renderRecetasList()">
+        <button type="button" id="recetas-new" class="btn-print" onclick="openRecetaEditor()" hidden>Nueva receta</button>
+        <button type="button" id="recetas-retry" class="fijos-secondary" onclick="ensureRecetasLoaded(true)" hidden>Reintentar conexión</button>
       </div>
+      <p class="form-help" id="recetas-notice" role="status"></p>
+      <p class="form-help" id="receta-feedback" role="status"></p>
       <div id="recetas-content">Cargando…</div>
+      <dialog id="receta-dialog" class="receta-dialog" aria-labelledby="receta-editor-title" oncancel="closeRecetaEditor(event)">
+        <h3 id="receta-editor-title">Receta</h3>
+        <p class="field-error" id="receta-error" role="status"></p>
+        <form onsubmit="saveReceta(event)">
+          <fieldset id="receta-fields">
+            <label class="form-field">Título<input id="receta-titulo" maxlength="200" required></label>
+            <h4 id="receta-ingredientes-label">Ingredientes</h4>
+            <ol id="receta-ingredientes" aria-labelledby="receta-ingredientes-label"></ol>
+            <button type="button" class="fijos-secondary" onclick="addRecetaRow('ingredientes', undefined, true)">Agregar ingrediente</button>
+            <h4 id="receta-pasos-label">Pasos de preparación</h4>
+            <ol id="receta-pasos" aria-labelledby="receta-pasos-label"></ol>
+            <button type="button" class="fijos-secondary" onclick="addRecetaRow('pasos', undefined, true)">Agregar paso</button>
+          </fieldset>
+          <div class="receta-actions">
+            <button type="button" class="fijos-secondary" id="receta-cancel" onclick="closeRecetaEditor()">Cerrar</button>
+            <button type="submit" class="btn-print" id="receta-save">Guardar receta</button>
+          </div>
+        </form>
+        <template id="receta-ingredientes-template">
+          <li><div class="receta-ingredient-fields">
+            <label class="form-field">Ingrediente<input name="nombre" maxlength="300" placeholder="Ej.: sal a gusto"></label>
+            <label class="form-field">Cantidad (opcional)<input name="cantidad" type="number" min="0" step="any" max="1000000000000" inputmode="decimal"></label>
+            <label class="form-field">Unidad (opcional)<input name="unidad" maxlength="400" placeholder="Ej.: g"></label>
+          </div><button type="button" class="fijos-secondary" onclick="this.closest('li').remove()">Quitar ingrediente</button></li>
+        </template>
+        <template id="receta-pasos-template">
+          <li><label class="form-field">Instrucción<textarea name="paso" rows="2" maxlength="4000"></textarea></label>
+            <button type="button" class="fijos-secondary" onclick="this.closest('li').remove()">Quitar paso</button></li>
+        </template>
+      </dialog>
     </div><!-- /view-recetas -->
 
     <!-- ── VISTA INVENTARIO ─────────────────────────────────────── -->

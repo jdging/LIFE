@@ -141,6 +141,10 @@ test('every contracted method forwards the exact path and query to the configure
     ['PATCH', '/api/supermercado/productos/1/stock', '{}'],
     ['DELETE', '/api/supermercado/productos/1', '{"expected_version":1}'],
     ['GET', '/api/health'],
+    ['GET', '/api/recetas'],
+    ['GET', '/api/recetas/2'],
+    ['POST', '/api/recetas', '{"titulo":"Sopa"}'],
+    ['PATCH', '/api/recetas/2', '{"version":1,"titulo":"Sopa"}'],
     ['GET', '/api/expenses?month=2026-10'],
     ['POST', '/api/expenses', '{}'],
     ['PATCH', '/api/expenses/1', '{}'],
@@ -205,6 +209,8 @@ test('known paths reject wrong methods with Allow; unknown paths stay 404', asyn
     ['/api/supermercado/productos/1/stock', 'DELETE', 'PATCH'],
     ['/api/supermercado/productos/1', 'POST', 'PATCH, DELETE'],
     ['/api/health', 'POST', 'GET'],
+    ['/api/recetas', 'PATCH', 'GET, POST'],
+    ['/api/recetas/2', 'DELETE', 'GET, PATCH'],
     ['/api/expenses', 'PATCH', 'GET, POST'],
     ['/api/expenses/1', 'GET', 'PATCH, DELETE'],
     ['/api/expenses/1/saldar', 'GET', 'POST'],
@@ -227,6 +233,7 @@ test('known paths reject wrong methods with Allow; unknown paths stay 404', asyn
     '/api/expenses/0', '/api/expenses/1/saldar/x', '/api/expenses/saldar-todas/x', '/api/income/-1', '/api/inventory/0', '/api/inventory/-1',
     '/api/fixed/0/historial', '/api/fixed/1/versions', '/api/fixed/1%2Fhistorial',
     '/api/unknown', '/api',
+    '/api/recetas/0', '/api/recetas/-1', '/api/recetas/2/pasos',
   ];
   let calls = 0;
   await withHarness(async () => {
@@ -253,6 +260,7 @@ test('query whitelist validates names, multiplicity, dates, and method scope', a
     '/api/supermercado/productos/1/historial?cursor=9223372036854775808',
     '/api/supermercado/productos/1/stock?x=1',
     '/api/health?month=2026-10', '/api/expenses?tag=x',
+    '/api/recetas?q=sopa', '/api/recetas/2?version=1',
     '/api/expenses?month=2026-10&month=2026-11', '/api/expenses?month=2026-13',
     '/api/expenses?month=0000-01', '/api/income?month=2026-10',
     '/api/fixed?dateISO=2026-02-30', '/api/fixed/range?fromISO=2026-10-01',

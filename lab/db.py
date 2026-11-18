@@ -62,6 +62,7 @@ import json
 import math
 import re
 import sqlite3
+import unicodedata
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -569,10 +570,14 @@ def _migrar_columnas_recetas(conn: sqlite3.Connection) -> None:
     existentes = _column_names(conn, "recetas")
     columnas_nuevas = (
         ("es_real", "INTEGER NOT NULL DEFAULT 0"),
+        ("version", "INTEGER NOT NULL DEFAULT 1"),
+        ("pasos", "TEXT NOT NULL DEFAULT '[]'"),
+        ("clave_ingesta", "TEXT"),
     )
     for columna, definicion in columnas_nuevas:
         if columna not in existentes:
             conn.execute(f"ALTER TABLE recetas ADD COLUMN {columna} {definicion}")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS recetas_clave_ingesta ON recetas (clave_ingesta)")
     conn.commit()
 
 
@@ -1457,6 +1462,95 @@ def clear_estado(conn: sqlite3.Connection, chat_id: str, usuario: Optional[str] 
 # --- Recetas -----------------------------------------------------------
 
 
+def get_recetas_publicas(conn: sqlite3.Connection, receta_id: Optional[int] = None) -> list:
+    # A single statement keeps recipe and children on the same snapshot.
+    rows = conn.execute("""
+        SELECT r.id, r.nombre AS titulo, r.notas, r.porciones,
+               r.tiempo_preparacion_min, r.version, r.pasos,
+               i.id AS ingrediente_id, i.ingrediente_nombre, i.cantidad, i.unidad
+        FROM recetas AS r LEFT JOIN receta_ingredientes AS i ON i.receta_id = r.id
+        WHERE r.activa = 1 AND r.es_real = 1 AND (? IS NULL OR r.id = ?)
+        ORDER BY r.id, i.id
+    """, (receta_id, receta_id))
+    result = {}
+    for row in rows:
+        if row["id"] not in result:
+            receta = {key: row[key] for key in (
+                "id", "titulo", "notas", "porciones", "tiempo_preparacion_min", "version",
+            )}
+            receta.update(pasos=json.loads(row["pasos"]), ingredientes=[])
+            result[row["id"]] = receta
+        if row["ingrediente_id"] is not None:
+            result[row["id"]]["ingredientes"].append({
+                "nombre": row["ingrediente_nombre"], "cantidad": row["cantidad"], "unidad": row["unidad"],
+            })
+    return list(result.values())
+
+
+def _replace_recipe_ingredients(conn, recipe_id, ingredients):
+    conn.execute("DELETE FROM receta_ingredientes WHERE receta_id = ?", (recipe_id,))
+    conn.executemany("""
+        INSERT INTO receta_ingredientes (receta_id, ingrediente_nombre, cantidad, unidad)
+        VALUES (?, ?, ?, ?)
+    """, ((recipe_id, i["nombre"], i["cantidad"], i["unidad"]) for i in ingredients))
+
+
+class DuplicateRecipeError(Exception):
+    pass
+
+
+def _recipe_title_key(title):
+    return " ".join(unicodedata.normalize("NFKC", title).casefold().split())
+
+
+def create_public_recipe(conn, data):
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        key = data.get("clave_ingesta")
+        if key is not None:
+            existing = conn.execute("SELECT id FROM recetas WHERE clave_ingesta = ?", (key,)).fetchone()
+            if existing is not None:
+                rows = get_recetas_publicas(conn, existing["id"])
+                return False, rows[0] if rows else None
+        if not data.get("allow_duplicado", False):
+            normalized = _recipe_title_key(data["titulo"])
+            titles = conn.execute("SELECT nombre FROM recetas WHERE activa = 1 AND es_real = 1")
+            if any(_recipe_title_key(row["nombre"]) == normalized for row in titles):
+                raise DuplicateRecipeError
+        recipe_id = conn.execute("""
+            INSERT INTO recetas (nombre, pasos, es_real, clave_ingesta)
+            VALUES (?, ?, 1, ?)
+        """, (data["titulo"], json.dumps(data["pasos"]), key)).lastrowid
+        _replace_recipe_ingredients(conn, recipe_id, data["ingredientes"])
+        return True, get_recetas_publicas(conn, recipe_id)[0]
+
+
+class StaleRecipeError(Exception):
+    pass
+
+
+def update_public_recipe(conn, recipe_id, data):
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        rows = get_recetas_publicas(conn, recipe_id)
+        if not rows:
+            return None
+        original = rows[0]
+        if original["version"] != data["version"]:
+            raise StaleRecipeError
+        for section in ("ingredientes", "pasos"):
+            if section in data and not data[section] and original[section]:
+                raise ValueError(f"{section} no puede quedar vacío.")
+        conn.execute("""
+            UPDATE recetas SET nombre = COALESCE(?, nombre),
+                pasos = COALESCE(?, pasos), version = version + 1
+            WHERE id = ?
+        """, (data.get("titulo"), json.dumps(data["pasos"]) if "pasos" in data else None, recipe_id))
+        if "ingredientes" in data and data["ingredientes"] != original["ingredientes"]:
+            _replace_recipe_ingredients(conn, recipe_id, data["ingredientes"])
+        return get_recetas_publicas(conn, recipe_id)[0]
+
+
 def insert_receta(conn: sqlite3.Connection, receta: dict) -> int:
     cursor = conn.execute(
         """
@@ -1476,12 +1570,14 @@ def insert_receta(conn: sqlite3.Connection, receta: dict) -> int:
 
 
 def get_recetas(conn: sqlite3.Connection, activa: Optional[bool] = None) -> list:
+    # Keep the legacy export/inventory shape; ingestion metadata stays private.
+    query = "SELECT id, nombre, porciones, tiempo_preparacion_min, notas, activa, es_real FROM recetas"
     if activa is not None:
         rows = conn.execute(
-            "SELECT * FROM recetas WHERE activa = ? ORDER BY id", (1 if activa else 0,)
+            query + " WHERE activa = ? ORDER BY id", (1 if activa else 0,)
         ).fetchall()
     else:
-        rows = conn.execute("SELECT * FROM recetas ORDER BY id").fetchall()
+        rows = conn.execute(query + " ORDER BY id").fetchall()
     return [dict(row) for row in rows]
 
 

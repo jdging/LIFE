@@ -1,5 +1,11 @@
 # Contexto Actual - LIFE
 
+## Recetas — candidato LAB (2026-11-18)
+
+En `lab/recetas`, Recetas permite crear y editar fichas con título, ingredientes y pasos numerados. La API protegida y SQLite son la fuente de verdad; la copia estática es un respaldo identificado como solo lectura. La migración aditiva conserva recetas, ingredientes, notas y metadatos existentes y no infiere pasos a partir de notas. El adaptador y plugin candidato de Lasso guardan por la misma API, con idempotencia por mensaje y confirmación de duplicados. Ver `lab/hermes/lasso-recetas/README.md` para límites y piloto.
+
+Validado localmente con SQLite efímera, suites Python/Node y Chromium a 390/1280 px: ingesta simulada, reintento sin duplicar, edición persistida tras recargar y alta web. No está desplegado; queda pendiente un DM real en un piloto autorizado, sin segundo poller del bot. No se tocaron `main`, el Lasso activo ni datos o servicios de producción.
+
 ## Crédito por cierres reales — candidato local en lab/reinvencion (2026-11-05)
 
 Completado localmente el cambio en curso de mejora #6: API y SQLite separan `cierre` obligatorio de `vencimiento_pago` opcional. Migración legacy conserva pagos y sus originales sin reinterpretarlos como cierres, deja límites desconocidos hasta confirmación y repara columnas faltantes al repetir init. Onboarding anterior/próximo cierre; cargas históricas posteriores admitidas. El detalle tiene selector propio actual/históricos sin truncamiento por el calendario global, con rango desde el día siguiente al cierre anterior hasta el actual inclusive. Primer ciclo y meses omitidos quedan incompletos; cargos correspondientes visibles en Sin asignar hasta completar límites. Fijos recurrentes sin fecha real de cargo quedan como referencia mensual estimada, separados del total fechado; el detalle explica su diferencia con la tarjeta principal calendario. Escrituras con bloqueo contra doble envío, render/controles desbloqueados al finalizar y lectura posterior/reintento idempotente ante fallos parciales de los dos POST iniciales.

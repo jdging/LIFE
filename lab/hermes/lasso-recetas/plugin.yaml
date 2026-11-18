@@ -1,0 +1,9 @@
+name: lasso-recetas
+version: 0.1.0
+kind: standalone
+description: Guarda recetas de LIFE desde el chat privado de Lasso en Telegram.
+provides_tools:
+  - lasso_guardar_receta
+provides_hooks:
+  - pre_gateway_dispatch
+  - post_gateway_admission

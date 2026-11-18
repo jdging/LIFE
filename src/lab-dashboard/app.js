@@ -148,7 +148,6 @@ let currentView = 'gastos';
 const VISIBLE_VIEWS = ['gastos', 'ingresos', 'fijos', 'supermercado', 'recetas', 'inventario'];
 const ALL_VIEWS = [...VISIBLE_VIEWS, 'inversiones', 'presupuesto'];
 let comprasLoaded = false;
-let recetasLoaded = false;
 let personaFiltro = 'comun';
 let fijosPersonaFiltro = 'comun';
 let incomePersonaFiltro = 'all';
@@ -456,6 +455,7 @@ function updateAvailability() {
 // visibles sin su pestaña correspondiente.
 function switchView(v) {
   if (!VISIBLE_VIEWS.includes(v)) return;
+  const enteringView = currentView !== v;
   const focusWasInPanel = document.getElementById('view-' + currentView)?.contains(document.activeElement);
   currentView = v;
   ALL_VIEWS.forEach((name) => {
@@ -474,16 +474,16 @@ function switchView(v) {
   });
   const topbar = document.getElementById('finanzas-topbar');
   if (topbar) topbar.hidden = !(v === 'gastos' || v === 'ingresos');
-  renderView(v);
+  renderView(v, enteringView);
   if (focusWasInPanel) document.getElementById('tab-' + v).focus();
 }
 
-function renderView(v) {
+function renderView(v, enteringView = false) {
   if (v === 'gastos') renderGastosView();
   else if (v === 'ingresos') renderIngresosView();
   else if (v === 'fijos') renderFijosView();
   else if (v === 'supermercado') ensureComprasLoaded(true);
-  else if (v === 'recetas') ensureRecetasLoaded();
+  else if (v === 'recetas') ensureRecetasLoaded(enteringView);
   else if (v === 'inventario') renderInventarioView();
   // Inversiones y Presupuesto se quedan en el estado vacío ya maquetado en index.html.
 }
@@ -3999,17 +3999,39 @@ if (typeof window !== 'undefined') {
 
 // ── VISTA RECETAS ────────────────────────────────────────────────────────
 
-async function ensureRecetasLoaded() {
-  if (recetasLoaded) { renderRecetasList(); return; }
-  recetasLoaded = true;
+const RECETAS_PATH = '/api/recetas';
+let recetasMode = 'idle';
+let recetaDraft = null;
+let recetaBusy = false;
+
+async function ensureRecetasLoaded(force = false) {
+  if (recetasMode === 'loading') return;
+  if (!force && recetasMode === 'live') { renderRecetasList(); return; }
+  recetasMode = 'loading';
+  DATA.recetas = null;
+  DATA.recetasError = null;
   document.getElementById('recetas-content').textContent = 'Cargando…';
+  renderRecetasList();
   try {
-    DATA.recetas = await fetchJSON('data/recetas.json');
-    DATA.recetasError = null;
-  } catch (err) {
-    DATA.recetas = [];
-    DATA.recetasError = err.message;
-    console.error('No se pudo cargar data/recetas.json', err);
+    DATA.recetas = requireList(await fetchJSON(RECETAS_PATH), 'recetas')
+      .map((row) => ({ ...row, id: canonicalId(row.id) }));
+    recetasMode = 'live';
+    document.getElementById('receta-feedback').textContent = '';
+  } catch (error) {
+    // An expired session is not an offline mode. Don't mask it with a snapshot.
+    if (error.status !== 401 && error.status !== 403) {
+      try {
+        const snapshot = await fetchJSON('data/recetas.json');
+        DATA.recetas = requireList({ recetas: snapshot }, 'recetas').map((row) => ({
+          ...row, titulo: row.nombre, ingredientes: (row.ingredientes || []).map((ing) => ({ ...ing, nombre: ing.ingrediente_nombre })),
+        }));
+        recetasMode = 'snapshot';
+      } catch { /* No readable snapshot. */ }
+    }
+    if (recetasMode !== 'snapshot') {
+      recetasMode = 'unavailable';
+      DATA.recetasError = error.status === 401 ? 'Volvé a iniciar sesión para ver las recetas.' : 'No se pudo cargar el recetario.';
+    }
   }
   renderRecetasList();
 }
@@ -4017,14 +4039,21 @@ async function ensureRecetasLoaded() {
 function renderRecetasList() {
   const content = document.getElementById('recetas-content');
   if (!content) return;
+  const editable = recetasMode === 'live';
+  document.getElementById('recetas-new').hidden = !editable;
+  const refresh = document.getElementById('recetas-retry');
+  refresh.hidden = !editable && !['snapshot', 'unavailable'].includes(recetasMode);
+  refresh.textContent = editable ? 'Actualizar' : 'Reintentar conexión';
+  document.getElementById('recetas-notice').textContent = recetasMode === 'snapshot'
+    ? 'Copia de solo lectura. No se pudo conectar con el recetario en vivo.' : '';
   if (DATA.recetasError) {
-    content.innerHTML = `<div class="empty-state">No se pudo cargar el recetario (${escapeHtml(DATA.recetasError)}). Verificá que exista <code>data/recetas.json</code>.</div>`;
+    content.innerHTML = `<div class="empty-state">${escapeHtml(DATA.recetasError)}</div>`;
     return;
   }
   if (DATA.recetas === null) return; // todavía cargando
 
   const query = (document.getElementById('recetas-search')?.value || '').trim().toLowerCase();
-  const recetas = DATA.recetas.filter((r) => !query || String(r.nombre || '').toLowerCase().includes(query));
+  const recetas = DATA.recetas.filter((r) => !query || String(r.titulo || '').toLowerCase().includes(query));
 
   if (!DATA.recetas.length) {
     content.innerHTML = '<div class="empty-state">Todavía no hay recetas cargadas.</div>';
@@ -4037,13 +4066,212 @@ function renderRecetasList() {
 
   content.innerHTML = `<div class="recetas-grid">${recetas.map((r) => `
     <article class="receta-card">
-      <h3>${escapeHtml(r.nombre)}</h3>
-      <div class="receta-meta">${r.porciones ? escapeHtml(r.porciones) + ' porciones' : ''}${r.tiempo_preparacion_min ? ' · ' + escapeHtml(r.tiempo_preparacion_min) + ' min' : ''}</div>
-      <ul class="receta-ingredientes">
-        ${(r.ingredientes || []).map((ing) => `<li>${escapeHtml(ing.cantidad)} ${escapeHtml(ing.unidad)} ${escapeHtml(ing.ingrediente_nombre)}</li>`).join('') || '<li class="td-muted">Sin ingredientes cargados.</li>'}
-      </ul>
-      ${r.notas ? `<div class="receta-notas">${escapeHtml(r.notas)}</div>` : ''}
+      <h3>${escapeHtml(r.titulo)}</h3>
+      <div class="receta-meta">${[r.porciones && `${escapeHtml(r.porciones)} porciones`, r.tiempo_preparacion_min && `${escapeHtml(r.tiempo_preparacion_min)} min`].filter(Boolean).join(' · ')}</div>
+      <h4>Ingredientes</h4>
+      <ol class="receta-ingredientes">
+        ${(r.ingredientes || []).map((ing) => `<li>${[ing.cantidad, ing.unidad, ing.nombre].filter((value) => value != null && value !== '').map(escapeHtml).join(' ')}</li>`).join('') || '<li class="td-muted">Sin ingredientes cargados.</li>'}
+      </ol>
+      <h4>Preparación</h4>
+      ${r.pasos?.length ? `<ol class="receta-pasos">${r.pasos.map((paso) => `<li>${escapeHtml(paso)}</li>`).join('')}</ol>` : '<p class="td-muted">Sin pasos cargados.</p>'}
+      ${r.notas ? `<h4>Notas</h4><div class="receta-notas">${escapeHtml(r.notas)}</div>` : ''}
+      ${editable ? `<button type="button" class="fijos-secondary" data-id="${escapeHtml(r.id)}" onclick="openRecetaEditor(this.dataset.id)">Editar</button>` : ''}
     </article>`).join('')}</div>`;
+}
+
+const recetaElement = (name) => document.getElementById(`receta-${name}`);
+const recetaField = (row, name) => row.querySelector(`[name="${name}"]`);
+
+function addRecetaRow(section, value, focus = false) {
+  const list = recetaElement(section);
+  if (list.children.length >= 200) {
+    recetaElement('error').textContent = 'Podés agregar hasta 200 filas por sección.';
+    return;
+  }
+  const row = recetaElement(`${section}-template`).content.firstElementChild.cloneNode(true);
+  const fields = section === 'ingredientes' ? ['nombre', 'cantidad', 'unidad'] : ['paso'];
+  for (const name of fields) recetaField(row, name).value = (name === 'paso' ? value : value?.[name]) ?? '';
+  list.append(row);
+  if (focus) recetaField(row, fields[0]).focus();
+}
+
+async function openRecetaEditor(id = null) {
+  const dialog = recetaElement('dialog');
+  if (recetasMode !== 'live' || recetaBusy || dialog.open) return;
+  recetaDraft = null;
+  recetaElement('feedback').textContent = '';
+  recetaElement('editor-title').textContent = id == null ? 'Nueva receta' : 'Editar receta';
+  recetaElement('error').textContent = '';
+  recetaElement('titulo').value = '';
+  for (const section of ['ingredientes', 'pasos']) recetaElement(section).replaceChildren();
+  recetaElement('save').disabled = true;
+  recetaElement('save').textContent = 'Guardar receta';
+  recetaElement('fields').disabled = true;
+  recetaBusy = true;
+  dialog.showModal();
+  try {
+    let recipe;
+    if (id != null) {
+      id = canonicalId(id);
+      recetaElement('error').textContent = 'Cargando receta…';
+      recipe = await fetchJSON(`${RECETAS_PATH}/${id}`);
+      if (canonicalId(recipe?.id) !== id || !Number.isSafeInteger(recipe.version) || recipe.version < 1) {
+        throw new Error('Respuesta inválida');
+      }
+    }
+    recetaElement('titulo').value = recipe?.titulo ?? '';
+    for (const section of ['ingredientes', 'pasos']) {
+      const values = recipe?.[section] ?? [undefined];
+      for (const value of values) addRecetaRow(section, value);
+    }
+    recetaDraft = { id, version: recipe?.version, key: id == null ? `web:${crypto.randomUUID()}` : null };
+    recetaElement('error').textContent = '';
+    recetaElement('save').disabled = false;
+  } catch (error) {
+    recetaElement('error').textContent = error.status === 401 ? 'La sesión venció. Volvé a iniciar sesión.'
+      : 'No se pudo abrir la receta. Cerrá el editor y volvé a intentar.';
+  } finally {
+    recetaBusy = false;
+    recetaElement('fields').disabled = !recetaDraft;
+    if (recetaDraft) recetaElement('titulo').focus();
+  }
+}
+
+function collectReceta() {
+  const titulo = recetaElement('titulo').value.trim();
+  if (!titulo || titulo.length > 200) throw new Error('Escribí un título de hasta 200 caracteres.');
+  const ingredientes = [...recetaElement('ingredientes').children].map((row, i) => {
+    const nombre = recetaField(row, 'nombre').value.trim();
+    const unidad = recetaField(row, 'unidad').value.trim();
+    const raw = recetaField(row, 'cantidad').value.trim();
+    const cantidad = raw === '' ? null : Number(raw);
+    if (!nombre || nombre.length > 300) throw new Error(`Revisá el nombre del ingrediente ${i + 1}.`);
+    if (unidad.length > 400) throw new Error(`Revisá la unidad del ingrediente ${i + 1}.`);
+    if (cantidad !== null && (!Number.isFinite(cantidad) || cantidad <= 0 || cantidad > 1e12)) {
+      throw new Error(`La cantidad del ingrediente ${i + 1} debe ser positiva y no superar 1 billón.`);
+    }
+    return { nombre, cantidad, unidad: unidad || null };
+  });
+  const pasos = [...recetaElement('pasos').children].map((row, i) => {
+    const text = recetaField(row, 'paso').value.trim();
+    if (!text || text.length > 4000) throw new Error(`Completá o quitá el paso ${i + 1}.`);
+    return text;
+  });
+  if (recetaDraft.id == null && (!ingredientes.length || !pasos.length)) {
+    throw new Error('Agregá al menos un ingrediente y un paso de preparación.');
+  }
+  return { titulo, ingredientes, pasos };
+}
+
+function closeRecetaEditor(event) {
+  if (recetaBusy) { event?.preventDefault(); return; }
+  if (!event) recetaElement('dialog').close();
+}
+
+function verifyReceta(recipe, sent, expectedId) {
+  const id = canonicalId(recipe?.id);
+  if ((expectedId != null && id !== expectedId) ||
+      !Number.isSafeInteger(recipe.version) || recipe.version < 1 || recipe.titulo !== sent.titulo ||
+      !Array.isArray(recipe.ingredientes) || recipe.ingredientes.length !== sent.ingredientes.length ||
+      !sent.ingredientes.every((ing, i) => {
+        const stored = recipe.ingredientes[i];
+        return stored && stored.nombre === ing.nombre && stored.cantidad === ing.cantidad && stored.unidad === ing.unidad;
+      }) || !Array.isArray(recipe.pasos) || recipe.pasos.length !== sent.pasos.length ||
+      !sent.pasos.every((paso, i) => recipe.pasos[i] === paso)) {
+    throw new Error('La receta devuelta no coincide con el envío');
+  }
+  return id;
+}
+
+async function saveReceta(event) {
+  event.preventDefault();
+  if (!recetaElement('dialog').open || !recetaDraft || recetaBusy || recetaDraft.conflict || recetasMode !== 'live') return;
+  const errorBox = recetaElement('error');
+  const { id, version, key } = recetaDraft;
+  const creating = id == null;
+  let body = recetaDraft.pendingBody;
+  if (!body) {
+    let payload;
+    try { payload = collectReceta(); } catch (error) { errorBox.textContent = error.message; return; }
+    Object.assign(payload, creating ? { clave_ingesta: key, allow_duplicado: false } : { version });
+    body = JSON.stringify(payload);
+  }
+  recetaBusy = true;
+  recetaElement('fields').disabled = true;
+  recetaElement('save').disabled = true;
+  recetaElement('cancel').disabled = true;
+  errorBox.textContent = recetaDraft.savedId ? 'Verificando…' : 'Guardando…';
+  try {
+    const sent = JSON.parse(body);
+    if (!recetaDraft.savedId) {
+      const response = await fetch(creating ? RECETAS_PATH : `${RECETAS_PATH}/${id}`, {
+        method: creating ? 'POST' : 'PATCH', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' }, body,
+      });
+      if (!response.ok) {
+        if (response.status === 409) {
+          const conflict = await response.json().catch(() => null);
+          if (!creating && conflict?.code === 'version_desactualizada') {
+            recetaDraft.conflict = true;
+            errorBox.textContent = 'Hay otra versión de esta receta. Copiá tus cambios antes de cerrar y volvé a abrirla para revisar la versión actual.';
+          } else if (creating && conflict?.code === 'receta_duplicada') {
+            recetaDraft.pendingBody = null;
+            errorBox.textContent = 'Ya existe una receta con ese título. Revisá el título y volvé a intentar.';
+          } else {
+            errorBox.textContent = conflict?.error === 'base de datos ocupada; reintentar.'
+              ? 'La base de datos está ocupada. Reintentá en unos segundos.'
+              : 'No se pudo guardar por un conflicto temporal. Reintentá en unos segundos.';
+          }
+        } else if (response.status === 401) {
+          errorBox.textContent = 'La sesión venció. Copiá tus cambios antes de volver a iniciar sesión.';
+        } else if (response.status === 413 || response.status === 400 || response.status === 422) {
+          // This attempt was rejected. Permit corrections, but retain the original
+          // intake key: an earlier timed-out attempt might have committed.
+          recetaDraft.pendingBody = null;
+          errorBox.textContent = response.status === 413
+            ? 'La receta supera el tamaño permitido. Acortá el contenido y volvé a intentar.'
+            : 'El recetario no aceptó los datos. Revisá los campos antes de volver a guardar.';
+        } else {
+          throw new Error('No se confirmó la escritura');
+        }
+        return;
+      }
+      const returned = await response.json();
+      try {
+        recetaDraft.savedId = verifyReceta(returned, sent, id);
+      } catch (error) {
+        if (!creating || response.status !== 200 || !Number.isSafeInteger(returned?.version) || returned.version < 1) throw error;
+        const existingId = canonicalId(returned.id);
+        recetaDraft.pendingBody = null;
+        recetaDraft.conflict = true;
+        errorBox.textContent = `El envío anterior ya creó la ficha #${existingId}. Estos cambios no se guardaron. Copialos antes de cerrar y editá la ficha existente.`;
+        return;
+      }
+      recetaDraft.pendingBody = body;
+    }
+    // If this read fails, retry verification only, not the accepted write.
+    const savedId = recetaDraft.savedId;
+    verifyReceta(await fetchJSON(`${RECETAS_PATH}/${savedId}`), sent, savedId);
+    recetaElement('dialog').close();
+    recetaDraft = null;
+    await ensureRecetasLoaded(true);
+    recetaElement('feedback').textContent = recetasMode === 'live' ? 'Receta guardada.'
+      : 'Receta guardada, pero no se pudo actualizar la lista. Reintentá la conexión para verla.';
+  } catch {
+    if (!recetaDraft) return;
+    if (creating) recetaDraft.pendingBody = body;
+    errorBox.textContent = recetaDraft.savedId
+      ? 'No se pudo verificar la receta guardada. Volvé a verificar sin reenviar los cambios.'
+      : creating ? 'No se pudo confirmar el alta. Reintentá el envío original antes de editar los campos.'
+        : 'No se pudo confirmar el guardado. Conservamos el borrador; podés reintentar.';
+  } finally {
+    recetaBusy = false;
+    recetaElement('fields').disabled = Boolean(recetaDraft?.pendingBody);
+    recetaElement('save').disabled = Boolean(recetaDraft?.conflict);
+    recetaElement('save').textContent = recetaDraft?.savedId ? 'Verificar guardado'
+      : recetaDraft?.pendingBody ? 'Reintentar envío' : 'Guardar receta';
+    recetaElement('cancel').disabled = false;
+  }
 }
 
 // ── VISTA INVENTARIO ─────────────────────────────────────────────────────
